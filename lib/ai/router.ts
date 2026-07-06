@@ -26,15 +26,17 @@ type UserContent =
   | string
   | Array<
       | { type: "text"; text: string }
-      | { type: "image"; image: URL }
+      | { type: "image"; image: string | URL }
     >;
 
 function buildUserContent(prompt: string, imageUrl?: string): UserContent {
   if (!imageUrl) return prompt;
 
+  const image = imageUrl.startsWith("data:") ? imageUrl : new URL(imageUrl);
+
   return [
     { type: "text", text: prompt },
-    { type: "image", image: new URL(imageUrl) },
+    { type: "image", image },
   ];
 }
 
@@ -161,10 +163,10 @@ async function generateViaZhipu(prompt: string, imageUrl?: string) {
 
 export async function generateProcessItems(
   prompt: string,
-  options?: { imageUrl?: string; provider?: AiProvider },
+  options?: { imageUrl?: string; imageDataUrl?: string; provider?: AiProvider },
 ) {
   const provider = resolveProvider(options?.provider);
-  const { imageUrl } = options ?? {};
+  const imageUrl = options?.imageUrl ?? options?.imageDataUrl;
 
   switch (provider) {
     case "dashscope":

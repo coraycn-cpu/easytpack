@@ -9,9 +9,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, imageUrl, provider } = body as {
+    const { prompt, imageUrl, imageDataUrl, provider } = body as {
       prompt?: string;
       imageUrl?: string;
+      imageDataUrl?: string;
       provider?: AiProvider;
     };
 
@@ -19,7 +20,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "prompt 必填" }, { status: 400 });
     }
 
-    const result = await generateProcessItems(prompt, { imageUrl, provider });
+    const result = await generateProcessItems(prompt, {
+      imageUrl: imageUrl ?? imageDataUrl,
+      provider,
+    });
     return NextResponse.json(result);
   } catch (error) {
     console.error("[AI generate]", error);
