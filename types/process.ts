@@ -14,10 +14,19 @@ export const ProcessListSchema = z.object({
 
 export const BomItemSchema = z.object({
   name: z.string().describe("物料名称"),
+  category: z
+    .enum(["fabric", "trim", "accessory", "packaging"])
+    .optional()
+    .describe("物料分类：面料/辅料/配件/包装"),
+  garmentPart: z
+    .string()
+    .optional()
+    .describe("所属部件，如：上装、下装、共用"),
   spec: z.string().optional().describe("规格"),
   color: z.string().optional().describe("颜色"),
   usage: z.string().optional().describe("用量"),
   supplier: z.string().optional().describe("供应商"),
+  code: z.string().optional().describe("物料编码"),
 });
 
 export const BomListSchema = z.object({

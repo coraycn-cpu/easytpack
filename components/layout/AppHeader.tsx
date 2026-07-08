@@ -7,7 +7,12 @@ export default function AppHeader() {
         <Link href="/" className="text-lg font-semibold tracking-tight text-zinc-900">
           EasytPack
         </Link>
-        <span className="text-xs text-zinc-400">AI 服装工艺包</span>
+        <nav className="flex items-center gap-3 text-sm">
+          <Link href="/projects" className="text-zinc-600 hover:text-zinc-900">
+            我的项目
+          </Link>
+          <span className="text-xs text-zinc-400">AI 服装工艺包</span>
+        </nav>
       </div>
     </header>
   );

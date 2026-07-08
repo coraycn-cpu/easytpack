@@ -1,4 +1,6 @@
 import type { TechPackProject } from "@/types/project";
+import { createDefaultCanvasData } from "@/lib/project/hotspots";
+import { migrateProject } from "@/lib/project/hotspots";
 
 const STORAGE_KEY = "easytpack_projects";
 
@@ -27,6 +29,7 @@ export function createEmptyProject(
   return {
     id: generateProjectId(),
     status: "intake",
+    workflowStatus: "draft",
     title: partial.title ?? "未命名款式",
     createdAt: now,
     updatedAt: now,
@@ -37,7 +40,7 @@ export function createEmptyProject(
       answers: {},
       isComplete: false,
     },
-    canvas_data: { hotspots: [] },
+    canvas_data: createDefaultCanvasData(partial.intake.imageDataUrl),
     process_items: [],
     bom_items: [],
     size_chart: { sizes: [], rows: [] },
@@ -46,18 +49,49 @@ export function createEmptyProject(
 
 export function saveProject(project: TechPackProject) {
   const all = readAll();
-  all[project.id] = { ...project, updatedAt: new Date().toISOString() };
+  all[project.id] = migrateProject({
+    ...project,
+    updatedAt: new Date().toISOString(),
+  });
   writeAll(all);
 }
 
 export function getProject(id: string): TechPackProject | null {
-  return readAll()[id] ?? null;
+  const p = readAll()[id];
+  return p ? migrateProject(p) : null;
 }
 
 export function listProjects(): TechPackProject[] {
-  return Object.values(readAll()).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+  return Object.values(readAll())
+    .map(migrateProject)
+    .sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+}
+
+export function duplicateProject(id: string): TechPackProject | null {
+  const source = getProject(id);
+  if (!source) return null;
+
+  const now = new Date().toISOString();
+  const copy: TechPackProject = {
+    ...JSON.parse(JSON.stringify(source)),
+    id: generateProjectId(),
+    title: `${source.title}（副本）`,
+    workflowStatus: "draft",
+    status: "studio",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  saveProject(copy);
+  return copy;
+}
+
+export function deleteProject(id: string) {
+  const all = readAll();
+  delete all[id];
+  writeAll(all);
 }
 
 export function fileToDataUrl(file: File): Promise<string> {

@@ -6,6 +6,8 @@ export type ProjectStatus =
   | "studio"
   | "completed";
 
+export type WorkflowStatus = "draft" | "in_review" | "finalized";
+
 export type IntakeData = {
   description: string;
   imageDataUrl?: string;
@@ -44,18 +46,48 @@ export type SizeChart = {
   }>;
 };
 
+export type Annotation = {
+  id: string;
+  type: "arrow" | "label";
+  x: number;
+  y: number;
+  x2?: number;
+  y2?: number;
+  text?: string;
+};
+
+export type Artboard = {
+  id: string;
+  name: string;
+  imageDataUrl?: string;
+  hotspots: Hotspot[];
+  annotations: Annotation[];
+};
+
+export type CanvasData = {
+  artboards: Artboard[];
+  activeArtboardId: string;
+};
+
+/** @deprecated 旧格式，仅用于迁移 */
+export type LegacyCanvasData = {
+  hotspots?: Hotspot[];
+};
+
 export type TechPackProject = {
   id: string;
   status: ProjectStatus;
+  workflowStatus: WorkflowStatus;
   title: string;
+  styleNo?: string;
   createdAt: string;
   updatedAt: string;
   intake: IntakeData;
   questionnaire: QuestionnaireData;
-  canvas_data: {
-    hotspots: Hotspot[];
-  };
+  canvas_data: CanvasData;
   process_items: ProcessItem[];
   bom_items: BomItem[];
   size_chart: SizeChart;
 };
+
+export const DEFAULT_ARTBOARD_NAMES = ["正面", "背面", "细节"];

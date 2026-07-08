@@ -4,14 +4,19 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
-import { getProject, saveProject } from "@/lib/project/storage";
+import { exportBomCsv, exportSizeChartCsv } from "@/lib/export/excel";
+import { renderAllArtboards } from "@/lib/export/canvas-render";
 import { calcProgress } from "@/lib/project/progress";
+import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [project, setProject] = useState<TechPackProject | null>(null);
+  const [annotatedImages, setAnnotatedImages] = useState<
+    Array<{ name: string; dataUrl: string }>
+  >([]);
 
   useEffect(() => {
     const p = getProject(id);
@@ -19,18 +24,24 @@ export default function ExportPage() {
       router.replace("/");
       return;
     }
-    if (p.status === "studio") {
-      const completed = { ...p, status: "completed" as const };
-      saveProject(completed);
-      setProject(completed);
+    if (p.workflowStatus !== "finalized") {
+      const updated = { ...p, workflowStatus: "in_review" as const };
+      saveProject(updated);
+      setProject(updated);
     } else {
       setProject(p);
     }
   }, [id, router]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  useEffect(() => {
+    if (!project) return;
+    renderAllArtboards(
+      project.canvas_data.artboards,
+      project.intake.imageDataUrl,
+    ).then(setAnnotatedImages);
+  }, [project]);
+
+  const handlePrint = () => window.print();
 
   if (!project) {
     return (
@@ -46,7 +57,7 @@ export default function ExportPage() {
     <>
       <div className="print:hidden">
         <header className="border-b border-zinc-200 bg-white px-4 py-3">
-          <div className="mx-auto flex max-w-4xl items-center justify-between">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
             <div>
               <Link
                 href={`/project/${id}/studio`}
@@ -55,25 +66,47 @@ export default function ExportPage() {
                 ← 返回画板
               </Link>
               <h1 className="text-lg font-semibold text-zinc-900">Tech Pack 预览</h1>
-              <p className="text-xs text-zinc-500">完成度 {progress}% · 可打印或保存为 PDF</p>
+              <p className="text-xs text-zinc-500">完成度 {progress}%</p>
             </div>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-            >
-              打印 / 保存 PDF
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => exportBomCsv(project.bom_items, `${project.title}-BOM.csv`)}
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
+              >
+                导出 BOM
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  exportSizeChartCsv(project.size_chart, `${project.title}-尺寸表.csv`)
+                }
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
+              >
+                导出尺寸表
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              >
+                打印 / 保存 PDF
+              </button>
+            </div>
           </div>
         </header>
 
         <main className="mx-auto max-w-4xl px-4 py-8">
-          <TechPackPreview project={project} />
+          <TechPackPreview project={project} annotatedImages={annotatedImages} />
         </main>
       </div>
 
       <div className="hidden print:block">
-        <TechPackPreview project={project} printMode />
+        <TechPackPreview
+          project={project}
+          annotatedImages={annotatedImages}
+          printMode
+        />
       </div>
 
       <style jsx global>{`

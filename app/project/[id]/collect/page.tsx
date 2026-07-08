@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import { getProject, saveProject } from "@/lib/project/storage";
-import type { Hotspot } from "@/types/process";
+import { createDefaultCanvasData, mergeHotspots } from "@/lib/project/hotspots";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 export default function CollectPage() {
@@ -126,7 +126,7 @@ export default function CollectPage() {
       const draft = await res.json();
       if (!res.ok) throw new Error(draft.error);
 
-      const hotspots: Hotspot[] = (draft.suggestedHotspots ?? []).map(
+      const rawHotspots = (draft.suggestedHotspots ?? []).map(
         (hs: { label: string; x: number; y: number; width: number; height: number }, i: number) => ({
           id: `hs_ai_${i}_${Date.now()}`,
           label: hs.label,
@@ -136,6 +136,16 @@ export default function CollectPage() {
           height: hs.height,
         }),
       );
+
+      const hotspots = mergeHotspots(
+        rawHotspots,
+        project.intake.detectedCategory,
+      );
+
+      const canvas_data = createDefaultCanvasData(project.intake.imageDataUrl);
+      if (canvas_data.artboards[0]) {
+        canvas_data.artboards[0].hotspots = hotspots;
+      }
 
       const hotspotIdByLabel = new Map(hotspots.map((h) => [h.label, h.id]));
       const processItems = (draft.process_items ?? []).map(
@@ -152,7 +162,7 @@ export default function CollectPage() {
         process_items: processItems,
         bom_items: draft.bom_items ?? [],
         size_chart: draft.size_chart ?? { sizes: [], rows: [] },
-        canvas_data: { hotspots },
+        canvas_data,
         questionnaire: {
           ...project.questionnaire,
           answers,

@@ -143,8 +143,9 @@ ${answersText}
 要求：
 - process_items 覆盖主要结构部位（领、袖、下摆、侧缝等），工艺描述可直接用于工艺单
 - bom_items 列出主要面辅料
-- suggestedHotspots 给出主要部位在画板上的建议热区（坐标基于 800x600 画布，尽量合理）
-- size_chart 如信息足够则给出基础尺码表，否则留空 rows
+- suggestedHotspots 给出主要部位在画板上的建议热区（坐标基于 800x600 画布，只标注服装结构部位，不要标注人脸/背景，最多 6 个）
+- bom_items 列出主要面辅料，套装需区分上装/下装（garmentPart 字段）
+- size_chart 如信息足够则给出基础尺码表（S/M/L/XL），否则留空 rows
 - aiSummary 用 2-3 句话说明初稿要点和后续建议用户确认的地方`,
     userText: context,
     imageDataUrl: input.imageDataUrl,

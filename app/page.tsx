@@ -161,7 +161,12 @@ export default function IntakePage() {
 
         {recentProjects.length > 0 && (
           <div className="mt-10">
-            <h2 className="mb-3 text-sm font-medium text-zinc-500">最近项目</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-zinc-500">最近项目</h2>
+              <Link href="/projects" className="text-xs text-blue-600 hover:underline">
+                查看全部 →
+              </Link>
+            </div>
             <ul className="space-y-2">
               {recentProjects.map((p) => {
                 const href =
