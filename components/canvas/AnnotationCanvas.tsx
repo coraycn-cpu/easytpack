@@ -21,6 +21,8 @@ import type { Hotspot } from "@/types/process";
 import type { Annotation } from "@/types/project";
 import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
 import type { CanvasTool } from "@/types/canvas";
+import DraggablePanel from "@/components/studio/DraggablePanel";
+import type { PanelPosition } from "@/lib/studio/layout";
 
 type Snapshot = { annotations: Annotation[]; hotspots: Hotspot[] };
 
@@ -40,6 +42,14 @@ type AnnotationCanvasProps = {
   stageHeight?: number;
   imageOffset?: { x: number; y: number };
   onImageOffsetChange?: (offset: { x: number; y: number }) => void;
+  splitOnCanvas?: boolean;
+  splitLayout?: { tabs: PanelPosition; toolbar: PanelPosition; stage: PanelPosition };
+  onSplitLayoutChange?: (
+    key: "tabs" | "toolbar" | "stage",
+    patch: Partial<PanelPosition>,
+  ) => void;
+  canvasScale?: number;
+  tabsContent?: React.ReactNode;
 };
 
 function createId(prefix: string) {
@@ -73,6 +83,11 @@ export default function AnnotationCanvas({
   stageHeight = 480,
   imageOffset = { x: 0, y: 0 },
   onImageOffsetChange,
+  splitOnCanvas = false,
+  splitLayout,
+  onSplitLayoutChange,
+  canvasScale = 1,
+  tabsContent,
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -81,7 +96,10 @@ export default function AnnotationCanvas({
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [imageSelected, setImageSelected] = useState(false);
-  const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: stageHeight });
+  const panelStageH = splitOnCanvas
+    ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
+    : stageHeight;
+  const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: panelStageH });
 
   const [draftRect, setDraftRect] = useState<{
     x: number;
@@ -188,7 +206,7 @@ export default function AnnotationCanvas({
     onHotspotsChange(next);
   };
 
-  const logicalH = embedded ? stageHeight : CANVAS_H;
+  const logicalH = embedded || splitOnCanvas ? panelStageH : CANVAS_H;
   const fitScale =
     Math.min(containerSize.w / CANVAS_W, containerSize.h / logicalH, 1.2) * zoom;
   const stageW = CANVAS_W * fitScale;
@@ -693,6 +711,225 @@ export default function AnnotationCanvas({
     }
   };
 
+  const toolbarHint =
+    tool !== "select"
+      ? "绘制完成后自动切回选择"
+      : imageSelected
+        ? "款式图已选中 — 可拖动位置"
+        : selectedAnnId || selectedHotspotId
+          ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
+          : "点击款式图或标注进行选中";
+
+  const toolbarEl = (
+    <CanvasToolbar
+      tool={tool}
+      onToolChange={setTool}
+      color={color}
+      onColorChange={setColor}
+      onUndo={undo}
+      onRedo={redo}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      onDelete={deleteSelected}
+      canDelete={Boolean(selectedAnnId || selectedHotspotId)}
+      zoom={zoom}
+      onZoomChange={setZoom}
+      flat
+      theme={splitOnCanvas ? "light" : "dark"}
+      hint={toolbarHint}
+    />
+  );
+
+  const stageEl = (
+    <div
+      ref={containerRef}
+      className={`relative flex min-h-0 overflow-hidden ${
+        splitOnCanvas ? "bg-transparent" : embedded ? "bg-[#141414]" : "flex-1 items-center justify-center bg-[#141414]"
+      }`}
+      style={
+        embedded || splitOnCanvas
+          ? { height: panelStageH, width: splitOnCanvas ? splitLayout?.stage.w : undefined }
+          : undefined
+      }
+    >
+      <Stage
+        ref={stageRef}
+        width={splitOnCanvas || embedded ? CANVAS_W * fitScale : stageW}
+        height={splitOnCanvas || embedded ? panelStageH * fitScale : stageH}
+        scaleX={fitScale}
+        scaleY={fitScale}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={finishDrawing}
+        onMouseLeave={finishDrawing}
+      >
+        <Layer>
+          <Rect
+            x={0}
+            y={0}
+            width={CANVAS_W}
+            height={logicalH}
+            fill={splitOnCanvas ? "#ffffff" : "#141414"}
+            listening={false}
+          />
+          {image && (
+            <KonvaImage
+              id="garment_image"
+              image={image}
+              x={imageFit.x + imageOffset.x}
+              y={imageFit.y + imageOffset.y}
+              width={imageFit.width}
+              height={imageFit.height}
+              listening={tool === "select"}
+              draggable={tool === "select" && imageSelected}
+              stroke={imageSelected ? "#2563eb" : undefined}
+              strokeWidth={imageSelected ? 2 : 0}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                selectImage();
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                selectImage();
+              }}
+              onDragEnd={(e) => {
+                onImageOffsetChange?.({
+                  x: e.target.x() - imageFit.x,
+                  y: e.target.y() - imageFit.y,
+                });
+              }}
+            />
+          )}
+          {normalizedAnnotations.map(renderAnnotation)}
+          {hotspots.map((hs) => (
+            <Rect
+              key={hs.id}
+              id={`hs_${hs.id}`}
+              x={hs.x}
+              y={hs.y}
+              width={hs.width}
+              height={hs.height}
+              stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#3b82f6"}
+              strokeWidth={selectedHotspotId === hs.id ? 2.5 : 1.5}
+              dash={[6, 3]}
+              fill="rgba(59, 130, 246, 0.08)"
+              draggable={tool === "select"}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
+                  selectHotspot(hs.id);
+                }
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                selectHotspot(hs.id);
+                if (tool !== "select") setTool("select");
+              }}
+              onDragEnd={(e) => {
+                pushHistory();
+                const next = hotspots.map((h) =>
+                  h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
+                );
+                onHotspotsChange(next);
+              }}
+            />
+          ))}
+          {draftRect && (
+            <Rect
+              x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
+              y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
+              width={Math.abs(draftRect.width)}
+              height={Math.abs(draftRect.height)}
+              stroke="#22c55e"
+              dash={[6, 4]}
+              strokeWidth={2}
+              listening={false}
+            />
+          )}
+          {draftLine && (
+            <Arrow
+              points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
+              stroke="#22c55e"
+              fill="#22c55e"
+              dash={[4, 4]}
+              listening={false}
+            />
+          )}
+          {freehandPoints.length > 1 && (
+            <Line
+              points={freehandPoints}
+              stroke={color}
+              strokeWidth={3}
+              lineCap="round"
+              tension={0.4}
+              listening={false}
+            />
+          )}
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled={false}
+            boundBoxFunc={(oldBox, newBox) => {
+              if (newBox.width < 8 || newBox.height < 8) return oldBox;
+              return newBox;
+            }}
+          />
+        </Layer>
+      </Stage>
+
+      {!image && (
+        <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
+          点击「更换图片」导入款式图
+        </p>
+      )}
+    </div>
+  );
+
+  if (splitOnCanvas && splitLayout && onSplitLayoutChange) {
+    return (
+      <>
+        <DraggablePanel
+          id="tabs"
+          title="画板视图"
+          variant="tabs"
+          x={splitLayout.tabs.x}
+          y={splitLayout.tabs.y}
+          width={splitLayout.tabs.w}
+          scale={canvasScale}
+          onMove={(x, y) => onSplitLayoutChange("tabs", { x, y })}
+        >
+          <div className="px-2 py-1.5">{tabsContent}</div>
+        </DraggablePanel>
+
+        <DraggablePanel
+          id="toolbar"
+          title="标注工具"
+          variant="tool"
+          x={splitLayout.toolbar.x}
+          y={splitLayout.toolbar.y}
+          width={splitLayout.toolbar.w}
+          scale={canvasScale}
+          onMove={(x, y) => onSplitLayoutChange("toolbar", { x, y })}
+        >
+          {toolbarEl}
+        </DraggablePanel>
+
+        <DraggablePanel
+          id="stage"
+          title="款式图 · 标注"
+          variant="stage"
+          x={splitLayout.stage.x}
+          y={splitLayout.stage.y}
+          width={splitLayout.stage.w}
+          height={splitLayout.stage.h}
+          scale={canvasScale}
+          onMove={(x, y) => onSplitLayoutChange("stage", { x, y })}
+        >
+          {stageEl}
+        </DraggablePanel>
+      </>
+    );
+  }
+
   return (
     <div
       className={`flex min-h-0 flex-col overflow-hidden ${
@@ -701,32 +938,9 @@ export default function AnnotationCanvas({
           : `border border-zinc-700/50 shadow-2xl rounded-xl ${className}`
       } ${embedded ? className : ""}`}
     >
-      <CanvasToolbar
-        tool={tool}
-        onToolChange={setTool}
-        color={color}
-        onColorChange={setColor}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onDelete={deleteSelected}
-        canDelete={Boolean(selectedAnnId || selectedHotspotId)}
-        zoom={zoom}
-        onZoomChange={setZoom}
-        flat={embedded}
-        hint={
-          tool !== "select"
-            ? "绘制完成后自动切回选择"
-            : imageSelected
-              ? "款式图已选中 — 可拖动位置"
-              : selectedAnnId || selectedHotspotId
-                ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
-                : "点击款式图或标注进行选中"
-        }
-      />
+      {toolbarEl}
 
-      {showImport && (
+      {showImport && !splitOnCanvas && (
         <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900 px-3 py-1.5">
           <label className="cursor-pointer text-xs text-zinc-400 hover:text-white">
             📎 更换图片
@@ -750,137 +964,7 @@ export default function AnnotationCanvas({
         </div>
       )}
 
-      <div
-        ref={containerRef}
-        className={`relative flex min-h-0 overflow-hidden bg-[#141414] ${
-          embedded ? "" : "flex-1 items-center justify-center"
-        }`}
-        style={embedded ? { height: stageHeight } : undefined}
-      >
-        <Stage
-          ref={stageRef}
-          width={embedded ? CANVAS_W * fitScale : stageW}
-          height={embedded ? stageHeight * fitScale : stageH}
-          scaleX={fitScale}
-          scaleY={fitScale}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={finishDrawing}
-          onMouseLeave={finishDrawing}
-        >
-          <Layer>
-            {image && (
-              <>
-                <KonvaImage
-                  id="garment_image"
-                  image={image}
-                  x={imageFit.x + imageOffset.x}
-                  y={imageFit.y + imageOffset.y}
-                  width={imageFit.width}
-                  height={imageFit.height}
-                  listening={tool === "select"}
-                  draggable={tool === "select" && imageSelected}
-                  stroke={imageSelected ? "#60a5fa" : undefined}
-                  strokeWidth={imageSelected ? 2 : 0}
-                  onClick={(e) => {
-                    e.cancelBubble = true;
-                    selectImage();
-                  }}
-                  onTap={(e) => {
-                    e.cancelBubble = true;
-                    selectImage();
-                  }}
-                  onDragEnd={(e) => {
-                    onImageOffsetChange?.({
-                      x: e.target.x() - imageFit.x,
-                      y: e.target.y() - imageFit.y,
-                    });
-                  }}
-                />
-              </>
-            )}
-            {normalizedAnnotations.map(renderAnnotation)}
-            {hotspots.map((hs) => (
-              <Rect
-                key={hs.id}
-                id={`hs_${hs.id}`}
-                x={hs.x}
-                y={hs.y}
-                width={hs.width}
-                height={hs.height}
-                stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#3b82f6"}
-                strokeWidth={selectedHotspotId === hs.id ? 2.5 : 1.5}
-                dash={[6, 3]}
-                fill="rgba(59, 130, 246, 0.08)"
-                draggable={tool === "select"}
-                onClick={(e) => {
-                  e.cancelBubble = true;
-                  if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
-                    selectHotspot(hs.id);
-                  }
-                }}
-                onTap={(e) => {
-                  e.cancelBubble = true;
-                  selectHotspot(hs.id);
-                  if (tool !== "select") setTool("select");
-                }}
-                onDragEnd={(e) => {
-                  pushHistory();
-                  const next = hotspots.map((h) =>
-                    h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
-                  );
-                  onHotspotsChange(next);
-                }}
-              />
-            ))}
-            {draftRect && (
-              <Rect
-                x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
-                y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
-                width={Math.abs(draftRect.width)}
-                height={Math.abs(draftRect.height)}
-                stroke="#22c55e"
-                dash={[6, 4]}
-                strokeWidth={2}
-                listening={false}
-              />
-            )}
-            {draftLine && (
-              <Arrow
-                points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
-                stroke="#22c55e"
-                fill="#22c55e"
-                dash={[4, 4]}
-                listening={false}
-              />
-            )}
-            {freehandPoints.length > 1 && (
-              <Line
-                points={freehandPoints}
-                stroke={color}
-                strokeWidth={3}
-                lineCap="round"
-                tension={0.4}
-                listening={false}
-              />
-            )}
-            <Transformer
-              ref={transformerRef}
-              rotateEnabled={false}
-              boundBoxFunc={(oldBox, newBox) => {
-                if (newBox.width < 8 || newBox.height < 8) return oldBox;
-                return newBox;
-              }}
-            />
-          </Layer>
-        </Stage>
-
-        {!image && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-zinc-500">
-            导入款式图后，使用工具栏标注 — 类似微信截图标注
-          </p>
-        )}
-      </div>
+      {stageEl}
     </div>
   );
 }

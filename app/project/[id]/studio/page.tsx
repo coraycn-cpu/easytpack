@@ -77,6 +77,13 @@ export default function StudioPage() {
     [project, persist],
   );
 
+  const updateSplitLayout = (
+    key: "tabs" | "toolbar" | "stage",
+    patch: Partial<{ x: number; y: number; w: number; h?: number }>,
+  ) => {
+    saveLayout({ ...layout, [key]: { ...layout[key], ...patch } });
+  };
+
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
     if (!project) return;
     const artboards = project.canvas_data.artboards.map((a) =>
@@ -242,20 +249,53 @@ export default function StudioPage() {
   const progress = calcProgress(project);
   const scale = layout.viewport.scale;
 
-  const artboardTabs = (
-    <div className="flex gap-0">
-      {project.canvas_data.artboards.map((ab) => (
-        <button
-          key={ab.id}
-          type="button"
-          onClick={() => switchArtboard(ab.id)}
-          className={`border-l border-[#444] px-2 py-0.5 text-[10px] first:border-l-0 ${
-            ab.id === activeArtboardId ? "bg-white/20" : "hover:bg-white/10"
-          }`}
-        >
-          {ab.name}
-        </button>
-      ))}
+  const tabsContent = (
+    <div className="flex flex-wrap items-center gap-2 text-[10px]">
+      <div className="flex border border-[#cbd5e1]">
+        {project.canvas_data.artboards.map((ab) => (
+          <button
+            key={ab.id}
+            type="button"
+            onClick={() => switchArtboard(ab.id)}
+            className={`border-r border-[#cbd5e1] px-2.5 py-1 last:border-r-0 ${
+              ab.id === activeArtboardId
+                ? "bg-[#475569] text-white"
+                : "bg-white text-[#64748b] hover:bg-[#f1f5f9]"
+            }`}
+          >
+            {ab.name}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const tpl = applyHotspotTemplate(project.intake.detectedCategory);
+          updateArtboard(activeArtboard.id, { hotspots: tpl });
+          setAiMessage("已应用热区模板");
+        }}
+        className="border border-[#cbd5e1] bg-white px-2 py-1 text-[#2563eb] hover:bg-[#f1f5f9]"
+      >
+        应用热区模板
+      </button>
+      <label className="cursor-pointer border border-[#cbd5e1] bg-white px-2 py-1 text-[#64748b] hover:bg-[#f1f5f9]">
+        更换图片
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () =>
+              updateArtboard(activeArtboard.id, {
+                imageDataUrl: reader.result as string,
+              });
+            reader.readAsDataURL(file);
+          }}
+        />
+      </label>
     </div>
   );
 
@@ -302,72 +342,33 @@ export default function StudioPage() {
           viewport={layout.viewport}
           onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
         >
-          <DraggablePanel
-            id="artboard"
-            title="款式标注"
-            variant="artboard"
-            x={layout.artboard.x}
-            y={layout.artboard.y}
-            width={layout.artboard.w}
-            height={layout.artboard.h}
-            scale={scale}
-            headerExtra={artboardTabs}
-            onMove={(x, y) => saveLayout({ ...layout, artboard: { ...layout.artboard, x, y } })}
-          >
-            <div className="flex h-full flex-col">
-              <div className="flex shrink-0 border-b border-[#333] bg-[#222] px-2 py-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const tpl = applyHotspotTemplate(project.intake.detectedCategory);
-                    updateArtboard(activeArtboard.id, { hotspots: tpl });
-                    setAiMessage("已应用热区模板");
-                  }}
-                  className="text-[10px] text-[#93c5fd] hover:underline"
-                >
-                  应用热区模板
-                </button>
-                <label className="ml-auto cursor-pointer text-[10px] text-[#94a3b8] hover:text-white">
-                  更换图片
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () =>
-                        updateArtboard(activeArtboard.id, {
-                          imageDataUrl: reader.result as string,
-                        });
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-              </div>
-              <AnnotationCanvas
-                embedded
-                stageHeight={480}
-                imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
-                hotspots={activeArtboard.hotspots}
-                annotations={normalizeAnnotations(activeArtboard.annotations)}
-                onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
-                onAnnotationsChange={(annotations) =>
-                  updateArtboard(activeArtboard.id, { annotations })
-                }
-                selectedHotspotId={selectedHotspotId}
-                onHotspotSelect={setSelectedHotspotId}
-                imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
-                onImageOffsetChange={(imageOffset) =>
-                  updateArtboard(activeArtboard.id, { imageOffset })
-                }
-                nextMarkerIndex={
-                  activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
-                }
-              />
-            </div>
-          </DraggablePanel>
+          <AnnotationCanvas
+            splitOnCanvas
+            splitLayout={{
+              tabs: layout.tabs,
+              toolbar: layout.toolbar,
+              stage: layout.stage,
+            }}
+            onSplitLayoutChange={updateSplitLayout}
+            canvasScale={scale}
+            tabsContent={tabsContent}
+            imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
+            hotspots={activeArtboard.hotspots}
+            annotations={normalizeAnnotations(activeArtboard.annotations)}
+            onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
+            onAnnotationsChange={(annotations) =>
+              updateArtboard(activeArtboard.id, { annotations })
+            }
+            selectedHotspotId={selectedHotspotId}
+            onHotspotSelect={setSelectedHotspotId}
+            imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
+            onImageOffsetChange={(imageOffset) =>
+              updateArtboard(activeArtboard.id, { imageOffset })
+            }
+            nextMarkerIndex={
+              activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
+            }
+          />
 
           <DraggablePanel
             id="ai"
