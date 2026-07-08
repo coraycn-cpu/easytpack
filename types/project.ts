@@ -1,4 +1,5 @@
 import type { BomItem, Hotspot, ProcessItem } from "./process";
+import type { StudioLayout } from "@/lib/studio/layout";
 
 export type ProjectStatus =
   | "intake"
@@ -82,11 +83,14 @@ export type Artboard = {
   imageDataUrl?: string;
   hotspots: Hotspot[];
   annotations: Annotation[];
+  /** 款式图在画板内的偏移（可拖动） */
+  imageOffset?: { x: number; y: number };
 };
 
 export type CanvasData = {
   artboards: Artboard[];
   activeArtboardId: string;
+  studioLayout?: StudioLayout;
 };
 
 /** @deprecated 旧格式，仅用于迁移 */

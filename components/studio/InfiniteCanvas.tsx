@@ -1,0 +1,128 @@
+"use client";
+
+import { useCallback, useRef, useState } from "react";
+import type { StudioLayout } from "@/lib/studio/layout";
+
+type InfiniteCanvasProps = {
+  viewport: StudioLayout["viewport"];
+  onViewportChange: (viewport: StudioLayout["viewport"]) => void;
+  children: React.ReactNode;
+};
+
+export default function InfiniteCanvas({
+  viewport,
+  onViewportChange,
+  children,
+}: InfiniteCanvasProps) {
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.92 : 1.08;
+      const nextScale = Math.min(2, Math.max(0.25, viewport.scale * delta));
+      onViewportChange({ ...viewport, scale: nextScale });
+    },
+    [viewport, onViewportChange],
+  );
+
+  const startPan = (clientX: number, clientY: number) => {
+    setIsPanning(true);
+    panStart.current = {
+      x: clientX,
+      y: clientY,
+      panX: viewport.panX,
+      panY: viewport.panY,
+    };
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-panel]")) return;
+    if (e.button === 1 || e.button === 0) {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      startPan(e.clientX, e.clientY);
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!isPanning) return;
+    onViewportChange({
+      ...viewport,
+      panX: panStart.current.panX + (e.clientX - panStart.current.x),
+      panY: panStart.current.panY + (e.clientY - panStart.current.y),
+    });
+  };
+
+  const onPointerUp = () => setIsPanning(false);
+
+  const gridSize = 24 * viewport.scale;
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden bg-[#ececec] select-none"
+      style={{
+        cursor: isPanning ? "grabbing" : "grab",
+        backgroundImage: "radial-gradient(circle, #b0b0b0 1px, transparent 1px)",
+        backgroundSize: `${gridSize}px ${gridSize}px`,
+        backgroundPosition: `${viewport.panX}px ${viewport.panY}px`,
+      }}
+      onWheel={handleWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
+      <div
+        className="absolute left-0 top-0 origin-top-left"
+        style={{
+          transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.scale})`,
+        }}
+      >
+        {children}
+      </div>
+
+      <div className="pointer-events-none absolute bottom-3 left-3 flex gap-0 border border-[#999] bg-white text-[11px] text-[#333]">
+        <button
+          type="button"
+          className="pointer-events-auto border-r border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
+          onClick={() =>
+            onViewportChange({
+              ...viewport,
+              scale: Math.max(0.25, viewport.scale - 0.1),
+            })
+          }
+        >
+          −
+        </button>
+        <span className="px-2 py-1 tabular-nums">{Math.round(viewport.scale * 100)}%</span>
+        <button
+          type="button"
+          className="pointer-events-auto border-l border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
+          onClick={() =>
+            onViewportChange({
+              ...viewport,
+              scale: Math.min(2, viewport.scale + 0.1),
+            })
+          }
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="pointer-events-auto border-l border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
+          onClick={() => onViewportChange({ panX: 0, panY: 0, scale: 1 })}
+        >
+          重置视图
+        </button>
+      </div>
+
+      <p className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-[#888]">
+        拖动画布空白处平移 · 滚轮缩放
+      </p>
+    </div>
+  );
+}

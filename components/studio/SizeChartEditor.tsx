@@ -6,9 +6,10 @@ type SizeChartEditorProps = {
   chart: SizeChart;
   onChange: (chart: SizeChart) => void;
   compact?: boolean;
+  flat?: boolean;
 };
 
-export default function SizeChartEditor({ chart, onChange, compact }: SizeChartEditorProps) {
+export default function SizeChartEditor({ chart, onChange, compact, flat }: SizeChartEditorProps) {
   const addSize = () => {
     const name = window.prompt("新尺码名称", "XL");
     if (!name?.trim() || chart.sizes.includes(name.trim())) return;
@@ -81,7 +82,7 @@ export default function SizeChartEditor({ chart, onChange, compact }: SizeChartE
   }
 
   return (
-    <div className={`text-xs ${compact ? "overflow-hidden" : "max-h-80 overflow-auto"}`}>
+    <div className={`text-xs ${compact ? "overflow-hidden" : flat ? "" : "max-h-80 overflow-auto"}`}>
       <div className="mb-2 flex gap-2">
         <button type="button" onClick={addSize} className="text-blue-600 hover:underline">
           + 尺码

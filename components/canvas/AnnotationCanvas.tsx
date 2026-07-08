@@ -36,6 +36,10 @@ type AnnotationCanvasProps = {
   onImageChange?: (dataUrl: string) => void;
   nextMarkerIndex?: number;
   className?: string;
+  embedded?: boolean;
+  stageHeight?: number;
+  imageOffset?: { x: number; y: number };
+  onImageOffsetChange?: (offset: { x: number; y: number }) => void;
 };
 
 function createId(prefix: string) {
@@ -65,6 +69,10 @@ export default function AnnotationCanvas({
   onImageChange,
   nextMarkerIndex = 1,
   className = "",
+  embedded = false,
+  stageHeight = 480,
+  imageOffset = { x: 0, y: 0 },
+  onImageOffsetChange,
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -72,7 +80,8 @@ export default function AnnotationCanvas({
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
-  const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: CANVAS_H });
+  const [imageSelected, setImageSelected] = useState(false);
+  const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: stageHeight });
 
   const [draftRect, setDraftRect] = useState<{
     x: number;
@@ -179,10 +188,11 @@ export default function AnnotationCanvas({
     onHotspotsChange(next);
   };
 
+  const logicalH = embedded ? stageHeight : CANVAS_H;
   const fitScale =
-    Math.min(containerSize.w / CANVAS_W, containerSize.h / CANVAS_H, 1.2) * zoom;
+    Math.min(containerSize.w / CANVAS_W, containerSize.h / logicalH, 1.2) * zoom;
   const stageW = CANVAS_W * fitScale;
-  const stageH = CANVAS_H * fitScale;
+  const stageH = logicalH * fitScale;
 
   const getPointer = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
@@ -193,12 +203,23 @@ export default function AnnotationCanvas({
 
   const selectAnnotation = (id: string) => {
     setSelectedAnnId(id);
+    setImageSelected(false);
     onHotspotSelect?.(null);
   };
 
   const selectHotspot = (id: string) => {
     onHotspotSelect?.(id);
     setSelectedAnnId(null);
+    setImageSelected(false);
+  };
+
+  const selectImage = () => {
+    setImageSelected(true);
+    setSelectedAnnId(null);
+    onHotspotSelect?.(null);
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+    }
   };
 
   const handleAnnClick = (
@@ -222,6 +243,7 @@ export default function AnnotationCanvas({
     if (tool === "select") {
       if (isEmptyTarget(e)) {
         setSelectedAnnId(null);
+        setImageSelected(false);
         onHotspotSelect?.(null);
       }
       return;
@@ -673,7 +695,11 @@ export default function AnnotationCanvas({
 
   return (
     <div
-      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-700/50 shadow-2xl ${className}`}
+      className={`flex min-h-0 flex-col overflow-hidden ${
+        embedded
+          ? "border-0 bg-[#141414]"
+          : `border border-zinc-700/50 shadow-2xl rounded-xl ${className}`
+      } ${embedded ? className : ""}`}
     >
       <CanvasToolbar
         tool={tool}
@@ -688,12 +714,15 @@ export default function AnnotationCanvas({
         canDelete={Boolean(selectedAnnId || selectedHotspotId)}
         zoom={zoom}
         onZoomChange={setZoom}
+        flat={embedded}
         hint={
           tool !== "select"
-            ? "绘制完成后自动切回选择；点击标注可选中"
-            : selectedAnnId || selectedHotspotId
-              ? "已选中 — 可拖动、Delete 删除、Ctrl+Z 撤销"
-              : "点击标注选中，或选择工具绘制"
+            ? "绘制完成后自动切回选择"
+            : imageSelected
+              ? "款式图已选中 — 可拖动位置"
+              : selectedAnnId || selectedHotspotId
+                ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
+                : "点击款式图或标注进行选中"
         }
       />
 
@@ -723,30 +752,52 @@ export default function AnnotationCanvas({
 
       <div
         ref={containerRef}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#0f0f14]"
+        className={`relative flex min-h-0 overflow-hidden bg-[#141414] ${
+          embedded ? "" : "flex-1 items-center justify-center"
+        }`}
+        style={embedded ? { height: stageHeight } : undefined}
       >
         <Stage
           ref={stageRef}
-          width={stageW}
-          height={stageH}
+          width={embedded ? CANVAS_W * fitScale : stageW}
+          height={embedded ? stageHeight * fitScale : stageH}
           scaleX={fitScale}
           scaleY={fitScale}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={finishDrawing}
           onMouseLeave={finishDrawing}
-          style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.4)" }}
         >
           <Layer>
             {image && (
-              <KonvaImage
-                image={image}
-                x={imageFit.x}
-                y={imageFit.y}
-                width={imageFit.width}
-                height={imageFit.height}
-                listening={false}
-              />
+              <>
+                <KonvaImage
+                  id="garment_image"
+                  image={image}
+                  x={imageFit.x + imageOffset.x}
+                  y={imageFit.y + imageOffset.y}
+                  width={imageFit.width}
+                  height={imageFit.height}
+                  listening={tool === "select"}
+                  draggable={tool === "select" && imageSelected}
+                  stroke={imageSelected ? "#60a5fa" : undefined}
+                  strokeWidth={imageSelected ? 2 : 0}
+                  onClick={(e) => {
+                    e.cancelBubble = true;
+                    selectImage();
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true;
+                    selectImage();
+                  }}
+                  onDragEnd={(e) => {
+                    onImageOffsetChange?.({
+                      x: e.target.x() - imageFit.x,
+                      y: e.target.y() - imageFit.y,
+                    });
+                  }}
+                />
+              </>
             )}
             {normalizedAnnotations.map(renderAnnotation)}
             {hotspots.map((hs) => (

@@ -6,26 +6,21 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AiAssistantPanel from "@/components/studio/AiAssistantPanel";
 import AiChatFab from "@/components/studio/AiChatFab";
-import CompliancePanel from "@/components/studio/CompliancePanel";
-import SizeChartEditor from "@/components/studio/SizeChartEditor";
+import DraggablePanel from "@/components/studio/DraggablePanel";
+import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
+import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { applyHotspotTemplate } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
+import { getStudioLayout, type StudioLayout } from "@/lib/studio/layout";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, Artboard, TechPackProject, WorkflowStatus } from "@/types/project";
 
 const AnnotationCanvas = dynamic(
   () => import("@/components/canvas/AnnotationCanvas"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex flex-1 items-center justify-center bg-zinc-900 text-sm text-zinc-400">
-        画板加载中...
-      </div>
-    ),
-  },
+  { ssr: false, loading: () => <div className="h-[480px] bg-[#141414] text-xs text-zinc-500 flex items-center justify-center">画板加载中…</div> },
 );
 
 type Tab = "process" | "bom" | "size";
@@ -40,6 +35,7 @@ export default function StudioPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
+  const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
 
   useEffect(() => {
     const p = getProject(id);
@@ -53,9 +49,9 @@ export default function StudioPage() {
     }
     setProject(p);
     setActiveArtboardId(p.canvas_data.activeArtboardId);
-    const hasAnnotations = p.canvas_data.artboards.some((a) => a.annotations.length > 0);
-    if (!hasAnnotations) {
-      setAiTip("先点「智能标注」或用手动工具标注；完成后用右下角 🤖 对话修改");
+    setLayout(getStudioLayout(p.canvas_data.studioLayout));
+    if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
+      setAiTip("拖动画布平移 · 拖动面板标题栏 reposition · 选择工具可拖动款式图");
     }
   }, [id, router]);
 
@@ -68,6 +64,18 @@ export default function StudioPage() {
     setProject(updated);
     saveProject(updated);
   }, []);
+
+  const saveLayout = useCallback(
+    (next: StudioLayout) => {
+      setLayout(next);
+      if (!project) return;
+      persist({
+        ...project,
+        canvas_data: { ...project.canvas_data, studioLayout: next },
+      });
+    },
+    [project, persist],
+  );
 
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
     if (!project) return;
@@ -130,7 +138,7 @@ export default function StudioPage() {
         annotations: [...activeArtboard.annotations, ...newAnnotations],
       });
       setAiTip(data.userTips ?? "已在图上添加智能标注");
-      setAiMessage("智能标注完成 — 用「选择」工具点击可调整或删除");
+      setAiMessage("智能标注完成");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "标注失败");
     } finally {
@@ -156,10 +164,9 @@ export default function StudioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
       persist({ ...project, size_chart: { sizes: data.sizes, rows: data.rows } });
       setActiveTab("size");
-      setAiTip(data.plainExplanation ?? "尺码表已生成，请核对数值");
+      setAiTip(data.plainExplanation ?? "尺码表已生成");
       setAiMessage("尺码表已填入");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
@@ -189,12 +196,8 @@ export default function StudioPage() {
           ...data.process_items.filter((p: ProcessItem) => !existing.has(p.part)),
         ];
       }
-      if (data.bom_items?.length) {
-        updated.bom_items = [...updated.bom_items, ...data.bom_items];
-      }
-      if (data.size_chart?.rows?.length) {
-        updated.size_chart = data.size_chart;
-      }
+      if (data.bom_items?.length) updated.bom_items = [...updated.bom_items, ...data.bom_items];
+      if (data.size_chart?.rows?.length) updated.size_chart = data.size_chart;
       persist(updated);
       setAiTip(data.summary);
       setAiMessage("工艺包已补全");
@@ -219,11 +222,7 @@ export default function StudioPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const text = data.items?.[0]?.process ?? data.text;
-      setAiTip(
-        typeof text === "string"
-          ? text
-          : project.process_items.map((p) => `${p.part}：${p.process}`).join("\n"),
-      );
+      setAiTip(typeof text === "string" ? text : "已生成解释");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "解释失败");
     } finally {
@@ -233,107 +232,153 @@ export default function StudioPage() {
 
   if (!project || !activeArtboard) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
-        加载工作台...
+      <div className="flex h-screen items-center justify-center bg-[#ececec] text-sm text-[#64748b]">
+        加载工作台…
       </div>
     );
   }
 
   const compliance = checkCompliance(project);
   const progress = calcProgress(project);
+  const scale = layout.viewport.scale;
+
+  const artboardTabs = (
+    <div className="flex gap-0">
+      {project.canvas_data.artboards.map((ab) => (
+        <button
+          key={ab.id}
+          type="button"
+          onClick={() => switchArtboard(ab.id)}
+          className={`border-l border-[#444] px-2 py-0.5 text-[10px] first:border-l-0 ${
+            ab.id === activeArtboardId ? "bg-white/20" : "hover:bg-white/10"
+          }`}
+        >
+          {ab.name}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-100">
-      <header className="shrink-0 border-b border-zinc-200 bg-white px-4 py-2 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <Link href="/projects" className="text-xs text-zinc-400 hover:text-zinc-600">
-              ← 我的项目
-            </Link>
-            <h1 className="text-base font-semibold text-zinc-900">{project.title}</h1>
-            <p className="text-[10px] text-zinc-500">
-              {project.intake.detectedCategory} · {WORKFLOW_LABELS[project.workflowStatus]} ·{" "}
-              {progress}%
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={project.workflowStatus}
-              onChange={(e) => {
-                const ws = e.target.value as WorkflowStatus;
-                if (ws === "finalized" && !canFinalize(project)) {
-                  setAiMessage("请先完善必填项");
-                  return;
-                }
-                persist({ ...project, workflowStatus: ws });
-              }}
-              className="rounded-lg border border-zinc-200 px-2 py-1 text-xs"
-            >
-              <option value="draft">草稿</option>
-              <option value="in_review">待版师审核</option>
-              <option value="finalized">已定稿</option>
-            </select>
-            <Link
-              href={`/project/${id}/export`}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              导出给版师 →
-            </Link>
-          </div>
+    <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
+      <header className="z-20 flex shrink-0 items-center justify-between border-b border-[#999] bg-white px-4 py-2">
+        <div>
+          <Link href="/projects" className="text-[10px] text-[#94a3b8] hover:text-[#475569]">
+            ← 我的项目
+          </Link>
+          <h1 className="text-sm font-semibold text-[#0f172a]">{project.title}</h1>
+          <p className="text-[10px] text-[#64748b]">
+            {project.intake.detectedCategory} · {WORKFLOW_LABELS[project.workflowStatus]} · {progress}%
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={project.workflowStatus}
+            onChange={(e) => {
+              const ws = e.target.value as WorkflowStatus;
+              if (ws === "finalized" && !canFinalize(project)) {
+                setAiMessage("请先完善必填项");
+                return;
+              }
+              persist({ ...project, workflowStatus: ws });
+            }}
+            className="border border-[#cbd5e1] bg-white px-2 py-1 text-xs"
+          >
+            <option value="draft">草稿</option>
+            <option value="in_review">待版师审核</option>
+            <option value="finalized">已定稿</option>
+          </select>
+          <Link
+            href={`/project/${id}/export`}
+            className="border border-[#2563eb] bg-[#2563eb] px-3 py-1 text-xs font-medium text-white hover:bg-[#1d4ed8]"
+          >
+            导出给版师 →
+          </Link>
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[1fr_380px]">
-        <div className="flex min-h-0 min-w-0 flex-col gap-1">
-          <div className="flex shrink-0 gap-1">
-            {project.canvas_data.artboards.map((ab) => (
-              <button
-                key={ab.id}
-                type="button"
-                onClick={() => switchArtboard(ab.id)}
-                className={`rounded-t-lg px-3 py-1.5 text-xs font-medium ${
-                  ab.id === activeArtboardId
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"
-                }`}
-              >
-                {ab.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                const tpl = applyHotspotTemplate(project.intake.detectedCategory);
-                updateArtboard(activeArtboard.id, { hotspots: tpl });
-                setAiMessage("已应用品类热区模板");
-              }}
-              className="ml-auto self-center text-[10px] text-blue-600 hover:underline"
-            >
-              应用热区模板
-            </button>
-          </div>
+      <div className="relative min-h-0 flex-1">
+        <InfiniteCanvas
+          viewport={layout.viewport}
+          onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
+        >
+          <DraggablePanel
+            id="artboard"
+            title="款式标注"
+            variant="artboard"
+            x={layout.artboard.x}
+            y={layout.artboard.y}
+            width={layout.artboard.w}
+            height={layout.artboard.h}
+            scale={scale}
+            headerExtra={artboardTabs}
+            onMove={(x, y) => saveLayout({ ...layout, artboard: { ...layout.artboard, x, y } })}
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex shrink-0 border-b border-[#333] bg-[#222] px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tpl = applyHotspotTemplate(project.intake.detectedCategory);
+                    updateArtboard(activeArtboard.id, { hotspots: tpl });
+                    setAiMessage("已应用热区模板");
+                  }}
+                  className="text-[10px] text-[#93c5fd] hover:underline"
+                >
+                  应用热区模板
+                </button>
+                <label className="ml-auto cursor-pointer text-[10px] text-[#94a3b8] hover:text-white">
+                  更换图片
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        updateArtboard(activeArtboard.id, {
+                          imageDataUrl: reader.result as string,
+                        });
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              </div>
+              <AnnotationCanvas
+                embedded
+                stageHeight={480}
+                imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
+                hotspots={activeArtboard.hotspots}
+                annotations={normalizeAnnotations(activeArtboard.annotations)}
+                onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
+                onAnnotationsChange={(annotations) =>
+                  updateArtboard(activeArtboard.id, { annotations })
+                }
+                selectedHotspotId={selectedHotspotId}
+                onHotspotSelect={setSelectedHotspotId}
+                imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
+                onImageOffsetChange={(imageOffset) =>
+                  updateArtboard(activeArtboard.id, { imageOffset })
+                }
+                nextMarkerIndex={
+                  activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
+                }
+              />
+            </div>
+          </DraggablePanel>
 
-          <AnnotationCanvas
-            className="min-h-0 flex-1"
-            imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
-            hotspots={activeArtboard.hotspots}
-            annotations={normalizeAnnotations(activeArtboard.annotations)}
-            onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
-            onAnnotationsChange={(annotations) =>
-              updateArtboard(activeArtboard.id, { annotations })
-            }
-            selectedHotspotId={selectedHotspotId}
-            onHotspotSelect={setSelectedHotspotId}
-            showImport
-            onImageChange={(url) => updateArtboard(activeArtboard.id, { imageDataUrl: url })}
-            nextMarkerIndex={
-              activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
-            }
-          />
-        </div>
-
-        <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
-          <div className="shrink-0">
+          <DraggablePanel
+            id="ai"
+            title="AI 版房助手"
+            variant="ai"
+            x={layout.ai.x}
+            y={layout.ai.y}
+            width={layout.ai.w}
+            scale={scale}
+            onMove={(x, y) => saveLayout({ ...layout, ai: { ...layout.ai, x, y } })}
+          >
             <AiAssistantPanel
               loading={aiLoading}
               message={aiMessage}
@@ -342,107 +387,32 @@ export default function StudioPage() {
               onGenerateSize={handleGenerateSize}
               onEnhanceAll={handleEnhanceAll}
               onExplain={handleExplain}
-              compact
             />
-          </div>
+          </DraggablePanel>
 
-          <div className="shrink-0 rounded-xl border border-zinc-200 bg-white p-2">
-            <h3 className="text-[10px] font-semibold text-zinc-700">质量检查</h3>
-            <div className="mt-1">
-              <CompliancePanel issues={compliance} />
-            </div>
-          </div>
+          <DraggablePanel
+            id="data"
+            title="工艺 · 物料 · 尺寸"
+            variant="data"
+            x={layout.data.x}
+            y={layout.data.y}
+            width={layout.data.w}
+            height={layout.data.h}
+            scale={scale}
+            onMove={(x, y) => saveLayout({ ...layout, data: { ...layout.data, x, y } })}
+          >
+            <StudioDataPanel
+              project={project}
+              compliance={compliance}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onPersist={persist}
+            />
+          </DraggablePanel>
+        </InfiniteCanvas>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-2">
-            <div className="mb-1 flex shrink-0 gap-1 border-b border-zinc-100 pb-1">
-              {(["process", "bom", "size"] as Tab[]).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${
-                    activeTab === tab ? "bg-zinc-900 text-white" : "text-zinc-500"
-                  }`}
-                >
-                  {tab === "process" ? "工艺" : tab === "bom" ? "物料" : "尺寸"}
-                </button>
-              ))}
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {activeTab === "process" && (
-                <div className="flex h-full flex-col gap-1 overflow-hidden">
-                  {project.process_items.slice(0, 6).map((item, i) => (
-                    <div key={i} className="shrink-0 rounded border border-zinc-100 p-1.5 text-[10px]">
-                      <input
-                        value={item.part}
-                        onChange={(e) => {
-                          const items = [...project.process_items];
-                          items[i] = { ...items[i], part: e.target.value };
-                          persist({ ...project, process_items: items });
-                        }}
-                        className="w-full font-medium outline-none"
-                      />
-                      <textarea
-                        value={item.process}
-                        onChange={(e) => {
-                          const items = [...project.process_items];
-                          items[i] = { ...items[i], process: e.target.value };
-                          persist({ ...project, process_items: items });
-                        }}
-                        rows={1}
-                        className="mt-0.5 w-full resize-none text-zinc-600 outline-none"
-                      />
-                    </div>
-                  ))}
-                  {project.process_items.length === 0 && (
-                    <p className="text-[10px] text-zinc-400">点击「一键补全」开始</p>
-                  )}
-                  {project.process_items.length > 6 && (
-                    <p className="text-[10px] text-zinc-400">
-                      还有 {project.process_items.length - 6} 条 — 用 🤖 对话查看全部
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "bom" && (
-                <div className="flex h-full flex-col gap-1 overflow-hidden">
-                  {project.bom_items.slice(0, 8).map((item, i) => (
-                    <div key={i} className="shrink-0 rounded border border-zinc-100 p-1.5 text-[10px]">
-                      <input
-                        value={item.name}
-                        onChange={(e) => {
-                          const items = [...project.bom_items];
-                          items[i] = { ...items[i], name: e.target.value };
-                          persist({ ...project, bom_items: items });
-                        }}
-                        className="w-full font-medium outline-none"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === "size" && (
-                <div className="h-full overflow-hidden text-[10px]">
-                  <SizeChartEditor
-                    chart={project.size_chart}
-                    onChange={(size_chart) => persist({ ...project, size_chart })}
-                    compact
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
       </div>
-
-      <AiChatFab
-        project={project}
-        onProjectUpdate={persist}
-        disabled={aiLoading}
-      />
     </div>
   );
 }

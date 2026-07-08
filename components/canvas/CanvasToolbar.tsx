@@ -20,6 +20,7 @@ type CanvasToolbarProps = {
   zoom: number;
   onZoomChange: (z: number) => void;
   hint?: string;
+  flat?: boolean;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -48,104 +49,86 @@ export default function CanvasToolbar({
   zoom,
   onZoomChange,
   hint,
+  flat,
 }: CanvasToolbarProps) {
+  const btn = flat
+    ? "px-2 py-1 text-[10px] border border-[#444] hover:bg-[#333] disabled:opacity-30"
+    : "rounded-md px-2 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-30";
+
+  const toolBtn = (active: boolean) =>
+    flat
+      ? `flex h-7 min-w-[28px] items-center justify-center border px-1 text-[10px] ${
+          active
+            ? "border-[#60a5fa] bg-[#2563eb] text-white"
+            : "border-[#444] text-zinc-300 hover:bg-[#333]"
+        }`
+      : `flex h-9 min-w-[36px] items-center justify-center rounded-md px-2 text-sm ${
+          active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-700"
+        }`;
+
   return (
-    <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-      <div className="flex flex-wrap gap-0.5 rounded-lg bg-zinc-800 p-1">
-        {TOOLS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            title={t.label}
-            onClick={() => onToolChange(t.id)}
-            className={`flex h-9 min-w-[36px] items-center justify-center rounded-md px-2 text-sm transition ${
-              tool === t.id
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
-            }`}
-          >
-            <span className="text-base leading-none">{t.icon}</span>
-            <span className="ml-1 hidden text-xs lg:inline">{t.label}</span>
+    <div className={`shrink-0 border-b bg-[#1a1a1a] ${flat ? "border-[#333]" : "border-zinc-700/50"}`}>
+      <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
+        <div className={`flex flex-wrap ${flat ? "gap-0" : "gap-0.5 rounded-lg bg-zinc-800 p-1"}`}>
+          {TOOLS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              title={t.label}
+              onClick={() => onToolChange(t.id)}
+              className={toolBtn(tool === t.id)}
+            >
+              <span className="leading-none">{t.icon}</span>
+              <span className="ml-0.5 hidden sm:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className={`mx-1 h-5 w-px ${flat ? "bg-[#444]" : "bg-zinc-700"}`} />
+
+        <div className="flex items-center gap-0.5">
+          {ANNOTATION_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              title={c.label}
+              onClick={() => onColorChange(c.value)}
+              className={`h-5 w-5 border ${color === c.value ? "border-white" : "border-transparent"}`}
+              style={{ backgroundColor: c.value }}
+            />
+          ))}
+        </div>
+
+        <div className={`mx-1 h-5 w-px ${flat ? "bg-[#444]" : "bg-zinc-700"}`} />
+
+        <div className="flex gap-0.5">
+          <button type="button" disabled={!canUndo} onClick={onUndo} className={`${btn} text-zinc-300`}>
+            撤销
           </button>
-        ))}
-      </div>
+          <button type="button" disabled={!canRedo} onClick={onRedo} className={`${btn} text-zinc-300`}>
+            重做
+          </button>
+          <button type="button" disabled={!canDelete} onClick={onDelete} className={`${btn} text-red-400`}>
+            删除
+          </button>
+        </div>
 
-      <div className="h-6 w-px bg-zinc-700" />
-
-      <div className="flex items-center gap-1">
-        {ANNOTATION_COLORS.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            title={c.label}
-            onClick={() => onColorChange(c.value)}
-            className={`h-6 w-6 rounded-full border-2 transition ${
-              color === c.value ? "border-white scale-110" : "border-transparent"
-            }`}
-            style={{ backgroundColor: c.value }}
-          />
-        ))}
-      </div>
-
-      <div className="h-6 w-px bg-zinc-700" />
-
-      <div className="flex gap-1">
-        <button
-          type="button"
-          disabled={!canUndo}
-          onClick={onUndo}
-          className="rounded-md px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-30"
-        >
-          撤销
-        </button>
-        <button
-          type="button"
-          disabled={!canRedo}
-          onClick={onRedo}
-          className="rounded-md px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-30"
-        >
-          重做
-        </button>
-        <button
-          type="button"
-          disabled={!canDelete}
-          onClick={onDelete}
-          className="rounded-md px-2 py-1.5 text-xs text-red-400 hover:bg-zinc-700 disabled:opacity-30"
-        >
-          删除
-        </button>
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))}
-          className="rounded-md px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
-        >
-          −
-        </button>
-        <span className="min-w-[3rem] text-center text-xs text-zinc-400">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button
-          type="button"
-          onClick={() => onZoomChange(Math.min(2, zoom + 0.1))}
-          className="rounded-md px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          onClick={() => onZoomChange(1)}
-          className="rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-700"
-        >
-          适应
-        </button>
-      </div>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button type="button" onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))} className={`${btn} text-zinc-300`}>
+            −
+          </button>
+          <span className="min-w-[2.5rem] text-center text-[10px] text-zinc-400">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button type="button" onClick={() => onZoomChange(Math.min(2, zoom + 0.1))} className={`${btn} text-zinc-300`}>
+            +
+          </button>
+        </div>
       </div>
       {hint && (
-        <p className="border-t border-zinc-800 px-3 py-1 text-[10px] text-zinc-500">{hint}</p>
+        <p className={`border-t px-2 py-0.5 text-[9px] text-zinc-500 ${flat ? "border-[#333]" : "border-zinc-800"}`}>
+          {hint}
+        </p>
       )}
     </div>
   );
