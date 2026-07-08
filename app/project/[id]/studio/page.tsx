@@ -7,7 +7,6 @@ import Link from "next/link";
 import AiAssistantPanel from "@/components/studio/AiAssistantPanel";
 import AiChatFab from "@/components/studio/AiChatFab";
 import CompliancePanel from "@/components/studio/CompliancePanel";
-import GuidedSteps, { inferGuidedStep } from "@/components/studio/GuidedSteps";
 import SizeChartEditor from "@/components/studio/SizeChartEditor";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
@@ -64,8 +63,6 @@ export default function StudioPage() {
     () => project?.canvas_data.artboards.find((a) => a.id === activeArtboardId),
     [project, activeArtboardId],
   );
-
-  const guidedStep = project ? inferGuidedStep(project) : 1;
 
   const persist = useCallback((updated: TechPackProject) => {
     setProject(updated);
@@ -283,9 +280,6 @@ export default function StudioPage() {
               导出给版师 →
             </Link>
           </div>
-        </div>
-        <div className="mt-2">
-          <GuidedSteps currentStep={guidedStep} />
         </div>
       </header>
 
