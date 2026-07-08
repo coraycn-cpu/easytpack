@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Stage,
   Layer,
@@ -23,6 +24,7 @@ import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
 import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
+import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
 
 type Snapshot = { annotations: Annotation[]; hotspots: Hotspot[] };
 
@@ -50,6 +52,10 @@ type AnnotationCanvasProps = {
   ) => void;
   canvasScale?: number;
   tabsContent?: React.ReactNode;
+  /** 工具栏固定顶部 + 款式图直接铺在无限画布上 */
+  fixedChrome?: boolean;
+  stagePosition?: PanelPosition;
+  onStagePositionChange?: (patch: Partial<PanelPosition>) => void;
 };
 
 function createId(prefix: string) {
@@ -88,6 +94,9 @@ export default function AnnotationCanvas({
   onSplitLayoutChange,
   canvasScale = 1,
   tabsContent,
+  fixedChrome = false,
+  stagePosition,
+  onStagePositionChange,
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -96,9 +105,11 @@ export default function AnnotationCanvas({
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [imageSelected, setImageSelected] = useState(false);
-  const panelStageH = splitOnCanvas
-    ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
-    : stageHeight;
+  const panelStageH = fixedChrome
+    ? Math.max(400, stagePosition?.h ?? 560)
+    : splitOnCanvas
+      ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
+      : stageHeight;
   const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: panelStageH });
 
   const [draftRect, setDraftRect] = useState<{
@@ -206,7 +217,8 @@ export default function AnnotationCanvas({
     onHotspotsChange(next);
   };
 
-  const logicalH = embedded || splitOnCanvas ? panelStageH : CANVAS_H;
+  const logicalH = fixedChrome || embedded || splitOnCanvas ? panelStageH : CANVAS_H;
+  const transparentStage = fixedChrome || splitOnCanvas;
   const fitScale =
     Math.min(containerSize.w / CANVAS_W, containerSize.h / logicalH, 1.2) * zoom;
   const stageW = CANVAS_W * fitScale;
@@ -735,20 +747,34 @@ export default function AnnotationCanvas({
       zoom={zoom}
       onZoomChange={setZoom}
       flat
-      theme={splitOnCanvas ? "light" : "dark"}
+      theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarHint}
     />
   );
 
+  const [toolbarAnchor, setToolbarAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (fixedChrome) {
+      setToolbarAnchor(document.getElementById(STUDIO_TOOLBAR_ANCHOR_ID));
+    }
+  }, [fixedChrome]);
+
   const stageEl = (
     <div
       ref={containerRef}
-      className={`relative flex min-h-0 overflow-hidden ${
-        splitOnCanvas ? "bg-transparent" : embedded ? "bg-[#141414]" : "flex-1 items-center justify-center bg-[#141414]"
+      className={`relative flex min-h-0 overflow-visible ${
+        transparentStage
+          ? "bg-transparent"
+          : embedded
+            ? "bg-[#141414]"
+            : "flex-1 items-center justify-center bg-[#141414]"
       }`}
       style={
-        embedded || splitOnCanvas
-          ? { height: panelStageH, width: splitOnCanvas ? splitLayout?.stage.w : undefined }
+        embedded || splitOnCanvas || fixedChrome
+          ? {
+              height: panelStageH,
+              width: fixedChrome ? stagePosition?.w : splitOnCanvas ? splitLayout?.stage.w : undefined,
+            }
           : undefined
       }
     >
@@ -764,14 +790,26 @@ export default function AnnotationCanvas({
         onMouseLeave={finishDrawing}
       >
         <Layer>
-          <Rect
-            x={0}
-            y={0}
-            width={CANVAS_W}
-            height={logicalH}
-            fill={splitOnCanvas ? "#ffffff" : "#141414"}
-            listening={false}
-          />
+          {!transparentStage && (
+            <Rect
+              x={0}
+              y={0}
+              width={CANVAS_W}
+              height={logicalH}
+              fill="#141414"
+              listening={false}
+            />
+          )}
+          {splitOnCanvas && !fixedChrome && (
+            <Rect
+              x={0}
+              y={0}
+              width={CANVAS_W}
+              height={logicalH}
+              fill="#ffffff"
+              listening={false}
+            />
+          )}
           {image && (
             <KonvaImage
               id="garment_image"
@@ -883,6 +921,29 @@ export default function AnnotationCanvas({
       )}
     </div>
   );
+
+  if (fixedChrome && stagePosition) {
+    const toolbarPortal =
+      toolbarAnchor && createPortal(toolbarEl, toolbarAnchor);
+
+    return (
+      <>
+        {toolbarPortal}
+        <div
+          data-panel="stage"
+          className="absolute z-10"
+          style={{
+            left: stagePosition.x,
+            top: stagePosition.y,
+            width: stagePosition.w,
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {stageEl}
+        </div>
+      </>
+    );
+  }
 
   if (splitOnCanvas && splitLayout && onSplitLayoutChange) {
     return (

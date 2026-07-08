@@ -7,6 +7,7 @@ import Link from "next/link";
 import AiAssistantPanel from "@/components/studio/AiAssistantPanel";
 import AiChatFab from "@/components/studio/AiChatFab";
 import DraggablePanel from "@/components/studio/DraggablePanel";
+import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
@@ -14,13 +15,17 @@ import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { applyHotspotTemplate } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
-import { getStudioLayout, type StudioLayout } from "@/lib/studio/layout";
+import {
+  getStudioLayout,
+  STUDIO_TOOLBAR_ANCHOR_ID,
+  type StudioLayout,
+} from "@/lib/studio/layout";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, Artboard, TechPackProject, WorkflowStatus } from "@/types/project";
 
 const AnnotationCanvas = dynamic(
   () => import("@/components/canvas/AnnotationCanvas"),
-  { ssr: false, loading: () => <div className="h-[480px] bg-[#141414] text-xs text-zinc-500 flex items-center justify-center">画板加载中…</div> },
+  { ssr: false, loading: () => null },
 );
 
 type Tab = "process" | "bom" | "size";
@@ -51,7 +56,7 @@ export default function StudioPage() {
     setActiveArtboardId(p.canvas_data.activeArtboardId);
     setLayout(getStudioLayout(p.canvas_data.studioLayout));
     if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
-      setAiTip("拖动画布平移 · 拖动面板标题栏 reposition · 选择工具可拖动款式图");
+      setAiTip("左侧切换视图 · 顶部使用标注工具 · 右下角 🤖 对话修改");
     }
   }, [id, router]);
 
@@ -76,13 +81,6 @@ export default function StudioPage() {
     },
     [project, persist],
   );
-
-  const updateSplitLayout = (
-    key: "tabs" | "toolbar" | "stage",
-    patch: Partial<{ x: number; y: number; w: number; h?: number }>,
-  ) => {
-    saveLayout({ ...layout, [key]: { ...layout[key], ...patch } });
-  };
 
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
     if (!project) return;
@@ -249,59 +247,9 @@ export default function StudioPage() {
   const progress = calcProgress(project);
   const scale = layout.viewport.scale;
 
-  const tabsContent = (
-    <div className="flex flex-wrap items-center gap-2 text-[10px]">
-      <div className="flex border border-[#cbd5e1]">
-        {project.canvas_data.artboards.map((ab) => (
-          <button
-            key={ab.id}
-            type="button"
-            onClick={() => switchArtboard(ab.id)}
-            className={`border-r border-[#cbd5e1] px-2.5 py-1 last:border-r-0 ${
-              ab.id === activeArtboardId
-                ? "bg-[#475569] text-white"
-                : "bg-white text-[#64748b] hover:bg-[#f1f5f9]"
-            }`}
-          >
-            {ab.name}
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          const tpl = applyHotspotTemplate(project.intake.detectedCategory);
-          updateArtboard(activeArtboard.id, { hotspots: tpl });
-          setAiMessage("已应用热区模板");
-        }}
-        className="border border-[#cbd5e1] bg-white px-2 py-1 text-[#2563eb] hover:bg-[#f1f5f9]"
-      >
-        应用热区模板
-      </button>
-      <label className="cursor-pointer border border-[#cbd5e1] bg-white px-2 py-1 text-[#64748b] hover:bg-[#f1f5f9]">
-        更换图片
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () =>
-              updateArtboard(activeArtboard.id, {
-                imageDataUrl: reader.result as string,
-              });
-            reader.readAsDataURL(file);
-          }}
-        />
-      </label>
-    </div>
-  );
-
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
-      <header className="z-20 flex shrink-0 items-center justify-between border-b border-[#999] bg-white px-4 py-2">
+      <header className="z-30 flex shrink-0 items-center justify-between border-b border-[#999] bg-white px-4 py-2">
         <div>
           <Link href="/projects" className="text-[10px] text-[#94a3b8] hover:text-[#475569]">
             ← 我的项目
@@ -337,82 +285,95 @@ export default function StudioPage() {
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1">
-        <InfiniteCanvas
-          viewport={layout.viewport}
-          onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
-        >
-          <AnnotationCanvas
-            splitOnCanvas
-            splitLayout={{
-              tabs: layout.tabs,
-              toolbar: layout.toolbar,
-              stage: layout.stage,
-            }}
-            onSplitLayoutChange={updateSplitLayout}
-            canvasScale={scale}
-            tabsContent={tabsContent}
-            imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
-            hotspots={activeArtboard.hotspots}
-            annotations={normalizeAnnotations(activeArtboard.annotations)}
-            onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
-            onAnnotationsChange={(annotations) =>
-              updateArtboard(activeArtboard.id, { annotations })
-            }
-            selectedHotspotId={selectedHotspotId}
-            onHotspotSelect={setSelectedHotspotId}
-            imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
-            onImageOffsetChange={(imageOffset) =>
-              updateArtboard(activeArtboard.id, { imageOffset })
-            }
-            nextMarkerIndex={
-              activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
-            }
-          />
+      {/* 标注工具 — 固定顶部 */}
+      <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
-          <DraggablePanel
-            id="ai"
-            title="AI 版房助手"
-            variant="ai"
-            x={layout.ai.x}
-            y={layout.ai.y}
-            width={layout.ai.w}
-            scale={scale}
-            onMove={(x, y) => saveLayout({ ...layout, ai: { ...layout.ai, x, y } })}
+      <div className="flex min-h-0 flex-1">
+        {/* 画板视图 — 固定左侧 */}
+        <FixedViewSidebar
+          artboards={project.canvas_data.artboards}
+          activeArtboardId={activeArtboardId}
+          onSwitchArtboard={switchArtboard}
+          onApplyHotspotTemplate={() => {
+            const tpl = applyHotspotTemplate(project.intake.detectedCategory);
+            updateArtboard(activeArtboard.id, { hotspots: tpl });
+            setAiMessage("已应用热区模板");
+          }}
+          onReplaceImage={(url) => updateArtboard(activeArtboard.id, { imageDataUrl: url })}
+        />
+
+        {/* 无限画布 — 仅款式图 + AI/数据浮动面板 */}
+        <div className="relative min-h-0 min-w-0 flex-1">
+          <InfiniteCanvas
+            viewport={layout.viewport}
+            onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
           >
-            <AiAssistantPanel
-              loading={aiLoading}
-              message={aiMessage}
-              tip={aiTip}
-              onSmartAnnotate={handleSmartAnnotate}
-              onGenerateSize={handleGenerateSize}
-              onEnhanceAll={handleEnhanceAll}
-              onExplain={handleExplain}
+            <AnnotationCanvas
+              fixedChrome
+              stagePosition={layout.stage}
+              canvasScale={scale}
+              imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
+              hotspots={activeArtboard.hotspots}
+              annotations={normalizeAnnotations(activeArtboard.annotations)}
+              onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
+              onAnnotationsChange={(annotations) =>
+                updateArtboard(activeArtboard.id, { annotations })
+              }
+              selectedHotspotId={selectedHotspotId}
+              onHotspotSelect={setSelectedHotspotId}
+              imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
+              onImageOffsetChange={(imageOffset) =>
+                updateArtboard(activeArtboard.id, { imageOffset })
+              }
+              nextMarkerIndex={
+                activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
+              }
             />
-          </DraggablePanel>
 
-          <DraggablePanel
-            id="data"
-            title="工艺 · 物料 · 尺寸"
-            variant="data"
-            x={layout.data.x}
-            y={layout.data.y}
-            width={layout.data.w}
-            height={layout.data.h}
-            scale={scale}
-            onMove={(x, y) => saveLayout({ ...layout, data: { ...layout.data, x, y } })}
-          >
-            <StudioDataPanel
-              project={project}
-              compliance={compliance}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              onPersist={persist}
-            />
-          </DraggablePanel>
-        </InfiniteCanvas>
+            <DraggablePanel
+              id="ai"
+              title="AI 版房助手"
+              variant="ai"
+              x={layout.ai.x}
+              y={layout.ai.y}
+              width={layout.ai.w}
+              scale={scale}
+              onMove={(x, y) => saveLayout({ ...layout, ai: { ...layout.ai, x, y } })}
+            >
+              <AiAssistantPanel
+                loading={aiLoading}
+                message={aiMessage}
+                tip={aiTip}
+                onSmartAnnotate={handleSmartAnnotate}
+                onGenerateSize={handleGenerateSize}
+                onEnhanceAll={handleEnhanceAll}
+                onExplain={handleExplain}
+              />
+            </DraggablePanel>
 
-        <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
+            <DraggablePanel
+              id="data"
+              title="工艺 · 物料 · 尺寸"
+              variant="data"
+              x={layout.data.x}
+              y={layout.data.y}
+              width={layout.data.w}
+              height={layout.data.h}
+              scale={scale}
+              onMove={(x, y) => saveLayout({ ...layout, data: { ...layout.data, x, y } })}
+            >
+              <StudioDataPanel
+                project={project}
+                compliance={compliance}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onPersist={persist}
+              />
+            </DraggablePanel>
+          </InfiniteCanvas>
+
+          <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
+        </div>
       </div>
     </div>
   );
