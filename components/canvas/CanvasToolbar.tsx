@@ -19,8 +19,7 @@ type CanvasToolbarProps = {
   canDelete: boolean;
   zoom: number;
   onZoomChange: (z: number) => void;
-  /** 触发撤销/重做按钮状态刷新 */
-  historyTick?: number;
+  hint?: string;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -48,10 +47,11 @@ export default function CanvasToolbar({
   canDelete,
   zoom,
   onZoomChange,
-  historyTick: _historyTick,
+  hint,
 }: CanvasToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-700/50 bg-zinc-900 px-3 py-2">
+    <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
       <div className="flex flex-wrap gap-0.5 rounded-lg bg-zinc-800 p-1">
         {TOOLS.map((t) => (
           <button
@@ -143,6 +143,10 @@ export default function CanvasToolbar({
           适应
         </button>
       </div>
+      </div>
+      {hint && (
+        <p className="border-t border-zinc-800 px-3 py-1 text-[10px] text-zinc-500">{hint}</p>
+      )}
     </div>
   );
 }

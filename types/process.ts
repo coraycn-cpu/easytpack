@@ -129,6 +129,14 @@ export const EnhanceTechPackSchema = z.object({
   summary: z.string().describe("本次补全了什么，用户还需要确认什么"),
 });
 
+export const AiChatResponseSchema = z.object({
+  reply: z.string().describe("给用户的友好回复"),
+  process_items: z.array(ProcessItemSchema).optional().describe("新增或修改的工艺条目"),
+  bom_items: z.array(BomItemSchema).optional().describe("新增或修改的物料"),
+  size_chart: SizeChartAssistSchema.optional().describe("更新后的尺码表"),
+  title: z.string().optional().describe("更新款式标题"),
+});
+
 export type ProcessItem = z.infer<typeof ProcessItemSchema>;
 export type ProcessList = z.infer<typeof ProcessListSchema>;
 export type BomItem = z.infer<typeof BomItemSchema>;

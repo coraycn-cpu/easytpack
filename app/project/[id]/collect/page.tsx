@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import { getProject, saveProject } from "@/lib/project/storage";
 import { createDefaultCanvasData, mergeHotspots } from "@/lib/project/hotspots";
 import type { AiQuestion, TechPackProject } from "@/types/project";
@@ -195,6 +196,15 @@ export default function CollectPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
+      {loading && (
+        <AiAnalysisOverlay title="AI 正在准备补充问题" />
+      )}
+      {submitting && (
+        <AiAnalysisOverlay
+          imagePreview={project.intake.imageDataUrl}
+          title="AI 正在生成工艺包初稿"
+        />
+      )}
       <AppHeader />
       <main className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-6">

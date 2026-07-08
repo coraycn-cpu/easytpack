@@ -9,7 +9,7 @@ import {
 } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
 
-function getModel(): string {
+export function getModel(): string {
   const provider = (process.env.AI_PROVIDER as AiProvider) || "gateway";
   if (provider === "dashscope") return process.env.AI_MODEL_DASHSCOPE || "qwen-plus";
   if (provider === "zhipu") return process.env.AI_MODEL_ZHIPU || "glm-4-flash";

@@ -35,11 +35,23 @@ type AnnotationCanvasProps = {
   showImport?: boolean;
   onImageChange?: (dataUrl: string) => void;
   nextMarkerIndex?: number;
+  className?: string;
 };
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
+
+const DRAW_TOOLS: CanvasTool[] = [
+  "rect",
+  "circle",
+  "arrow",
+  "text",
+  "dimension",
+  "freehand",
+  "marker",
+  "hotspot",
+];
 
 export default function AnnotationCanvas({
   imageUrl,
@@ -52,6 +64,7 @@ export default function AnnotationCanvas({
   showImport = false,
   onImageChange,
   nextMarkerIndex = 1,
+  className = "",
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -59,6 +72,7 @@ export default function AnnotationCanvas({
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
+  const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: CANVAS_H });
 
   const [draftRect, setDraftRect] = useState<{
     x: number;
@@ -77,12 +91,19 @@ export default function AnnotationCanvas({
 
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
-  const [historyTick, setHistoryTick] = useState(0);
-  const bumpHistory = () => setHistoryTick((t) => t + 1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
 
   const normalizedAnnotations = normalizeAnnotations(annotations);
+
+  const syncHistoryButtons = () => {
+    setCanUndo(undoStack.current.length > 0);
+    setCanRedo(redoStack.current.length > 0);
+  };
 
   const loadImage = useCallback((url: string) => {
     const img = new window.Image();
@@ -99,36 +120,54 @@ export default function AnnotationCanvas({
     else setImage(null);
   }, [imageUrl, loadImage]);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const pushHistory = useCallback(() => {
     undoStack.current.push({
-      annotations: [...annotations],
-      hotspots: [...hotspots],
+      annotations: structuredClone(annotations),
+      hotspots: structuredClone(hotspots),
     });
     if (undoStack.current.length > 40) undoStack.current.shift();
     redoStack.current = [];
-    bumpHistory();
+    syncHistoryButtons();
   }, [annotations, hotspots]);
 
   const applySnapshot = (snap: Snapshot) => {
     onAnnotationsChange(snap.annotations);
     onHotspotsChange(snap.hotspots);
+    setSelectedAnnId(null);
+    onHotspotSelect?.(null);
   };
 
-  const undo = () => {
+  const undo = useCallback(() => {
     const prev = undoStack.current.pop();
     if (!prev) return;
-    redoStack.current.push({ annotations: [...annotations], hotspots: [...hotspots] });
+    redoStack.current.push({
+      annotations: structuredClone(annotations),
+      hotspots: structuredClone(hotspots),
+    });
     applySnapshot(prev);
-    bumpHistory();
-  };
+    syncHistoryButtons();
+  }, [annotations, hotspots, onAnnotationsChange, onHotspotsChange, onHotspotSelect]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     const next = redoStack.current.pop();
     if (!next) return;
-    undoStack.current.push({ annotations: [...annotations], hotspots: [...hotspots] });
+    undoStack.current.push({
+      annotations: structuredClone(annotations),
+      hotspots: structuredClone(hotspots),
+    });
     applySnapshot(next);
-    bumpHistory();
-  };
+    syncHistoryButtons();
+  }, [annotations, hotspots, onAnnotationsChange, onHotspotsChange, onHotspotSelect]);
 
   const commitAnnotations = (next: Annotation[]) => {
     pushHistory();
@@ -140,29 +179,61 @@ export default function AnnotationCanvas({
     onHotspotsChange(next);
   };
 
+  const fitScale =
+    Math.min(containerSize.w / CANVAS_W, containerSize.h / CANVAS_H, 1.2) * zoom;
+  const stageW = CANVAS_W * fitScale;
+  const stageH = CANVAS_H * fitScale;
+
   const getPointer = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     const pos = stage?.getPointerPosition();
     if (!pos) return null;
-    return { x: pos.x / zoom, y: pos.y / zoom };
+    return { x: pos.x / fitScale, y: pos.y / fitScale };
+  };
+
+  const selectAnnotation = (id: string) => {
+    setSelectedAnnId(id);
+    onHotspotSelect?.(null);
+  };
+
+  const selectHotspot = (id: string) => {
+    onHotspotSelect?.(id);
+    setSelectedAnnId(null);
+  };
+
+  const handleAnnClick = (
+    e: Konva.KonvaEventObject<MouseEvent | TouchEvent>,
+    id: string,
+  ) => {
+    e.cancelBubble = true;
+    selectAnnotation(id);
+    if (tool !== "select") setTool("select");
+  };
+
+  const isEmptyTarget = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const t = e.target;
+    const stage = t.getStage();
+    return t === stage || t.getType() === "Layer";
   };
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!image) return;
-    const pos = getPointer(e);
-    if (!pos) return;
 
     if (tool === "select") {
-      if (e.target === e.target.getStage()) {
+      if (isEmptyTarget(e)) {
         setSelectedAnnId(null);
         onHotspotSelect?.(null);
       }
       return;
     }
 
+    const pos = getPointer(e);
+    if (!pos) return;
+
     if (tool === "hotspot") {
       setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
       onHotspotSelect?.(null);
+      setSelectedAnnId(null);
       return;
     }
 
@@ -191,6 +262,7 @@ export default function AnnotationCanvas({
             strokeWidth: 3,
           },
         ]);
+        setTool("select");
       }
       return;
     }
@@ -209,6 +281,7 @@ export default function AnnotationCanvas({
           strokeWidth: 3,
         },
       ]);
+      setTool("select");
       return;
     }
 
@@ -237,7 +310,7 @@ export default function AnnotationCanvas({
     }
   };
 
-  const handleMouseUp = () => {
+  const finishDrawing = () => {
     if (draftRect && (tool === "rect" || tool === "circle" || tool === "hotspot")) {
       const n = {
         x: draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x,
@@ -253,21 +326,24 @@ export default function AnnotationCanvas({
             label: `部位 ${hotspots.length + 1}`,
           };
           commitHotspots([...hotspots, hs]);
-          onHotspotSelect?.(hs.id);
+          selectHotspot(hs.id);
         } else {
+          const id = createId("ann");
           commitAnnotations([
             ...annotations,
             {
-              id: createId("ann"),
+              id,
               type: tool,
               color,
               ...n,
               strokeWidth: 3,
             },
           ]);
+          selectAnnotation(id);
         }
       }
       setDraftRect(null);
+      setTool("select");
     }
 
     if (draftLine && (tool === "arrow" || tool === "dimension")) {
@@ -277,10 +353,11 @@ export default function AnnotationCanvas({
         if (tool === "dimension") {
           text = window.prompt("尺寸数值（如 52cm）", "") ?? undefined;
         }
+        const id = createId("ann");
         commitAnnotations([
           ...annotations,
           {
-            id: createId("ann"),
+            id,
             type: tool,
             color,
             x,
@@ -291,15 +368,18 @@ export default function AnnotationCanvas({
             strokeWidth: 3,
           },
         ]);
+        selectAnnotation(id);
       }
       setDraftLine(null);
+      setTool("select");
     }
 
     if (isDrawing && tool === "freehand" && freehandPoints.length > 4) {
+      const id = createId("ann");
       commitAnnotations([
         ...annotations,
         {
-          id: createId("ann"),
+          id,
           type: "freehand",
           color,
           x: 0,
@@ -308,21 +388,32 @@ export default function AnnotationCanvas({
           strokeWidth: 3,
         },
       ]);
+      selectAnnotation(id);
+      setTool("select");
     }
     setIsDrawing(false);
     setFreehandPoints([]);
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = useCallback(() => {
     if (selectedAnnId) {
       pushHistory();
       onAnnotationsChange(annotations.filter((a) => a.id !== selectedAnnId));
       setSelectedAnnId(null);
+      syncHistoryButtons();
     } else if (selectedHotspotId) {
       commitHotspots(hotspots.filter((h) => h.id !== selectedHotspotId));
       onHotspotSelect?.(null);
     }
-  };
+  }, [
+    selectedAnnId,
+    selectedHotspotId,
+    annotations,
+    hotspots,
+    pushHistory,
+    onAnnotationsChange,
+    onHotspotSelect,
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -333,7 +424,7 @@ export default function AnnotationCanvas({
         e.preventDefault();
         deleteSelected();
       }
-      if (e.ctrlKey && e.key === "z") {
+      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
       }
@@ -344,64 +435,158 @@ export default function AnnotationCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [deleteSelected, undo, redo]);
 
   useEffect(() => {
-    if (!selectedHotspotId) return;
-    const node = stageRef.current?.findOne(`#hs_${selectedHotspotId}`);
-    if (node && transformerRef.current) {
-      transformerRef.current.nodes([node]);
-      transformerRef.current.getLayer()?.batchDraw();
+    const tr = transformerRef.current;
+    const stage = stageRef.current;
+    if (!tr || !stage) return;
+
+    if (selectedAnnId) {
+      const node = stage.findOne(`#ann_${selectedAnnId}`);
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
     }
-  }, [selectedHotspotId, hotspots]);
+    if (selectedHotspotId) {
+      const node = stage.findOne(`#hs_${selectedHotspotId}`);
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
+    }
+    tr.nodes([]);
+    tr.getLayer()?.batchDraw();
+  }, [selectedAnnId, selectedHotspotId, annotations, hotspots]);
+
+  const updateAnnotation = (id: string, patch: Partial<Annotation>) => {
+    onAnnotationsChange(
+      annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    );
+  };
+
+  const handleAnnDragEnd = (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
+    pushHistory();
+    const node = e.target;
+    const ann = annotations.find((a) => a.id === id);
+    if (!ann) return;
+
+    if (ann.type === "marker") {
+      updateAnnotation(id, { x: node.x(), y: node.y() });
+    } else if (ann.type === "rect" || ann.type === "circle") {
+      updateAnnotation(id, { x: node.x(), y: node.y() });
+    } else if (ann.type === "text") {
+      updateAnnotation(id, { x: node.x(), y: node.y() });
+    } else if (ann.type === "arrow" || ann.type === "dimension") {
+      const dx = node.x();
+      const dy = node.y();
+      node.position({ x: 0, y: 0 });
+      updateAnnotation(id, {
+        x: (ann.x ?? 0) + dx,
+        y: (ann.y ?? 0) + dy,
+        x2: (ann.x2 ?? ann.x) + dx,
+        y2: (ann.y2 ?? ann.y) + dy,
+      });
+    }
+  };
+
+  const handleAnnTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
+    pushHistory();
+    const node = e.target;
+    const ann = annotations.find((a) => a.id === id);
+    if (!ann) return;
+
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+
+    if (ann.type === "rect") {
+      updateAnnotation(id, {
+        x: node.x(),
+        y: node.y(),
+        width: Math.max(8, (ann.width ?? 0) * scaleX),
+        height: Math.max(8, (ann.height ?? 0) * scaleY),
+      });
+    } else if (ann.type === "circle") {
+      updateAnnotation(id, {
+        x: node.x(),
+        y: node.y(),
+        width: Math.max(8, (ann.width ?? 0) * scaleX),
+        height: Math.max(8, (ann.height ?? 0) * scaleY),
+      });
+    }
+  };
 
   const renderAnnotation = (ann: Annotation) => {
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
+    const isSelected = selectedAnnId === ann.id;
+    const draggable = tool === "select";
 
     switch (ann.type) {
       case "rect":
         return (
           <Rect
             key={ann.id}
+            id={`ann_${ann.id}`}
             x={ann.x}
             y={ann.y}
             width={ann.width ?? 0}
             height={ann.height ?? 0}
             stroke={c}
-            strokeWidth={sw}
+            strokeWidth={isSelected ? sw + 1 : sw}
             fill={`${c}22`}
-            onClick={() => {
-              if (tool === "select") setSelectedAnnId(ann.id);
-            }}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+            onTransformEnd={(e) => handleAnnTransformEnd(ann.id, e)}
           />
         );
       case "circle":
         return (
-          <Circle
+          <Rect
             key={ann.id}
-            x={ann.x + (ann.width ?? 0) / 2}
-            y={ann.y + (ann.height ?? 0) / 2}
-            radius={Math.max(ann.width ?? 0, ann.height ?? 0) / 2}
+            id={`ann_${ann.id}`}
+            x={ann.x}
+            y={ann.y}
+            width={ann.width ?? 0}
+            height={ann.height ?? 0}
+            cornerRadius={9999}
             stroke={c}
-            strokeWidth={sw}
+            strokeWidth={isSelected ? sw + 1 : sw}
             fill={`${c}22`}
-            onClick={() => tool === "select" && setSelectedAnnId(ann.id)}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+            onTransformEnd={(e) => handleAnnTransformEnd(ann.id, e)}
           />
         );
       case "arrow":
       case "dimension":
         return (
-          <Group key={ann.id}>
+          <Group
+            key={ann.id}
+            id={`ann_${ann.id}`}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+          >
             <Arrow
               points={[ann.x, ann.y, ann.x2 ?? ann.x, ann.y2 ?? ann.y]}
               stroke={c}
               fill={c}
-              strokeWidth={sw}
+              strokeWidth={isSelected ? sw + 1 : sw}
               pointerLength={10}
               pointerWidth={10}
               dash={ann.type === "dimension" ? [8, 4] : undefined}
-              onClick={() => tool === "select" && setSelectedAnnId(ann.id)}
+              hitStrokeWidth={16}
             />
             {ann.text && (
               <Text
@@ -411,6 +596,7 @@ export default function AnnotationCanvas({
                 fontSize={14}
                 fill={c}
                 fontStyle="bold"
+                listening={false}
               />
             )}
           </Group>
@@ -419,6 +605,7 @@ export default function AnnotationCanvas({
         return (
           <Text
             key={ann.id}
+            id={`ann_${ann.id}`}
             x={ann.x}
             y={ann.y}
             text={ann.text ?? ""}
@@ -426,7 +613,10 @@ export default function AnnotationCanvas({
             fill={c}
             fontStyle="bold"
             padding={4}
-            onClick={() => tool === "select" && setSelectedAnnId(ann.id)}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
           />
         );
       case "marker": {
@@ -435,11 +625,15 @@ export default function AnnotationCanvas({
         return (
           <Group
             key={ann.id}
+            id={`ann_${ann.id}`}
             x={ann.x}
             y={ann.y}
-            onClick={() => tool === "select" && setSelectedAnnId(ann.id)}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
           >
-            <Circle radius={14} fill={c} />
+            <Circle radius={14} fill={c} stroke={isSelected ? "#fff" : undefined} strokeWidth={2} />
             <Text
               text={label}
               fontSize={14}
@@ -450,6 +644,7 @@ export default function AnnotationCanvas({
               verticalAlign="middle"
               offsetX={14}
               offsetY={14}
+              listening={false}
             />
           </Group>
         );
@@ -458,13 +653,17 @@ export default function AnnotationCanvas({
         return (
           <Line
             key={ann.id}
+            id={`ann_${ann.id}`}
             points={ann.points ?? []}
             stroke={c}
-            strokeWidth={sw}
+            strokeWidth={isSelected ? sw + 1 : sw}
             lineCap="round"
             lineJoin="round"
             tension={0.4}
-            onClick={() => tool === "select" && setSelectedAnnId(ann.id)}
+            hitStrokeWidth={16}
+            draggable={draggable}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
           />
         );
       default:
@@ -473,7 +672,9 @@ export default function AnnotationCanvas({
   };
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-zinc-700/50 shadow-2xl">
+    <div
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-700/50 shadow-2xl ${className}`}
+    >
       <CanvasToolbar
         tool={tool}
         onToolChange={setTool}
@@ -481,17 +682,23 @@ export default function AnnotationCanvas({
         onColorChange={setColor}
         onUndo={undo}
         onRedo={redo}
-        canUndo={undoStack.current.length > 0}
-        canRedo={redoStack.current.length > 0}
-        historyTick={historyTick}
+        canUndo={canUndo}
+        canRedo={canRedo}
         onDelete={deleteSelected}
         canDelete={Boolean(selectedAnnId || selectedHotspotId)}
         zoom={zoom}
         onZoomChange={setZoom}
+        hint={
+          tool !== "select"
+            ? "绘制完成后自动切回选择；点击标注可选中"
+            : selectedAnnId || selectedHotspotId
+              ? "已选中 — 可拖动、Delete 删除、Ctrl+Z 撤销"
+              : "点击标注选中，或选择工具绘制"
+        }
       />
 
       {showImport && (
-        <div className="border-b border-zinc-700/50 bg-zinc-900 px-3 py-1.5">
+        <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900 px-3 py-1.5">
           <label className="cursor-pointer text-xs text-zinc-400 hover:text-white">
             📎 更换图片
             <input
@@ -514,16 +721,20 @@ export default function AnnotationCanvas({
         </div>
       )}
 
-      <div className="flex flex-1 items-center justify-center overflow-auto bg-[#0f0f14] p-4 min-h-[65vh]">
+      <div
+        ref={containerRef}
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#0f0f14]"
+      >
         <Stage
           ref={stageRef}
-          width={CANVAS_W * zoom}
-          height={CANVAS_H * zoom}
-          scaleX={zoom}
-          scaleY={zoom}
+          width={stageW}
+          height={stageH}
+          scaleX={fitScale}
+          scaleY={fitScale}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onMouseUp={finishDrawing}
+          onMouseLeave={finishDrawing}
           style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.4)" }}
         >
           <Layer>
@@ -547,17 +758,23 @@ export default function AnnotationCanvas({
                 width={hs.width}
                 height={hs.height}
                 stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#3b82f6"}
-                strokeWidth={selectedHotspotId === hs.id ? 2 : 1.5}
+                strokeWidth={selectedHotspotId === hs.id ? 2.5 : 1.5}
                 dash={[6, 3]}
                 fill="rgba(59, 130, 246, 0.08)"
                 draggable={tool === "select"}
-                onClick={() => {
-                  if (tool === "select") {
-                    onHotspotSelect?.(hs.id);
-                    setSelectedAnnId(null);
+                onClick={(e) => {
+                  e.cancelBubble = true;
+                  if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
+                    selectHotspot(hs.id);
                   }
                 }}
+                onTap={(e) => {
+                  e.cancelBubble = true;
+                  selectHotspot(hs.id);
+                  if (tool !== "select") setTool("select");
+                }}
                 onDragEnd={(e) => {
+                  pushHistory();
                   const next = hotspots.map((h) =>
                     h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
                   );
@@ -574,6 +791,7 @@ export default function AnnotationCanvas({
                 stroke="#22c55e"
                 dash={[6, 4]}
                 strokeWidth={2}
+                listening={false}
               />
             )}
             {draftLine && (
@@ -582,6 +800,7 @@ export default function AnnotationCanvas({
                 stroke="#22c55e"
                 fill="#22c55e"
                 dash={[4, 4]}
+                listening={false}
               />
             )}
             {freehandPoints.length > 1 && (
@@ -591,18 +810,26 @@ export default function AnnotationCanvas({
                 strokeWidth={3}
                 lineCap="round"
                 tension={0.4}
+                listening={false}
               />
             )}
-            <Transformer ref={transformerRef} rotateEnabled={false} />
+            <Transformer
+              ref={transformerRef}
+              rotateEnabled={false}
+              boundBoxFunc={(oldBox, newBox) => {
+                if (newBox.width < 8 || newBox.height < 8) return oldBox;
+                return newBox;
+              }}
+            />
           </Layer>
         </Stage>
-      </div>
 
-      {!image && (
-        <p className="bg-zinc-900 py-6 text-center text-sm text-zinc-500">
-          导入款式图后，使用工具栏标注 — 类似微信截图标注
-        </p>
-      )}
+        {!image && (
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-zinc-500">
+            导入款式图后，使用工具栏标注 — 类似微信截图标注
+          </p>
+        )}
+      </div>
     </div>
   );
 }
