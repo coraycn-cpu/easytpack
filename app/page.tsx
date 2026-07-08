@@ -29,6 +29,7 @@ export default function IntakePage() {
   }, []);
 
   const canSubmit = description.trim().length > 0 || imageDataUrl;
+  const canDirectStudio = Boolean(imageDataUrl);
 
   const handleImage = async (file: File) => {
     const dataUrl = await fileToDataUrl(file);
@@ -69,6 +70,22 @@ export default function IntakePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDirectStudio = () => {
+    if (!imageDataUrl) return;
+
+    const project = createEmptyProject({
+      title: description.trim().slice(0, 40) || "我的款式",
+      intake: {
+        description,
+        imageDataUrl,
+        detectedCategory: "未分类",
+      },
+    });
+    project.status = "studio";
+    saveProject(project);
+    router.push(`/project/${project.id}/studio`);
   };
 
   return (
@@ -154,14 +171,26 @@ export default function IntakePage() {
                   }}
                 />
               </div>
-              <button
-                type="button"
-                disabled={!canSubmit || loading}
-                onClick={handleSubmit}
-                className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
-              >
-                {loading ? "分析中…" : "开始制作 →"}
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {canDirectStudio && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleDirectStudio}
+                    className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    直接进入画布
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={!canSubmit || loading}
+                  onClick={handleSubmit}
+                  className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
+                >
+                  {loading ? "分析中…" : canDirectStudio ? "AI 分析并开始 →" : "开始制作 →"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

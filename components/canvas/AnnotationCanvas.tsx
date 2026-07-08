@@ -219,8 +219,10 @@ export default function AnnotationCanvas({
 
   const logicalH = fixedChrome || embedded || splitOnCanvas ? panelStageH : CANVAS_H;
   const transparentStage = fixedChrome || splitOnCanvas;
-  const fitScale =
-    Math.min(containerSize.w / CANVAS_W, containerSize.h / logicalH, 1.2) * zoom;
+  const displayW = fixedChrome ? (stagePosition?.w ?? 720) : containerSize.w;
+  const displayH = fixedChrome ? panelStageH : containerSize.h;
+  const baseFit = Math.min(displayW / CANVAS_W, displayH / logicalH);
+  const fitScale = baseFit * zoom;
   const stageW = CANVAS_W * fitScale;
   const stageH = logicalH * fitScale;
 
@@ -772,8 +774,8 @@ export default function AnnotationCanvas({
       style={
         embedded || splitOnCanvas || fixedChrome
           ? {
-              height: panelStageH,
-              width: fixedChrome ? stagePosition?.w : splitOnCanvas ? splitLayout?.stage.w : undefined,
+              height: fixedChrome ? stageH : panelStageH,
+              width: fixedChrome ? stageW : splitOnCanvas ? splitLayout?.stage.w : undefined,
             }
           : undefined
       }
@@ -847,10 +849,14 @@ export default function AnnotationCanvas({
               y={hs.y}
               width={hs.width}
               height={hs.height}
-              stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#3b82f6"}
-              strokeWidth={selectedHotspotId === hs.id ? 2.5 : 1.5}
+              stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
+              strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
               dash={[6, 3]}
-              fill="rgba(59, 130, 246, 0.08)"
+              fill={
+                selectedHotspotId === hs.id
+                  ? "rgba(59, 130, 246, 0.12)"
+                  : "rgba(59, 130, 246, 0.03)"
+              }
               draggable={tool === "select"}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -931,11 +937,12 @@ export default function AnnotationCanvas({
         {toolbarPortal}
         <div
           data-panel="stage"
-          className="absolute z-10"
+          className="absolute z-[8] overflow-visible"
           style={{
             left: stagePosition.x,
             top: stagePosition.y,
-            width: stagePosition.w,
+            width: stageW,
+            height: stageH,
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >

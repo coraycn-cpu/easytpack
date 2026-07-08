@@ -54,35 +54,45 @@ export default function CanvasToolbar({
   theme = "dark",
 }: CanvasToolbarProps) {
   const light = theme === "light";
-  const btn = flat
-    ? `px-2 py-1 text-[10px] border disabled:opacity-30 ${
-        light
-          ? "border-[#cbd5e1] text-[#475569] hover:bg-[#f1f5f9]"
-          : "border-[#444] hover:bg-[#333] disabled:opacity-30"
-      }`
-    : "rounded-md px-2 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-30";
+
+  const actionBtn = (disabled: boolean, danger?: boolean) =>
+    light
+      ? `inline-flex h-8 items-center rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          danger
+            ? "text-rose-600 hover:bg-rose-50"
+            : "text-slate-600 hover:bg-slate-100"
+        }`
+      : `inline-flex h-8 items-center rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          danger ? "text-red-400 hover:bg-zinc-800" : "text-zinc-300 hover:bg-zinc-800"
+        }`;
 
   const toolBtn = (active: boolean) =>
-    flat
-      ? `flex h-7 min-w-[28px] items-center justify-center border px-1 text-[10px] ${
+    light
+      ? `inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition ${
           active
-            ? "border-[#2563eb] bg-[#2563eb] text-white"
-            : light
-              ? "border-[#cbd5e1] text-[#475569] hover:bg-[#f1f5f9]"
-              : "border-[#444] text-zinc-300 hover:bg-[#333]"
+            ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
+            : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
         }`
-      : `flex h-9 min-w-[36px] items-center justify-center rounded-md px-2 text-sm ${
+      : `inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm transition ${
           active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-700"
         }`;
 
+  const zoomBtn = light
+    ? "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-600 transition hover:bg-slate-100"
+    : "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-zinc-300 hover:bg-zinc-800";
+
   return (
     <div
-      className={`shrink-0 border-b ${
-        light ? "border-[#e2e8f0] bg-white" : flat ? "border-[#333] bg-[#1a1a1a]" : "border-zinc-700/50 bg-[#1a1a1a]"
+      className={`shrink-0 ${
+        light ? "border-b border-slate-200/80 bg-white" : flat ? "border-b border-[#333] bg-[#1a1a1a]" : "border-b border-zinc-700/50 bg-[#1a1a1a]"
       }`}
     >
-      <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
-        <div className={`flex flex-wrap ${flat ? "gap-0" : "gap-0.5 rounded-lg bg-zinc-800 p-1"}`}>
+      <div className="flex flex-wrap items-center gap-3 px-4 py-2">
+        <div
+          className={`inline-flex flex-wrap items-center gap-0.5 rounded-lg p-1 ${
+            light ? "bg-slate-100" : flat ? "bg-[#262626]" : "rounded-lg bg-zinc-800 p-1"
+          }`}
+        >
           {TOOLS.map((t) => (
             <button
               key={t.id}
@@ -91,55 +101,82 @@ export default function CanvasToolbar({
               onClick={() => onToolChange(t.id)}
               className={toolBtn(tool === t.id)}
             >
-              <span className="leading-none">{t.icon}</span>
-              <span className="ml-0.5 hidden sm:inline">{t.label}</span>
+              <span className="text-sm leading-none">{t.icon}</span>
+              <span className="hidden sm:inline">{t.label}</span>
             </button>
           ))}
         </div>
 
-        <div className={`mx-1 h-5 w-px ${light ? "bg-[#e2e8f0]" : flat ? "bg-[#444]" : "bg-zinc-700"}`} />
+        <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
 
-        <div className="flex items-center gap-0.5">
-          {ANNOTATION_COLORS.map((c) => (
+        <div className="flex items-center gap-1.5">
+          {ANNOTATION_COLORS.slice(0, 5).map((c) => (
             <button
               key={c.id}
               type="button"
               title={c.label}
               onClick={() => onColorChange(c.value)}
-              className={`h-5 w-5 border ${color === c.value ? "border-white" : "border-transparent"}`}
+              className={`h-6 w-6 rounded-full transition ring-offset-2 ${
+                light ? "ring-offset-white" : "ring-offset-[#1a1a1a]"
+              } ${
+                color === c.value
+                  ? "ring-2 ring-slate-400 scale-110"
+                  : "ring-1 ring-black/10 hover:scale-105"
+              }`}
               style={{ backgroundColor: c.value }}
             />
           ))}
         </div>
 
-        <div className={`mx-1 h-5 w-px ${light ? "bg-[#e2e8f0]" : flat ? "bg-[#444]" : "bg-zinc-700"}`} />
+        <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
 
-        <div className="flex gap-0.5">
-          <button type="button" disabled={!canUndo} onClick={onUndo} className={`${btn} ${light ? "" : "text-zinc-300"}`}>
+        <div className="flex items-center gap-0.5">
+          <button type="button" disabled={!canUndo} onClick={onUndo} className={actionBtn(!canUndo)}>
             撤销
           </button>
-          <button type="button" disabled={!canRedo} onClick={onRedo} className={`${btn} ${light ? "" : "text-zinc-300"}`}>
+          <button type="button" disabled={!canRedo} onClick={onRedo} className={actionBtn(!canRedo)}>
             重做
           </button>
-          <button type="button" disabled={!canDelete} onClick={onDelete} className={`${btn} text-red-500`}>
+          <button
+            type="button"
+            disabled={!canDelete}
+            onClick={onDelete}
+            className={actionBtn(!canDelete, true)}
+          >
             删除
           </button>
         </div>
 
-        <div className="ml-auto flex items-center gap-0.5">
-          <button type="button" onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))} className={`${btn} ${light ? "" : "text-zinc-300"}`}>
+        <div className="ml-auto flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))}
+            className={zoomBtn}
+          >
             −
           </button>
-          <span className={`min-w-[2.5rem] text-center text-[10px] ${light ? "text-[#64748b]" : "text-zinc-400"}`}>
+          <span
+            className={`min-w-[3rem] text-center text-xs font-medium tabular-nums ${
+              light ? "text-slate-600" : "text-zinc-400"
+            }`}
+          >
             {Math.round(zoom * 100)}%
           </span>
-          <button type="button" onClick={() => onZoomChange(Math.min(2, zoom + 0.1))} className={`${btn} ${light ? "" : "text-zinc-300"}`}>
+          <button
+            type="button"
+            onClick={() => onZoomChange(Math.min(2, zoom + 0.1))}
+            className={zoomBtn}
+          >
             +
           </button>
         </div>
       </div>
       {hint && (
-        <p className={`border-t px-2 py-0.5 text-[9px] ${light ? "border-[#e2e8f0] text-[#94a3b8]" : flat ? "border-[#333] text-zinc-500" : "border-zinc-800 text-zinc-500"}`}>
+        <p
+          className={`border-t px-4 py-1.5 text-[11px] ${
+            light ? "border-slate-100 text-slate-400" : flat ? "border-[#333] text-zinc-500" : "border-zinc-800 text-zinc-500"
+          }`}
+        >
           {hint}
         </p>
       )}

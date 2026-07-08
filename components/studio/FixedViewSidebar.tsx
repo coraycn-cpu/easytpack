@@ -16,39 +16,43 @@ export default function FixedViewSidebar({
   onReplaceImage,
 }: FixedViewSidebarProps) {
   return (
-    <aside className="flex w-44 shrink-0 flex-col border-r border-[#cbd5e1] bg-white">
-      <div className="border-b border-[#e2e8f0] px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748b]">
-          画板视图
-        </p>
+    <aside className="flex w-48 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <p className="text-xs font-semibold text-slate-700">画板视图</p>
+        <p className="mt-0.5 text-[10px] text-slate-400">切换正面 / 背面 / 细节</p>
       </div>
 
-      <div className="flex flex-col gap-0 border-b border-[#e2e8f0] p-2">
-        {artboards.map((ab) => (
-          <button
-            key={ab.id}
-            type="button"
-            onClick={() => onSwitchArtboard(ab.id)}
-            className={`border px-3 py-2 text-left text-xs font-medium ${
-              ab.id === activeArtboardId
-                ? "border-[#475569] bg-[#475569] text-white"
-                : "border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
-            } ${ab.id !== artboards[0]?.id ? "-mt-px" : ""}`}
-          >
-            {ab.name}
-          </button>
-        ))}
+      <div className="space-y-1 p-3">
+        {artboards.map((ab) => {
+          const active = ab.id === activeArtboardId;
+          return (
+            <button
+              key={ab.id}
+              type="button"
+              onClick={() => onSwitchArtboard(ab.id)}
+              className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                active
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              {ab.name}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex flex-col gap-2 p-2">
+      <div className="mt-auto space-y-2 border-t border-slate-100 p-3">
         <button
           type="button"
           onClick={onApplyHotspotTemplate}
-          className="border border-[#cbd5e1] bg-white px-3 py-2 text-left text-[11px] text-[#2563eb] hover:bg-[#f1f5f9]"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
         >
+          <span>⊞</span>
           应用热区模板
         </button>
-        <label className="cursor-pointer border border-[#cbd5e1] bg-white px-3 py-2 text-[11px] text-[#64748b] hover:bg-[#f1f5f9]">
+        <label className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">
+          <span>🖼</span>
           更换图片
           <input
             type="file"
