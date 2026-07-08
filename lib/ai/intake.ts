@@ -54,10 +54,8 @@ async function callStructured<S extends z.ZodType>({
     model: getModel(),
     schema,
     schemaName,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: buildContent(userText, imageDataUrl) },
-    ],
+    instructions: system,
+    messages: [{ role: "user", content: buildContent(userText, imageDataUrl) }],
   });
   return object as z.infer<S>;
 }

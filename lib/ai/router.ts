@@ -46,8 +46,8 @@ async function generateViaGateway(prompt: string, imageUrl?: string) {
   const { object } = await generateObject({
     model,
     schema: ProcessListSchema,
+    instructions: SYSTEM_PROMPT,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content: buildUserContent(prompt, imageUrl),
@@ -187,7 +187,7 @@ export async function streamDebugText(prompt: string, provider?: AiProvider) {
 
   return streamText({
     model: getGatewayModel(),
-    system: SYSTEM_PROMPT,
+    instructions: SYSTEM_PROMPT,
     prompt,
   });
 }
