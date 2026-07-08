@@ -7,8 +7,7 @@ import {
   type TechPackProject,
 } from "@/types/project";
 
-const STAGE_W = 800;
-const STAGE_H = 600;
+import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 
 export function createArtboard(
   name: string,
@@ -81,19 +80,19 @@ export function filterHotspots(
     const cx = hs.x + hs.width / 2;
     const cy = hs.y + hs.height / 2;
     const area = hs.width * hs.height;
-    const stageArea = STAGE_W * STAGE_H;
+    const stageArea = CANVAS_W * CANVAS_H;
 
     // 排除画面上方 18%（常见人脸区域）
-    if (cy < STAGE_H * 0.18) return false;
+    if (cy < CANVAS_H * 0.18) return false;
     // 排除过小或过大
-    if (area < 400 || area > stageArea * 0.35) return false;
+    if (area < 600 || area > stageArea * 0.35) return false;
     // 排除极扁/极竖的异常框
     const ratio = hs.width / (hs.height || 1);
     if (ratio > 8 || ratio < 0.12) return false;
     // 排除居中偏上的小块（常见误标脸部）
-    if (cy < STAGE_H * 0.28 && hs.width < STAGE_W * 0.25) return false;
+    if (cy < CANVAS_H * 0.28 && hs.width < CANVAS_W * 0.25) return false;
 
-    return cx > 0 && cy > 0 && cx < STAGE_W && cy < STAGE_H;
+    return cx > 0 && cy > 0 && cx < CANVAS_W && cy < CANVAS_H;
   });
 
   // 去重叠：保留面积较大的
@@ -114,47 +113,61 @@ export function filterHotspots(
 
 type TemplateHotspot = Omit<Hotspot, "id">;
 
-/** 品类热区模板（800×600 画布坐标） */
+function scaleCoord(v: number, base = 800) {
+  return Math.round(v * (CANVAS_W / base));
+}
+
+function scaleHotspotFromLegacy(hs: Hotspot): Hotspot {
+  return {
+    ...hs,
+    x: scaleCoord(hs.x),
+    y: scaleCoord(hs.y, 600),
+    width: scaleCoord(hs.width),
+    height: scaleCoord(hs.height, 600),
+  };
+}
+
+/** 品类热区模板（基于 CANVAS_W×CANVAS_H） */
 export function getCategoryHotspotTemplate(category?: string): TemplateHotspot[] {
   const c = (category ?? "").toLowerCase();
+  const s = scaleCoord;
 
   if (c.includes("马甲") || c.includes("vest")) {
     return [
-      { label: "领口", x: 340, y: 95, width: 120, height: 70 },
-      { label: "前门襟", x: 370, y: 165, width: 60, height: 200 },
-      { label: "肩缝", x: 260, y: 130, width: 90, height: 50 },
-      { label: "袖笼", x: 220, y: 175, width: 70, height: 80 },
-      { label: "口袋", x: 280, y: 280, width: 100, height: 70 },
-      { label: "下摆", x: 250, y: 400, width: 300, height: 50 },
+      { label: "领口", x: s(340), y: s(95, 600), width: s(120), height: s(70, 600) },
+      { label: "前门襟", x: s(370), y: s(165, 600), width: s(60), height: s(200, 600) },
+      { label: "肩缝", x: s(260), y: s(130, 600), width: s(90), height: s(50, 600) },
+      { label: "袖笼", x: s(220), y: s(175, 600), width: s(70), height: s(80, 600) },
+      { label: "口袋", x: s(280), y: s(280, 600), width: s(100), height: s(70, 600) },
+      { label: "下摆", x: s(250), y: s(400, 600), width: s(300), height: s(50, 600) },
     ];
   }
 
   if (c.includes("裤") || c.includes("short")) {
     return [
-      { label: "腰头", x: 280, y: 120, width: 240, height: 45 },
-      { label: "门襟", x: 370, y: 165, width: 60, height: 100 },
-      { label: "侧缝", x: 250, y: 200, width: 50, height: 250 },
-      { label: "脚口", x: 270, y: 460, width: 260, height: 40 },
+      { label: "腰头", x: s(280), y: s(120, 600), width: s(240), height: s(45, 600) },
+      { label: "门襟", x: s(370), y: s(165, 600), width: s(60), height: s(100, 600) },
+      { label: "侧缝", x: s(250), y: s(200, 600), width: s(50), height: s(250, 600) },
+      { label: "脚口", x: s(270), y: s(460, 600), width: s(260), height: s(40, 600) },
     ];
   }
 
   if (c.includes("衬衫") || c.includes("shirt")) {
     return [
-      { label: "领座", x: 340, y: 80, width: 120, height: 60 },
-      { label: "袖窿", x: 200, y: 150, width: 80, height: 90 },
-      { label: "袖口", x: 130, y: 380, width: 70, height: 50 },
-      { label: "前门襟", x: 375, y: 140, width: 50, height: 280 },
-      { label: "下摆", x: 260, y: 430, width: 280, height: 45 },
+      { label: "领座", x: s(340), y: s(80, 600), width: s(120), height: s(60, 600) },
+      { label: "袖窿", x: s(200), y: s(150, 600), width: s(80), height: s(90, 600) },
+      { label: "袖口", x: s(130), y: s(380, 600), width: s(70), height: s(50, 600) },
+      { label: "前门襟", x: s(375), y: s(140, 600), width: s(50), height: s(280, 600) },
+      { label: "下摆", x: s(260), y: s(430, 600), width: s(280), height: s(45, 600) },
     ];
   }
 
-  // 默认 T 恤 / 针织
   return [
-    { label: "领口", x: 330, y: 90, width: 140, height: 65 },
-    { label: "肩缝", x: 250, y: 145, width: 100, height: 45 },
-    { label: "袖口", x: 140, y: 350, width: 75, height: 55 },
-    { label: "侧缝", x: 230, y: 220, width: 45, height: 220 },
-    { label: "下摆", x: 260, y: 440, width: 280, height: 45 },
+    { label: "领口", x: s(330), y: s(90, 600), width: s(140), height: s(65, 600) },
+    { label: "肩缝", x: s(250), y: s(145, 600), width: s(100), height: s(45, 600) },
+    { label: "袖口", x: s(140), y: s(350, 600), width: s(75), height: s(55, 600) },
+    { label: "侧缝", x: s(230), y: s(220, 600), width: s(45), height: s(220, 600) },
+    { label: "下摆", x: s(260), y: s(440, 600), width: s(280), height: s(45, 600) },
   ];
 }
 
@@ -172,7 +185,8 @@ export function mergeHotspots(
   aiHotspots: Hotspot[],
   category?: string,
 ): Hotspot[] {
-  const filtered = filterHotspots(aiHotspots, { category });
+  const scaled = aiHotspots.map(scaleHotspotFromLegacy);
+  const filtered = filterHotspots(scaled, { category });
   if (filtered.length >= 3) return filtered;
   return applyHotspotTemplate(category, "hs_merged");
 }

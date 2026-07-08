@@ -46,15 +46,35 @@ export type SizeChart = {
   }>;
 };
 
+export type AnnotationType =
+  | "rect"
+  | "circle"
+  | "arrow"
+  | "text"
+  | "dimension"
+  | "freehand"
+  | "marker";
+
 export type Annotation = {
   id: string;
-  type: "arrow" | "label";
+  type: AnnotationType;
+  color?: string;
+  strokeWidth?: number;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   x2?: number;
   y2?: number;
   text?: string;
+  points?: number[];
+  /** 序号标注 ①②③，关联工艺条目 */
+  markerIndex?: number;
+  linkedPart?: string;
 };
+
+/** @deprecated 旧类型别名 */
+export type LegacyAnnotationType = "arrow" | "label";
 
 export type Artboard = {
   id: string;

@@ -86,6 +86,49 @@ export const StudioDraftSchema = z.object({
   aiSummary: z.string().optional().describe("版房专家初稿说明"),
 });
 
+export const SizeChartAssistSchema = z.object({
+  sizes: z.array(z.string()),
+  rows: z.array(
+    z.object({
+      part: z.string().describe("部位名称，如胸宽、衣长"),
+      method: z.string().describe("测量方法，通俗说明"),
+      values: z.record(z.string(), z.string()).describe("各尺码数值，单位cm"),
+    }),
+  ),
+  plainExplanation: z
+    .string()
+    .describe("用非专业人士能理解的语言解释这份尺码表"),
+});
+
+export const SmartAnnotationItemSchema = z.object({
+  type: z.enum(["rect", "circle", "arrow", "text", "dimension", "marker"]),
+  label: z.string(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  x2: z.number().optional(),
+  y2: z.number().optional(),
+  text: z.string().optional(),
+  markerIndex: z.number().optional(),
+  linkedPart: z.string().optional(),
+  color: z.string().optional(),
+});
+
+export const SmartAnnotateSchema = z.object({
+  annotations: z.array(SmartAnnotationItemSchema),
+  userTips: z
+    .string()
+    .describe("给非服装专业用户的简短操作提示，说明图上标注了什么"),
+});
+
+export const EnhanceTechPackSchema = z.object({
+  process_items: z.array(ProcessItemSchema).optional(),
+  bom_items: z.array(BomItemSchema).optional(),
+  size_chart: SizeChartAssistSchema.optional(),
+  summary: z.string().describe("本次补全了什么，用户还需要确认什么"),
+});
+
 export type ProcessItem = z.infer<typeof ProcessItemSchema>;
 export type ProcessList = z.infer<typeof ProcessListSchema>;
 export type BomItem = z.infer<typeof BomItemSchema>;

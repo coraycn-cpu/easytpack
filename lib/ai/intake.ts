@@ -77,7 +77,8 @@ export async function analyzeIntent(input: {
 
   return callStructured({
     system: `你是服装版房专家。分析用户的款式需求或参考图，识别品类、结构和工艺特征。
-输出简洁专业，面向后续 Tech Pack 制作。`,
+用户可能完全不懂服装术语，summary 要用通俗易懂的语言。
+输出简洁，面向后续 Tech Pack 制作。`,
     userText,
     imageDataUrl: input.imageDataUrl,
     schema: IntentAnalysisSchema,
@@ -100,13 +101,12 @@ AI 理解：${input.intentSummary}
 `.trim();
 
   return callStructured({
-    system: `你是服装版房专家。根据已有信息，生成 3-5 个必要的追问，帮助补全 Tech Pack 所需信息。
+    system: `你是服装版房专家，正在帮助「不懂服装」的用户补全信息。
+根据已有信息，生成 3-5 个简单问题，用大白话提问，不要用专业缩写。
 规则：
-- 优先用 single/multi 选择题，减少用户输入负担
-- 每个问题必须有唯一 id（如 q_category, q_fabric）
-- 只问做工艺包真正必要的信息：面料、尺码段、特殊工艺、品质要求、目标市场等
-- 如果信息已足够，也要至少问 1 个确认性问题
-- intro 用一句话说明为何需要补充`,
+- 优先用选择题（面料感觉、穿着季节、预算档次、要不要印花绣花等）
+- 每个问题必须有唯一 id
+- intro 告诉用户「问这些是为了让版师看懂你的创意」`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: QuestionnaireSchema,

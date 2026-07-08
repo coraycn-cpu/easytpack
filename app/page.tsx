@@ -37,7 +37,6 @@ export default function IntakePage() {
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-
     setLoading(true);
     setError(null);
 
@@ -47,12 +46,11 @@ export default function IntakePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description, imageDataUrl }),
       });
-
       const intent = await res.json();
       if (!res.ok) throw new Error(intent.error || "分析失败");
 
       const project = createEmptyProject({
-        title: intent.suggestedTitle || "未命名款式",
+        title: intent.suggestedTitle || "我的创意款式",
         intake: {
           description,
           imageDataUrl: imageDataUrl ?? undefined,
@@ -62,7 +60,6 @@ export default function IntakePage() {
           suggestedTitle: intent.suggestedTitle,
         },
       });
-
       project.status = "collecting";
       saveProject(project);
       router.push(`/project/${project.id}/collect`);
@@ -74,47 +71,76 @@ export default function IntakePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-blue-50/30">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-12">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            开始制作工艺包
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <div className="mb-10 text-center">
+          <p className="text-sm font-medium text-blue-600">不用懂服装，也能做出专业工艺包</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+            一张图，交给 AI 和版师
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            上传款式图、描述需求，或两者结合 — AI 版房专家将帮你分析并收集必要信息
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-slate-500">
+            你是业务员、爱好者还是设计师都行 — 上传灵感图或描述想法，AI 帮你整理成版师和工厂能看懂的
+            Tech Pack
           </p>
         </div>
 
-        <div className="flex flex-1 flex-col rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          {imagePreview && (
-            <div className="border-b border-zinc-100 p-4">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50">
+          {imagePreview ? (
+            <div className="border-b border-slate-100 bg-slate-50 p-4">
               <img
                 src={imagePreview}
-                alt="款式预览"
-                className="mx-auto max-h-48 rounded-lg object-contain"
+                alt="预览"
+                className="mx-auto max-h-56 rounded-lg object-contain shadow-sm"
               />
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="flex w-full flex-col items-center border-b border-dashed border-slate-200 bg-slate-50/50 py-12 text-slate-400 transition hover:bg-blue-50/50 hover:text-blue-600"
+            >
+              <span className="text-4xl">📷</span>
+              <span className="mt-2 text-sm font-medium">点击上传款式图（推荐）</span>
+              <span className="mt-1 text-xs">手绘稿、网购截图、灵感拼贴都可以</span>
+            </button>
           )}
 
-          <div className="flex flex-1 flex-col p-4">
+          <div className="p-5">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              用你自己的话描述这个款式（可选）
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="描述你的款式，例如：针织圆领 T 恤，袖口和下摆做双针卷边，左胸有小 logo 绣花..."
-              rows={5}
-              className="flex-1 resize-none rounded-xl border border-zinc-200 px-4 py-3 text-sm leading-relaxed outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="例如：想做一件休闲马甲配短裤的套装，夏天穿，胸口有扣子，面料要舒服一点..."
+              rows={4}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm leading-relaxed outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
             />
 
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
-                >
-                  📎 上传图片
-                </button>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {imagePreview && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="text-xs text-slate-500 hover:text-blue-600"
+                    >
+                      换一张图
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageDataUrl(null);
+                      }}
+                      className="text-xs text-slate-400 hover:text-red-500"
+                    >
+                      移除
+                    </button>
+                  </>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -125,70 +151,62 @@ export default function IntakePage() {
                     if (file) handleImage(file);
                   }}
                 />
-                {imagePreview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImagePreview(null);
-                      setImageDataUrl(null);
-                    }}
-                    className="text-xs text-zinc-400 hover:text-red-500"
-                  >
-                    移除图片
-                  </button>
-                )}
               </div>
-
               <button
                 type="button"
                 disabled={!canSubmit || loading}
                 onClick={handleSubmit}
-                className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
               >
-                {loading ? "AI 分析中..." : "开始分析 →"}
+                {loading ? "AI 正在理解你的创意..." : "开始制作 →"}
               </button>
             </div>
           </div>
         </div>
 
-        {error && (
-          <p className="mt-4 text-center text-sm text-red-600">{error}</p>
-        )}
+        {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
 
-        <p className="mt-6 text-center text-xs text-zinc-400">
-          支持纯文字、纯图片、或图片 + 说明文字
-        </p>
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          {[
+            { icon: "🎨", title: "爱好者", desc: "有想法不会画工艺单" },
+            { icon: "💼", title: "业务员", desc: "快速给客户提供方案" },
+            { icon: "✏️", title: "设计师", desc: "加速初稿到工艺包" },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className="rounded-xl border border-slate-100 bg-white/80 p-4 text-center"
+            >
+              <span className="text-2xl">{item.icon}</span>
+              <p className="mt-2 text-sm font-medium text-slate-800">{item.title}</p>
+              <p className="text-xs text-slate-500">{item.desc}</p>
+            </div>
+          ))}
+        </div>
 
         {recentProjects.length > 0 && (
           <div className="mt-10">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-500">最近项目</h2>
+              <h2 className="text-sm font-medium text-slate-500">继续未完成的项目</h2>
               <Link href="/projects" className="text-xs text-blue-600 hover:underline">
-                查看全部 →
+                全部项目
               </Link>
             </div>
             <ul className="space-y-2">
-              {recentProjects.map((p) => {
-                const href =
-                  p.status === "collecting"
-                    ? `/project/${p.id}/collect`
-                    : p.status === "studio" || p.status === "completed"
-                      ? `/project/${p.id}/studio`
-                      : `/project/${p.id}/collect`;
-                return (
-                  <li key={p.id}>
-                    <Link
-                      href={href}
-                      className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm hover:border-blue-200"
-                    >
-                      <span className="font-medium text-zinc-800">{p.title}</span>
-                      <span className="text-xs text-zinc-400">
-                        {p.intake.detectedCategory} · {calcProgress(p)}%
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
+              {recentProjects.map((p) => (
+                <li key={p.id}>
+                  <Link
+                    href={
+                      p.status === "collecting"
+                        ? `/project/${p.id}/collect`
+                        : `/project/${p.id}/studio`
+                    }
+                    className="flex justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm hover:border-blue-200"
+                  >
+                    <span className="font-medium">{p.title}</span>
+                    <span className="text-xs text-slate-400">{calcProgress(p)}%</span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
         )}

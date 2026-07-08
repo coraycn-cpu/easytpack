@@ -198,16 +198,15 @@ export default function CollectPage() {
       <AppHeader />
       <main className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-6">
-          <p className="text-xs font-medium uppercase tracking-wider text-blue-600">
-            信息收集
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-zinc-900">
-            {project.title}
-          </h1>
+          <p className="text-xs font-medium text-blue-600">第 2 步 · 确认几个简单问题</p>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">{project.title}</h1>
           {project.intake.aiIntentAnalysis && (
-            <p className="mt-3 rounded-lg bg-blue-50 px-4 py-3 text-sm leading-relaxed text-blue-900">
-              {project.intake.aiIntentAnalysis}
-            </p>
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-medium text-blue-800">AI 理解你的创意：</p>
+              <p className="mt-1 text-sm leading-relaxed text-blue-900">
+                {project.intake.aiIntentAnalysis}
+              </p>
+            </div>
           )}
         </div>
 
@@ -246,7 +245,7 @@ export default function CollectPage() {
             onClick={handleSubmit}
             className="w-full rounded-lg bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            {submitting ? "AI 生成初稿中..." : "确认，进入画板工作台 →"}
+            {submitting ? "AI 正在准备工艺包初稿..." : "确认，进入画板 →"}
           </button>
         </div>
 

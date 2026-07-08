@@ -1,9 +1,9 @@
 import type { Artboard } from "@/types/project";
 import type { Hotspot } from "@/types/process";
 import type { Annotation } from "@/types/project";
-
-const STAGE_W = 800;
-const STAGE_H = 600;
+import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
+import { computeImageFit } from "@/lib/canvas/fit";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -15,52 +15,95 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function drawHotspot(
-  ctx: CanvasRenderingContext2D,
-  hs: Hotspot,
-  selected = false,
-) {
-  ctx.strokeStyle = selected ? "#1d4ed8" : "#2563eb";
-  ctx.lineWidth = selected ? 3 : 2;
-  ctx.fillStyle = "rgba(37, 99, 235, 0.12)";
-  ctx.fillRect(hs.x, hs.y, hs.width, hs.height);
+function drawHotspot(ctx: CanvasRenderingContext2D, hs: Hotspot) {
+  ctx.strokeStyle = "#3b82f6";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
   ctx.strokeRect(hs.x, hs.y, hs.width, hs.height);
-
+  ctx.setLineDash([]);
   ctx.fillStyle = "#1d4ed8";
-  ctx.font = "12px sans-serif";
-  const labelY = hs.y - 4 < 12 ? hs.y + 14 : hs.y - 4;
-  ctx.fillText(hs.label, hs.x + 2, labelY);
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillText(hs.label, hs.x + 4, hs.y > 16 ? hs.y - 6 : hs.y + 16);
 }
 
 function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
-  ctx.strokeStyle = "#dc2626";
-  ctx.fillStyle = "#dc2626";
-  ctx.lineWidth = 2;
+  const a = normalizeAnnotations([ann])[0];
+  const c = a.color ?? "#ef4444";
+  ctx.strokeStyle = c;
+  ctx.fillStyle = c;
+  ctx.lineWidth = a.strokeWidth ?? 3;
 
-  if (ann.type === "arrow" && ann.x2 != null && ann.y2 != null) {
-    ctx.beginPath();
-    ctx.moveTo(ann.x, ann.y);
-    ctx.lineTo(ann.x2, ann.y2);
-    ctx.stroke();
-    const angle = Math.atan2(ann.y2 - ann.y, ann.x2 - ann.x);
-    const head = 10;
-    ctx.beginPath();
-    ctx.moveTo(ann.x2, ann.y2);
-    ctx.lineTo(
-      ann.x2 - head * Math.cos(angle - 0.4),
-      ann.y2 - head * Math.sin(angle - 0.4),
-    );
-    ctx.lineTo(
-      ann.x2 - head * Math.cos(angle + 0.4),
-      ann.y2 - head * Math.sin(angle + 0.4),
-    );
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  if (ann.type === "label" && ann.text) {
-    ctx.font = "13px sans-serif";
-    ctx.fillText(ann.text, ann.x, ann.y);
+  switch (a.type) {
+    case "rect":
+      if (a.width && a.height) {
+        ctx.fillStyle = `${c}33`;
+        ctx.fillRect(a.x, a.y, a.width, a.height);
+        ctx.strokeRect(a.x, a.y, a.width, a.height);
+      }
+      break;
+    case "circle": {
+      const rx = (a.width ?? 40) / 2;
+      const ry = (a.height ?? 40) / 2;
+      ctx.beginPath();
+      ctx.ellipse(a.x + rx, a.y + ry, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `${c}33`;
+      ctx.fill();
+      ctx.stroke();
+      break;
+    }
+    case "arrow":
+    case "dimension":
+      if (a.x2 != null && a.y2 != null) {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(a.x2, a.y2);
+        if (a.type === "dimension") ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const angle = Math.atan2(a.y2 - a.y, a.x2 - a.x);
+        const head = 12;
+        ctx.beginPath();
+        ctx.moveTo(a.x2, a.y2);
+        ctx.lineTo(a.x2 - head * Math.cos(angle - 0.4), a.y2 - head * Math.sin(angle - 0.4));
+        ctx.lineTo(a.x2 - head * Math.cos(angle + 0.4), a.y2 - head * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+        if (a.text) {
+          ctx.font = "bold 14px sans-serif";
+          ctx.fillText(a.text, a.x2 + 6, a.y2 - 4);
+        }
+      }
+      break;
+    case "text":
+      if (a.text) {
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(a.text, a.x, a.y);
+      }
+      break;
+    case "marker": {
+      const num = a.markerIndex ?? 1;
+      const label = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧"][num - 1] ?? `${num}`;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(label, a.x, a.y + 5);
+      ctx.textAlign = "left";
+      ctx.fillStyle = c;
+      break;
+    }
+    case "freehand":
+      if (a.points && a.points.length > 2) {
+        ctx.beginPath();
+        ctx.moveTo(a.points[0], a.points[1]);
+        for (let i = 2; i < a.points.length; i += 2) {
+          ctx.lineTo(a.points[i], a.points[i + 1]);
+        }
+        ctx.stroke();
+      }
+      break;
   }
 }
 
@@ -72,16 +115,19 @@ export async function renderArtboardToDataUrl(
   if (!src) return null;
 
   const canvas = document.createElement("canvas");
-  canvas.width = STAGE_W;
-  canvas.height = STAGE_H;
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
   const img = await loadImage(src);
-  ctx.drawImage(img, 0, 0, STAGE_W, STAGE_H);
+  const fit = computeImageFit(img.naturalWidth, img.naturalHeight);
+  ctx.fillStyle = "#0f0f14";
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.drawImage(img, fit.x, fit.y, fit.width, fit.height);
 
   artboard.hotspots.forEach((hs) => drawHotspot(ctx, hs));
-  artboard.annotations.forEach((ann) => drawAnnotation(ctx, ann));
+  normalizeAnnotations(artboard.annotations).forEach((ann) => drawAnnotation(ctx, ann));
 
   return canvas.toDataURL("image/png");
 }
