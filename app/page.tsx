@@ -1,13 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
+import { calcProgress } from "@/lib/project/progress";
 import {
   createEmptyProject,
   fileToDataUrl,
+  listProjects,
   saveProject,
 } from "@/lib/project/storage";
+import type { TechPackProject } from "@/types/project";
 
 export default function IntakePage() {
   const router = useRouter();
@@ -17,6 +21,11 @@ export default function IntakePage() {
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recentProjects, setRecentProjects] = useState<TechPackProject[]>([]);
+
+  useEffect(() => {
+    setRecentProjects(listProjects().slice(0, 5));
+  }, []);
 
   const canSubmit = description.trim().length > 0 || imageDataUrl;
 
@@ -149,6 +158,35 @@ export default function IntakePage() {
         <p className="mt-6 text-center text-xs text-zinc-400">
           支持纯文字、纯图片、或图片 + 说明文字
         </p>
+
+        {recentProjects.length > 0 && (
+          <div className="mt-10">
+            <h2 className="mb-3 text-sm font-medium text-zinc-500">最近项目</h2>
+            <ul className="space-y-2">
+              {recentProjects.map((p) => {
+                const href =
+                  p.status === "collecting"
+                    ? `/project/${p.id}/collect`
+                    : p.status === "studio" || p.status === "completed"
+                      ? `/project/${p.id}/studio`
+                      : `/project/${p.id}/collect`;
+                return (
+                  <li key={p.id}>
+                    <Link
+                      href={href}
+                      className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm hover:border-blue-200"
+                    >
+                      <span className="font-medium text-zinc-800">{p.title}</span>
+                      <span className="text-xs text-zinc-400">
+                        {p.intake.detectedCategory} · {calcProgress(p)}%
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </main>
     </div>
   );
