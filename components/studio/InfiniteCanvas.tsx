@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioLayout } from "@/lib/studio/layout";
 
 type InfiniteCanvasProps = {
@@ -15,8 +15,27 @@ export default function InfiniteCanvas({
   children,
 }: InfiniteCanvasProps) {
   const [isPanning, setIsPanning] = useState(false);
+  const [spaceDown, setSpaceDown] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setSpaceDown(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") setSpaceDown(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -40,7 +59,10 @@ export default function InfiniteCanvas({
 
   const onPointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
+    // 面板 / 画板内的交互交给子组件（标注绘制、拖图等）
     if (target.closest("[data-panel]")) return;
+
+    // 空白处：中键、空格+左键、或纯左键均可平移
     if (e.button === 1 || e.button === 0) {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       startPan(e.clientX, e.clientY);
@@ -65,7 +87,7 @@ export default function InfiniteCanvas({
       ref={containerRef}
       className="relative h-full w-full overflow-hidden bg-[#ececec] select-none"
       style={{
-        cursor: isPanning ? "grabbing" : "grab",
+        cursor: isPanning || spaceDown ? "grabbing" : "default",
         backgroundImage: "radial-gradient(circle, #b0b0b0 1px, transparent 1px)",
         backgroundSize: `${gridSize}px ${gridSize}px`,
         backgroundPosition: `${viewport.panX}px ${viewport.panY}px`,
@@ -121,7 +143,7 @@ export default function InfiniteCanvas({
       </div>
 
       <p className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-[#888]">
-        拖动画布空白处平移 · 滚轮缩放
+        空白处拖动平移 · 滚轮缩放 · 空格可临时抓手
       </p>
     </div>
   );

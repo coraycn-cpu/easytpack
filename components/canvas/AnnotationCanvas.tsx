@@ -57,6 +57,9 @@ type AnnotationCanvasProps = {
   fixedChrome?: boolean;
   stagePosition?: PanelPosition;
   onStagePositionChange?: (patch: Partial<PanelPosition>) => void;
+  /** AI 智能标注（固定在顶部工具栏） */
+  onSmartAnnotate?: () => void;
+  smartAnnotateLoading?: boolean;
 };
 
 function createId(prefix: string) {
@@ -98,6 +101,8 @@ export default function AnnotationCanvas({
   fixedChrome = false,
   stagePosition,
   onStagePositionChange,
+  onSmartAnnotate,
+  smartAnnotateLoading,
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -125,6 +130,17 @@ export default function AnnotationCanvas({
   } | null>(null);
   const [freehandPoints, setFreehandPoints] = useState<number[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  const draftRectRef = useRef(draftRect);
+  const draftLineRef = useRef(draftLine);
+  const freehandRef = useRef(freehandPoints);
+  const isDrawingRef = useRef(isDrawing);
+  const toolRef = useRef(tool);
+  draftRectRef.current = draftRect;
+  draftLineRef.current = draftLine;
+  freehandRef.current = freehandPoints;
+  isDrawingRef.current = isDrawing;
+  toolRef.current = tool;
 
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
@@ -299,8 +315,10 @@ export default function AnnotationCanvas({
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!image) return;
+    const currentTool = toolRef.current;
 
-    if (tool === "select") {
+    // 选择工具：点空白取消选中；点图片由图片自身处理
+    if (currentTool === "select") {
       if (isEmptyTarget(e)) {
         setSelectedAnnId(null);
         setImageSelected(false);
@@ -312,24 +330,33 @@ export default function AnnotationCanvas({
     const pos = getPointer(e);
     if (!pos) return;
 
-    if (tool === "hotspot") {
-      setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+    e.cancelBubble = true;
+    setImageSelected(false);
+
+    if (currentTool === "hotspot") {
+      const next = { x: pos.x, y: pos.y, width: 0, height: 0 };
+      draftRectRef.current = next;
+      setDraftRect(next);
       onHotspotSelect?.(null);
       setSelectedAnnId(null);
       return;
     }
 
-    if (tool === "rect" || tool === "circle") {
-      setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+    if (currentTool === "rect" || currentTool === "circle") {
+      const next = { x: pos.x, y: pos.y, width: 0, height: 0 };
+      draftRectRef.current = next;
+      setDraftRect(next);
       return;
     }
 
-    if (tool === "arrow" || tool === "dimension") {
-      setDraftLine({ x: pos.x, y: pos.y, x2: pos.x, y2: pos.y });
+    if (currentTool === "arrow" || currentTool === "dimension") {
+      const next = { x: pos.x, y: pos.y, x2: pos.x, y2: pos.y };
+      draftLineRef.current = next;
+      setDraftLine(next);
       return;
     }
 
-    if (tool === "text") {
+    if (currentTool === "text") {
       const text = window.prompt("输入标注文字", "");
       if (text?.trim()) {
         commitAnnotations([
@@ -349,7 +376,7 @@ export default function AnnotationCanvas({
       return;
     }
 
-    if (tool === "marker") {
+    if (currentTool === "marker") {
       const idx = nextMarkerIndex + annotations.filter((a) => a.type === "marker").length;
       commitAnnotations([
         ...annotations,
@@ -367,8 +394,10 @@ export default function AnnotationCanvas({
       return;
     }
 
-    if (tool === "freehand") {
+    if (currentTool === "freehand") {
+      isDrawingRef.current = true;
       setIsDrawing(true);
+      freehandRef.current = [pos.x, pos.y];
       setFreehandPoints([pos.x, pos.y]);
     }
   };
@@ -376,32 +405,46 @@ export default function AnnotationCanvas({
   const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const pos = getPointer(e);
     if (!pos) return;
+    const currentTool = toolRef.current;
 
-    if (draftRect) {
-      setDraftRect({
-        ...draftRect,
-        width: pos.x - draftRect.x,
-        height: pos.y - draftRect.y,
-      });
+    const rect = draftRectRef.current;
+    if (rect) {
+      const next = {
+        ...rect,
+        width: pos.x - rect.x,
+        height: pos.y - rect.y,
+      };
+      draftRectRef.current = next;
+      setDraftRect(next);
     }
-    if (draftLine) {
-      setDraftLine({ ...draftLine, x2: pos.x, y2: pos.y });
+    const line = draftLineRef.current;
+    if (line) {
+      const next = { ...line, x2: pos.x, y2: pos.y };
+      draftLineRef.current = next;
+      setDraftLine(next);
     }
-    if (isDrawing && tool === "freehand") {
-      setFreehandPoints((pts) => [...pts, pos.x, pos.y]);
+    if (isDrawingRef.current && currentTool === "freehand") {
+      const pts = [...freehandRef.current, pos.x, pos.y];
+      freehandRef.current = pts;
+      setFreehandPoints(pts);
     }
   };
 
   const finishDrawing = () => {
-    if (draftRect && (tool === "rect" || tool === "circle" || tool === "hotspot")) {
+    const currentTool = toolRef.current;
+    const rect = draftRectRef.current;
+    const line = draftLineRef.current;
+    const points = freehandRef.current;
+
+    if (rect && (currentTool === "rect" || currentTool === "circle" || currentTool === "hotspot")) {
       const n = {
-        x: draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x,
-        y: draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y,
-        width: Math.abs(draftRect.width),
-        height: Math.abs(draftRect.height),
+        x: rect.width < 0 ? rect.x + rect.width : rect.x,
+        y: rect.height < 0 ? rect.y + rect.height : rect.y,
+        width: Math.abs(rect.width),
+        height: Math.abs(rect.height),
       };
       if (n.width > 8 && n.height > 8) {
-        if (tool === "hotspot") {
+        if (currentTool === "hotspot") {
           const hs: Hotspot = {
             id: createId("hs"),
             ...n,
@@ -415,7 +458,7 @@ export default function AnnotationCanvas({
             ...annotations,
             {
               id,
-              type: tool,
+              type: currentTool,
               color,
               ...n,
               strokeWidth: 3,
@@ -424,15 +467,16 @@ export default function AnnotationCanvas({
           selectAnnotation(id);
         }
       }
+      draftRectRef.current = null;
       setDraftRect(null);
       setTool("select");
     }
 
-    if (draftLine && (tool === "arrow" || tool === "dimension")) {
-      const { x, y, x2, y2 } = draftLine;
+    if (line && (currentTool === "arrow" || currentTool === "dimension")) {
+      const { x, y, x2, y2 } = line;
       if (Math.hypot(x2 - x, y2 - y) > 12) {
         let text: string | undefined;
-        if (tool === "dimension") {
+        if (currentTool === "dimension") {
           text = window.prompt("尺寸数值（如 52cm）", "") ?? undefined;
         }
         const id = createId("ann");
@@ -440,7 +484,7 @@ export default function AnnotationCanvas({
           ...annotations,
           {
             id,
-            type: tool,
+            type: currentTool,
             color,
             x,
             y,
@@ -452,11 +496,12 @@ export default function AnnotationCanvas({
         ]);
         selectAnnotation(id);
       }
+      draftLineRef.current = null;
       setDraftLine(null);
       setTool("select");
     }
 
-    if (isDrawing && tool === "freehand" && freehandPoints.length > 4) {
+    if (isDrawingRef.current && currentTool === "freehand" && points.length > 4) {
       const id = createId("ann");
       commitAnnotations([
         ...annotations,
@@ -466,14 +511,16 @@ export default function AnnotationCanvas({
           color,
           x: 0,
           y: 0,
-          points: [...freehandPoints],
+          points: [...points],
           strokeWidth: 3,
         },
       ]);
       selectAnnotation(id);
       setTool("select");
     }
+    isDrawingRef.current = false;
     setIsDrawing(false);
+    freehandRef.current = [];
     setFreehandPoints([]);
   };
 
@@ -765,7 +812,10 @@ export default function AnnotationCanvas({
   const toolbarEl = (
     <CanvasToolbar
       tool={tool}
-      onToolChange={setTool}
+      onToolChange={(t) => {
+        setTool(t);
+        if (t !== "select") setImageSelected(false);
+      }}
       color={color}
       onColorChange={setColor}
       onUndo={undo}
@@ -779,6 +829,8 @@ export default function AnnotationCanvas({
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarHint}
+      onSmartAnnotate={onSmartAnnotate}
+      smartAnnotateLoading={smartAnnotateLoading}
     />
   );
 
@@ -814,13 +866,28 @@ export default function AnnotationCanvas({
         height={splitOnCanvas || embedded ? panelStageH * fitScale : stageH}
         scaleX={fitScale}
         scaleY={fitScale}
+        style={{ cursor: tool === "select" ? (imageSelected ? "move" : "default") : "crosshair" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={finishDrawing}
         onMouseLeave={finishDrawing}
+        onTouchStart={handleMouseDown as unknown as (e: Konva.KonvaEventObject<TouchEvent>) => void}
+        onTouchMove={handleMouseMove as unknown as (e: Konva.KonvaEventObject<TouchEvent>) => void}
+        onTouchEnd={finishDrawing}
       >
         <Layer>
           <Group x={contentOffsetX} y={contentOffsetY}>
+          {/* 透明命中区：保证绘制工具在空白处也能收到事件 */}
+          {transparentStage && (
+            <Rect
+              x={-contentOffsetX}
+              y={-contentOffsetY}
+              width={logicalW}
+              height={logicalH}
+              fill="rgba(0,0,0,0)"
+              listening
+            />
+          )}
           {!transparentStage && (
             <Rect
               x={0}
@@ -849,15 +916,24 @@ export default function AnnotationCanvas({
               y={imageFit.y + imageOffset.y}
               width={imageFit.width}
               height={imageFit.height}
-              listening={tool === "select"}
+              listening
               draggable={tool === "select" && imageSelected}
               stroke={imageSelected ? "#2563eb" : undefined}
               strokeWidth={imageSelected ? 2 : 0}
+              onMouseDown={(e) => {
+                // 绘制工具：点击图片时开始绘制，不要选中图片
+                if (tool !== "select") {
+                  e.cancelBubble = false;
+                  return;
+                }
+              }}
               onClick={(e) => {
+                if (tool !== "select") return;
                 e.cancelBubble = true;
                 selectImage();
               }}
               onTap={(e) => {
+                if (tool !== "select") return;
                 e.cancelBubble = true;
                 selectImage();
               }}

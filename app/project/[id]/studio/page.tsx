@@ -328,6 +328,8 @@ export default function StudioPage() {
               nextMarkerIndex={
                 activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
               }
+              onSmartAnnotate={handleSmartAnnotate}
+              smartAnnotateLoading={aiLoading}
             />
 
             <DraggablePanel
@@ -344,7 +346,6 @@ export default function StudioPage() {
                 loading={aiLoading}
                 message={aiMessage}
                 tip={aiTip}
-                onSmartAnnotate={handleSmartAnnotate}
                 onGenerateSize={handleGenerateSize}
                 onEnhanceAll={handleEnhanceAll}
                 onExplain={handleExplain}

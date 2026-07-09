@@ -22,6 +22,9 @@ type CanvasToolbarProps = {
   hint?: string;
   flat?: boolean;
   theme?: "light" | "dark";
+  /** AI 智能标注（与标注工具同一栏） */
+  onSmartAnnotate?: () => void;
+  smartAnnotateLoading?: boolean;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -52,6 +55,8 @@ export default function CanvasToolbar({
   hint,
   flat,
   theme = "dark",
+  onSmartAnnotate,
+  smartAnnotateLoading,
 }: CanvasToolbarProps) {
   const light = theme === "light";
 
@@ -106,6 +111,25 @@ export default function CanvasToolbar({
             </button>
           ))}
         </div>
+
+        {onSmartAnnotate && (
+          <>
+            <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+            <button
+              type="button"
+              disabled={smartAnnotateLoading}
+              onClick={onSmartAnnotate}
+              className={`inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                light
+                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-500"
+              }`}
+            >
+              <span>✦</span>
+              {smartAnnotateLoading ? "标注中…" : "AI智能标注"}
+            </button>
+          </>
+        )}
 
         <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
 

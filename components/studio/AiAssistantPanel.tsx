@@ -4,7 +4,6 @@ type AiAssistantPanelProps = {
   loading: boolean;
   message: string | null;
   tip: string | null;
-  onSmartAnnotate: () => void;
   onGenerateSize: () => void;
   onEnhanceAll: () => void;
   onExplain: () => void;
@@ -14,16 +13,17 @@ export default function AiAssistantPanel({
   loading,
   message,
   tip,
-  onSmartAnnotate,
   onGenerateSize,
   onEnhanceAll,
   onExplain,
 }: AiAssistantPanelProps) {
   return (
     <div className="bg-[#eff6ff] p-2">
-      <div className="grid grid-cols-2 gap-1">
-        <AiActionButton loading={loading} onClick={onSmartAnnotate} title="智能标注" primary />
-        <AiActionButton loading={loading} onClick={onGenerateSize} title="生成尺码" />
+      <p className="mb-2 px-1 text-[10px] text-[#64748b]">
+        智能标注已移至顶部工具栏 · 此处可生成尺码与补全工艺
+      </p>
+      <div className="grid grid-cols-1 gap-1">
+        <AiActionButton loading={loading} onClick={onGenerateSize} title="生成尺码" primary />
         <AiActionButton loading={loading} onClick={onEnhanceAll} title="一键补全" />
         <AiActionButton loading={loading} onClick={onExplain} title="通俗解释" />
       </div>
