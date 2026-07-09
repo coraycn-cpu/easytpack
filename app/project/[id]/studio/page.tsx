@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import AiAssistantPanel from "@/components/studio/AiAssistantPanel";
 import AiChatFab from "@/components/studio/AiChatFab";
 import DraggablePanel from "@/components/studio/DraggablePanel";
@@ -56,7 +55,7 @@ export default function StudioPage() {
     setActiveArtboardId(p.canvas_data.activeArtboardId);
     setLayout(getStudioLayout(p.canvas_data.studioLayout));
     if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
-      setAiTip("左侧切换视图 · 顶部使用标注工具 · 右下角 🤖 对话修改");
+      setAiTip("左侧切换视图 · 顶部标注工具 · 右下角 🤖 对话修改");
     }
   }, [id, router]);
 
@@ -249,47 +248,10 @@ export default function StudioPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
-      <header className="z-30 flex shrink-0 items-center justify-between border-b border-[#999] bg-white px-4 py-2">
-        <div>
-          <Link href="/projects" className="text-[10px] text-[#94a3b8] hover:text-[#475569]">
-            ← 我的项目
-          </Link>
-          <h1 className="text-sm font-semibold text-[#0f172a]">{project.title}</h1>
-          <p className="text-[10px] text-[#64748b]">
-            {project.intake.detectedCategory} · {WORKFLOW_LABELS[project.workflowStatus]} · {progress}%
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={project.workflowStatus}
-            onChange={(e) => {
-              const ws = e.target.value as WorkflowStatus;
-              if (ws === "finalized" && !canFinalize(project)) {
-                setAiMessage("请先完善必填项");
-                return;
-              }
-              persist({ ...project, workflowStatus: ws });
-            }}
-            className="border border-[#cbd5e1] bg-white px-2 py-1 text-xs"
-          >
-            <option value="draft">草稿</option>
-            <option value="in_review">待版师审核</option>
-            <option value="finalized">已定稿</option>
-          </select>
-          <Link
-            href={`/project/${id}/export`}
-            className="border border-[#2563eb] bg-[#2563eb] px-3 py-1 text-xs font-medium text-white hover:bg-[#1d4ed8]"
-          >
-            导出给版师 →
-          </Link>
-        </div>
-      </header>
-
       {/* 标注工具 — 固定顶部 */}
       <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
       <div className="flex min-h-0 flex-1">
-        {/* 画板视图 — 固定左侧 */}
         <FixedViewSidebar
           artboards={project.canvas_data.artboards}
           activeArtboardId={activeArtboardId}
@@ -300,6 +262,19 @@ export default function StudioPage() {
             setAiMessage("已应用热区模板");
           }}
           onReplaceImage={(url) => updateArtboard(activeArtboard.id, { imageDataUrl: url })}
+          projectTitle={project.title}
+          category={project.intake.detectedCategory}
+          workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
+          progress={progress}
+          workflowStatus={project.workflowStatus}
+          onWorkflowChange={(ws) => {
+            if (ws === "finalized" && !canFinalize(project)) {
+              setAiMessage("请先完善必填项");
+              return;
+            }
+            persist({ ...project, workflowStatus: ws });
+          }}
+          exportHref={`/project/${id}/export`}
         />
 
         {/* 无限画布 — 仅款式图 + AI/数据浮动面板 */}
