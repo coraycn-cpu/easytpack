@@ -59,11 +59,9 @@ export default function InfiniteCanvas({
 
   const onPointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
-    // 面板 / 画板内的交互交给子组件（标注绘制、拖图等）
-    if (target.closest("[data-panel]")) return;
+    if (target.closest("[data-panel]") || target.tagName === "CANVAS") return;
 
-    // 空白处：中键、空格+左键、或纯左键均可平移
-    if (e.button === 1 || e.button === 0) {
+    if (e.button === 1 || (e.button === 0 && spaceDown)) {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       startPan(e.clientX, e.clientY);
     }

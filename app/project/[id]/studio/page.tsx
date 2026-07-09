@@ -9,6 +9,10 @@ import DraggablePanel from "@/components/studio/DraggablePanel";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
+import {
+  loadImagePlacement,
+  mapAiAnnotationToCanvas,
+} from "@/lib/canvas/bounds";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { applyHotspotTemplate } from "@/lib/project/hotspots";
@@ -120,22 +124,20 @@ export default function StudioPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
+      const imageFit = imgUrl
+        ? await loadImagePlacement(imgUrl)
+        : { x: 0, y: 0, width: 1000, height: 750 };
+
       const newAnnotations: Annotation[] = (data.annotations ?? []).map(
-        (a: Annotation & { label?: string }, i: number) => ({
-          id: `ann_ai_${i}_${Date.now()}`,
-          type: a.type,
-          color: a.color ?? "#ef4444",
-          x: a.x,
-          y: a.y,
-          width: a.width,
-          height: a.height,
-          x2: a.x2,
-          y2: a.y2,
-          text: a.text ?? a.label,
-          markerIndex: a.markerIndex,
-          linkedPart: a.linkedPart,
-          strokeWidth: 3,
-        }),
+        (a: Annotation & { label?: string }, i: number) =>
+          mapAiAnnotationToCanvas(
+            a,
+            imageFit,
+            imageOffset,
+            `ann_ai_${i}_${Date.now()}`,
+          ),
       );
 
       updateArtboard(activeArtboard.id, {
@@ -305,6 +307,7 @@ export default function StudioPage() {
               }
               onSmartAnnotate={handleSmartAnnotate}
               smartAnnotateLoading={aiLoading}
+              toolbarMessage={aiMessage}
             />
 
             <DraggablePanel

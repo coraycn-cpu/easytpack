@@ -1,5 +1,6 @@
 import type { Hotspot } from "@/types/process";
 import type { Annotation } from "@/types/project";
+import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 
 export type RectBounds = {
   minX: number;
@@ -134,4 +135,50 @@ export function computeStudioStageBounds(input: {
     offsetX: pad,
     offsetY: pad,
   };
+}
+
+/** 将 AI 返回的 1000×750 坐标映射到当前款式图位置 */
+export function mapAiAnnotationToCanvas(
+  ann: Annotation & { label?: string },
+  imageFit: { x: number; y: number; width: number; height: number },
+  imageOffset: { x: number; y: number },
+  id: string,
+): Annotation {
+  const sx = imageFit.width / CANVAS_W;
+  const sy = imageFit.height / CANVAS_H;
+  const ox = imageFit.x + imageOffset.x;
+  const oy = imageFit.y + imageOffset.y;
+
+  const mapped: Annotation = {
+    id,
+    type: ann.type,
+    color: ann.color ?? "#ef4444",
+    x: ann.x * sx + ox,
+    y: ann.y * sy + oy,
+    strokeWidth: ann.strokeWidth ?? 3,
+    text: ann.text ?? ann.label,
+    markerIndex: ann.markerIndex,
+    linkedPart: ann.linkedPart,
+  };
+
+  if (ann.width != null) mapped.width = ann.width * sx;
+  if (ann.height != null) mapped.height = ann.height * sy;
+  if (ann.x2 != null) mapped.x2 = ann.x2 * sx + ox;
+  if (ann.y2 != null) mapped.y2 = ann.y2 * sy + oy;
+  if (ann.points?.length) {
+    mapped.points = ann.points.map((v, i) => (i % 2 === 0 ? v * sx + ox : v * sy + oy));
+  }
+
+  return mapped;
+}
+
+export function loadImagePlacement(dataUrl: string, maxDim = 900) {
+  return new Promise<ReturnType<typeof computeImagePlacement>>((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () =>
+      resolve(computeImagePlacement(img.naturalWidth, img.naturalHeight, maxDim));
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
 }

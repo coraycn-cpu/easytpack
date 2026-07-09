@@ -60,6 +60,7 @@ type AnnotationCanvasProps = {
   /** AI 智能标注（固定在顶部工具栏） */
   onSmartAnnotate?: () => void;
   smartAnnotateLoading?: boolean;
+  toolbarMessage?: string | null;
 };
 
 function createId(prefix: string) {
@@ -103,6 +104,7 @@ export default function AnnotationCanvas({
   onStagePositionChange,
   onSmartAnnotate,
   smartAnnotateLoading,
+  toolbarMessage,
 }: AnnotationCanvasProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
@@ -271,11 +273,14 @@ export default function AnnotationCanvas({
     const stage = e.target.getStage();
     const pos = stage?.getPointerPosition();
     if (!pos) return null;
+    // Konva 已处理 stage 缩放，只需减去 Group 偏移
     return {
-      x: pos.x / fitScale - contentOffsetX,
-      y: pos.y / fitScale - contentOffsetY,
+      x: pos.x - contentOffsetX,
+      y: pos.y - contentOffsetY,
     };
   };
+
+  const isDrawingMode = tool !== "select";
 
   const selectAnnotation = (id: string) => {
     setSelectedAnnId(id);
@@ -310,7 +315,8 @@ export default function AnnotationCanvas({
   const isEmptyTarget = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const t = e.target;
     const stage = t.getStage();
-    return t === stage || t.getType() === "Layer";
+    const name = typeof t.name === "function" ? t.name() : "";
+    return t === stage || t.getType() === "Layer" || name === "stage-hit";
   };
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -430,7 +436,7 @@ export default function AnnotationCanvas({
     }
   };
 
-  const finishDrawing = () => {
+  const finishDrawing = useCallback(() => {
     const currentTool = toolRef.current;
     const rect = draftRectRef.current;
     const line = draftLineRef.current;
@@ -522,7 +528,18 @@ export default function AnnotationCanvas({
     setIsDrawing(false);
     freehandRef.current = [];
     setFreehandPoints([]);
-  };
+  }, [annotations, hotspots, color, commitAnnotations, commitHotspots]);
+
+  useEffect(() => {
+    if (tool === "select") return;
+    const onUp = () => finishDrawing();
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [tool, finishDrawing]);
 
   const deleteSelected = useCallback(() => {
     if (selectedAnnId) {
@@ -655,6 +672,7 @@ export default function AnnotationCanvas({
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
     const draggable = tool === "select";
+    const listening = tool === "select";
 
     switch (ann.type) {
       case "rect":
@@ -669,6 +687,7 @@ export default function AnnotationCanvas({
             stroke={c}
             strokeWidth={isSelected ? sw + 1 : sw}
             fill={`${c}22`}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -689,6 +708,7 @@ export default function AnnotationCanvas({
             stroke={c}
             strokeWidth={isSelected ? sw + 1 : sw}
             fill={`${c}22`}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -702,6 +722,7 @@ export default function AnnotationCanvas({
           <Group
             key={ann.id}
             id={`ann_${ann.id}`}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -742,6 +763,7 @@ export default function AnnotationCanvas({
             fill={c}
             fontStyle="bold"
             padding={4}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -757,6 +779,7 @@ export default function AnnotationCanvas({
             id={`ann_${ann.id}`}
             x={ann.x}
             y={ann.y}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -790,6 +813,7 @@ export default function AnnotationCanvas({
             lineJoin="round"
             tension={0.4}
             hitStrokeWidth={16}
+            listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
@@ -828,7 +852,7 @@ export default function AnnotationCanvas({
       onZoomChange={setZoom}
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
-      hint={toolbarHint}
+      hint={toolbarMessage ?? toolbarHint}
       onSmartAnnotate={onSmartAnnotate}
       smartAnnotateLoading={smartAnnotateLoading}
     />
@@ -877,17 +901,6 @@ export default function AnnotationCanvas({
       >
         <Layer>
           <Group x={contentOffsetX} y={contentOffsetY}>
-          {/* 透明命中区：保证绘制工具在空白处也能收到事件 */}
-          {transparentStage && (
-            <Rect
-              x={-contentOffsetX}
-              y={-contentOffsetY}
-              width={logicalW}
-              height={logicalH}
-              fill="rgba(0,0,0,0)"
-              listening
-            />
-          )}
           {!transparentStage && (
             <Rect
               x={0}
@@ -916,17 +929,10 @@ export default function AnnotationCanvas({
               y={imageFit.y + imageOffset.y}
               width={imageFit.width}
               height={imageFit.height}
-              listening
+              listening={!isDrawingMode}
               draggable={tool === "select" && imageSelected}
               stroke={imageSelected ? "#2563eb" : undefined}
               strokeWidth={imageSelected ? 2 : 0}
-              onMouseDown={(e) => {
-                // 绘制工具：点击图片时开始绘制，不要选中图片
-                if (tool !== "select") {
-                  e.cancelBubble = false;
-                  return;
-                }
-              }}
               onClick={(e) => {
                 if (tool !== "select") return;
                 e.cancelBubble = true;
@@ -962,6 +968,7 @@ export default function AnnotationCanvas({
                   ? "rgba(59, 130, 246, 0.12)"
                   : "rgba(59, 130, 246, 0.03)"
               }
+              listening={!isDrawingMode}
               draggable={tool === "select"}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -1022,6 +1029,31 @@ export default function AnnotationCanvas({
               return newBox;
             }}
           />
+          {isDrawingMode && (
+            <Rect
+              name="draw-overlay"
+              x={-contentOffsetX}
+              y={-contentOffsetY}
+              width={logicalW}
+              height={logicalH}
+              fill="rgba(0,0,0,0.01)"
+              listening
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={finishDrawing}
+              onTouchStart={
+                handleMouseDown as unknown as (
+                  e: Konva.KonvaEventObject<TouchEvent>,
+                ) => void
+              }
+              onTouchMove={
+                handleMouseMove as unknown as (
+                  e: Konva.KonvaEventObject<TouchEvent>,
+                ) => void
+              }
+              onTouchEnd={finishDrawing}
+            />
+          )}
           </Group>
         </Layer>
       </Stage>
@@ -1050,7 +1082,6 @@ export default function AnnotationCanvas({
             width: stageW,
             height: stageH,
           }}
-          onPointerDown={(e) => e.stopPropagation()}
         >
           {stageEl}
         </div>
