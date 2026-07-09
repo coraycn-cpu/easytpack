@@ -16,6 +16,7 @@ import {
 } from "react-konva";
 import type Konva from "konva";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
+import { computeStudioStageBounds, computeImagePlacement } from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import type { Hotspot } from "@/types/process";
@@ -105,11 +106,9 @@ export default function AnnotationCanvas({
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [imageSelected, setImageSelected] = useState(false);
-  const panelStageH = fixedChrome
-    ? Math.max(400, stagePosition?.h ?? 560)
-    : splitOnCanvas
-      ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
-      : stageHeight;
+  const panelStageH = splitOnCanvas
+    ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
+    : stageHeight;
   const [containerSize, setContainerSize] = useState({ w: CANVAS_W, h: panelStageH });
 
   const [draftRect, setDraftRect] = useState<{
@@ -143,15 +142,22 @@ export default function AnnotationCanvas({
     setCanRedo(redoStack.current.length > 0);
   };
 
-  const loadImage = useCallback((url: string) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      setImage(img);
-      setImageFit(computeImageFit(img.naturalWidth, img.naturalHeight));
-    };
-    img.src = url;
-  }, []);
+  const loadImage = useCallback(
+    (url: string) => {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        setImage(img);
+        setImageFit(
+          fixedChrome
+            ? computeImagePlacement(img.naturalWidth, img.naturalHeight)
+            : computeImageFit(img.naturalWidth, img.naturalHeight),
+        );
+      };
+      img.src = url;
+    },
+    [fixedChrome],
+  );
 
   useEffect(() => {
     if (imageUrl) loadImage(imageUrl);
@@ -217,20 +223,42 @@ export default function AnnotationCanvas({
     onHotspotsChange(next);
   };
 
-  const logicalH = fixedChrome || embedded || splitOnCanvas ? panelStageH : CANVAS_H;
+  const studioBounds = fixedChrome
+    ? computeStudioStageBounds({
+        imageFit: image ? imageFit : null,
+        imageOffset,
+        hotspots,
+        annotations: normalizedAnnotations,
+      })
+    : null;
+
+  const logicalW = fixedChrome ? studioBounds!.width : CANVAS_W;
+  const logicalH = fixedChrome
+    ? studioBounds!.height
+    : embedded || splitOnCanvas
+      ? panelStageH
+      : CANVAS_H;
+  const contentOffsetX = fixedChrome ? studioBounds!.offsetX : 0;
+  const contentOffsetY = fixedChrome ? studioBounds!.offsetY : 0;
   const transparentStage = fixedChrome || splitOnCanvas;
-  const displayW = fixedChrome ? (stagePosition?.w ?? 720) : containerSize.w;
-  const displayH = fixedChrome ? panelStageH : containerSize.h;
-  const baseFit = Math.min(displayW / CANVAS_W, displayH / logicalH);
+  const baseFit = fixedChrome
+    ? 1
+    : Math.min(
+        containerSize.w / CANVAS_W,
+        containerSize.h / (embedded || splitOnCanvas ? panelStageH : CANVAS_H),
+      );
   const fitScale = baseFit * zoom;
-  const stageW = CANVAS_W * fitScale;
+  const stageW = logicalW * fitScale;
   const stageH = logicalH * fitScale;
 
   const getPointer = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     const pos = stage?.getPointerPosition();
     if (!pos) return null;
-    return { x: pos.x / fitScale, y: pos.y / fitScale };
+    return {
+      x: pos.x / fitScale - contentOffsetX,
+      y: pos.y / fitScale - contentOffsetY,
+    };
   };
 
   const selectAnnotation = (id: string) => {
@@ -792,6 +820,7 @@ export default function AnnotationCanvas({
         onMouseLeave={finishDrawing}
       >
         <Layer>
+          <Group x={contentOffsetX} y={contentOffsetY}>
           {!transparentStage && (
             <Rect
               x={0}
@@ -917,6 +946,7 @@ export default function AnnotationCanvas({
               return newBox;
             }}
           />
+          </Group>
         </Layer>
       </Stage>
 

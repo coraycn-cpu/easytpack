@@ -1,7 +1,7 @@
 export type PanelPosition = { x: number; y: number; w: number; h?: number };
 
 export type StudioLayout = {
-  /** 款式图在无限画布上的位置（无外层容器） */
+  /** 款式图在无限画布上的锚点（仅 x/y，尺寸随内容扩展） */
   stage: PanelPosition;
   ai: PanelPosition;
   data: PanelPosition;
@@ -13,9 +13,9 @@ export type StudioLayout = {
 };
 
 export const DEFAULT_STUDIO_LAYOUT: StudioLayout = {
-  stage: { x: 48, y: 48, w: 720, h: 560 },
-  ai: { x: 48, y: 640, w: 340 },
-  data: { x: 420, y: 640, w: 340, h: 420 },
+  stage: { x: 48, y: 48, w: 0, h: 0 },
+  ai: { x: 48, y: 1680, w: 340 },
+  data: { x: 420, y: 1680, w: 340, h: 420 },
   viewport: { panX: 0, panY: 0, scale: 1 },
 };
 
