@@ -73,6 +73,8 @@ type AnnotationCanvasProps = {
   onEnhanceAll?: () => void;
   onExplain?: () => void;
   aiLoading?: boolean;
+  viewport?: { panX: number; panY: number; scale: number };
+  onViewportChange?: (viewport: { panX: number; panY: number; scale: number }) => void;
 };
 
 function createId(prefix: string) {
@@ -123,6 +125,8 @@ export default function AnnotationCanvas({
   onEnhanceAll,
   onExplain,
   aiLoading,
+  viewport,
+  onViewportChange,
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -138,6 +142,41 @@ export default function AnnotationCanvas({
   const [zoom, setZoom] = useState(1);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [imageSelected, setImageSelected] = useState(false);
+  const [spaceDown, setSpaceDown] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ clientX: 0, clientY: 0, panX: 0, panY: 0 });
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.code === "Space" &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        setSpaceDown(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") setSpaceDown(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const onUp = () => setIsPanning(false);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [isPanning]);
+
   const panelStageH = splitOnCanvas
     ? Math.max(320, (splitLayout?.stage.h ?? 520) - 32)
     : stageHeight;
@@ -342,7 +381,36 @@ export default function AnnotationCanvas({
     : null;
   const displayImage = multiMode ? activeImageEntry?.img ?? null : image;
 
-  const isDrawingMode = tool !== "select";
+  const isPanActive = tool === "pan" || spaceDown;
+  const isDrawingMode = tool !== "select" && tool !== "pan";
+
+  const handlePanStart = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!viewport || !onViewportChange) return;
+    if ("button" in e.evt && e.evt.button !== 0) return;
+    e.cancelBubble = true;
+    const clientX = "clientX" in e.evt ? e.evt.clientX : e.evt.touches[0]?.clientX ?? 0;
+    const clientY = "clientY" in e.evt ? e.evt.clientY : e.evt.touches[0]?.clientY ?? 0;
+    panStart.current = {
+      clientX,
+      clientY,
+      panX: viewport.panX,
+      panY: viewport.panY,
+    };
+    setIsPanning(true);
+  };
+
+  const handlePanMove = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!isPanning || !viewport || !onViewportChange) return;
+    const clientX = "clientX" in e.evt ? e.evt.clientX : e.evt.touches[0]?.clientX ?? 0;
+    const clientY = "clientY" in e.evt ? e.evt.clientY : e.evt.touches[0]?.clientY ?? 0;
+    onViewportChange({
+      ...viewport,
+      panX: panStart.current.panX + (clientX - panStart.current.clientX),
+      panY: panStart.current.panY + (clientY - panStart.current.clientY),
+    });
+  };
+
+  const handlePanEnd = () => setIsPanning(false);
 
   const selectAnnotation = (id: string) => {
     setSelectedAnnId(id);
@@ -374,7 +442,7 @@ export default function AnnotationCanvas({
   };
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!displayImage) return;
+    if (!displayImage || isPanActive) return;
     const currentTool = toolRef.current;
 
     // 选择工具：点空白取消选中；点图片由图片自身处理
@@ -686,8 +754,8 @@ export default function AnnotationCanvas({
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
-    const draggable = tool === "select" && interactive;
-    const listening = interactive && (tool === "select" || !isDrawingMode);
+    const draggable = tool === "select" && interactive && !isPanActive;
+    const listening = interactive && !isPanActive && (tool === "select" || !isDrawingMode);
 
     switch (ann.type) {
       case "rect": {
@@ -855,20 +923,27 @@ export default function AnnotationCanvas({
   };
 
   const toolbarHint =
-    tool !== "select"
-      ? "绘制完成后自动切回选择"
-      : imageSelected
-        ? "款式图已选中 — 可拖动位置"
-        : selectedAnnId
-          ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
-          : "点击款式图或标注进行选中";
+    tool === "pan"
+      ? "抓手工具 — 拖动画布视口，不移动款式图"
+      : spaceDown
+        ? "按住空格 — 拖动画布视口"
+        : tool !== "select"
+          ? "绘制完成后自动切回选择"
+          : imageSelected
+            ? "款式图已选中 — 可拖动位置"
+            : selectedAnnId
+              ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
+              : "点击款式图或标注进行选中";
 
   const toolbarEl = (
     <CanvasToolbar
       tool={tool}
       onToolChange={(t) => {
         setTool(t);
-        if (t !== "select") setImageSelected(false);
+        if (t !== "select") {
+          setImageSelected(false);
+          setSelectedAnnId(null);
+        }
       }}
       color={color}
       onColorChange={setColor}
@@ -927,7 +1002,17 @@ export default function AnnotationCanvas({
         height={splitOnCanvas || embedded ? panelStageH * fitScale : stageH}
         scaleX={fitScale}
         scaleY={fitScale}
-        style={{ cursor: tool === "select" ? (imageSelected ? "move" : "default") : "crosshair" }}
+        style={{
+          cursor: isPanActive
+            ? isPanning
+              ? "grabbing"
+              : "grab"
+            : tool === "select"
+              ? imageSelected
+                ? "move"
+                : "default"
+              : "crosshair",
+        }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={finishDrawing}
@@ -985,8 +1070,8 @@ export default function AnnotationCanvas({
                       y={entry.fit.y + abOffset.y}
                       width={entry.fit.width}
                       height={entry.fit.height}
-                      listening={!isDrawingMode || !isActive}
-                      draggable={isActive && tool === "select" && imageSelected}
+                      listening={!isPanActive && (!isDrawingMode || !isActive)}
+                      draggable={isActive && tool === "select" && imageSelected && !isPanActive}
                       stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
                       strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
                       opacity={isActive ? 1 : 0.92}
@@ -1060,8 +1145,8 @@ export default function AnnotationCanvas({
               y={imageFit.y + imageOffset.y}
               width={imageFit.width}
               height={imageFit.height}
-              listening={!isDrawingMode}
-              draggable={tool === "select" && imageSelected}
+              listening={!isDrawingMode && !isPanActive}
+              draggable={tool === "select" && imageSelected && !isPanActive}
               stroke={imageSelected ? "#2563eb" : undefined}
               strokeWidth={imageSelected ? 2 : 0}
               onClick={(e) => {
@@ -1122,6 +1207,23 @@ export default function AnnotationCanvas({
               return newBox;
             }}
           />
+          {isPanActive && viewport && onViewportChange && (
+            <Rect
+              name="pan-overlay"
+              x={-contentOffsetX}
+              y={-contentOffsetY}
+              width={logicalW}
+              height={logicalH}
+              fill="rgba(0,0,0,0.01)"
+              listening
+              onMouseDown={handlePanStart}
+              onMouseMove={handlePanMove}
+              onMouseUp={handlePanEnd}
+              onTouchStart={handlePanStart}
+              onTouchMove={handlePanMove}
+              onTouchEnd={handlePanEnd}
+            />
+          )}
           {isDrawingMode && (
             <Rect
               name="draw-overlay"

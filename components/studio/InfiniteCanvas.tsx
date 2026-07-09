@@ -106,7 +106,7 @@ export default function InfiniteCanvas({
       </div>
 
       <p className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-[#888]">
-        空白处拖动平移 · 滚轮缩放 · 空格可临时抓手
+        抓手工具 / 空格拖动画布 · 滚轮缩放 · 中键平移
       </p>
     </div>
   );

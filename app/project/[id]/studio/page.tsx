@@ -410,6 +410,8 @@ export default function StudioPage() {
               onResetViewport={() =>
                 saveLayout({ ...layout, viewport: { panX: 0, panY: 0, scale: 1 } })
               }
+              viewport={layout.viewport}
+              onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
               toolbarMessage={aiMessage ?? aiTip}
             />
           </InfiniteCanvas>

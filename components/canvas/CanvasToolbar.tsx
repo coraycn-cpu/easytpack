@@ -37,6 +37,7 @@ type CanvasToolbarProps = {
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
   { id: "select", label: "选择", icon: "↖" },
+  { id: "pan", label: "移动", icon: "✋" },
   { id: "rect", label: "方框", icon: "□" },
   { id: "circle", label: "圆圈", icon: "○" },
   { id: "arrow", label: "箭头", icon: "→" },

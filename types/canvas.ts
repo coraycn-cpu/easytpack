@@ -1,5 +1,6 @@
 export type CanvasTool =
   | "select"
+  | "pan"
   | "rect"
   | "circle"
   | "arrow"
