@@ -12,7 +12,7 @@ export default function CompliancePanel({
   if (issues.length === 0) {
     return (
       <div
-        className={`px-2 py-1.5 text-[10px] text-green-700 ${
+        className={`px-2 py-2 text-xs text-green-700 ${
           flat ? "border border-green-200 bg-green-50" : "rounded-lg bg-green-50"
         }`}
       >
@@ -26,7 +26,7 @@ export default function CompliancePanel({
   const box = flat ? "border px-2 py-1.5" : "rounded-lg px-3 py-2";
 
   return (
-    <div className="space-y-1 text-[10px]">
+    <div className="space-y-1.5 text-xs">
       {errors.map((issue, i) => (
         <div key={`e-${i}`} className={`${box} border-red-200 bg-red-50 text-red-700`}>
           {issue.message}

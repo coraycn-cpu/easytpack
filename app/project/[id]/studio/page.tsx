@@ -3,9 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import AiAssistantPanel from "@/components/studio/AiAssistantPanel";
 import AiChatFab from "@/components/studio/AiChatFab";
-import DraggablePanel from "@/components/studio/DraggablePanel";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
@@ -15,14 +13,21 @@ import {
 } from "@/lib/canvas/bounds";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
-import { applyHotspotTemplate } from "@/lib/project/hotspots";
+import { applyHotspotTemplate, createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
+import {
+  computeArtboardSlots,
+  nextArtboardOrigin,
+  type ArtboardSlot,
+} from "@/lib/studio/artboard-layout";
 import {
   getStudioLayout,
   STUDIO_TOOLBAR_ANCHOR_ID,
   type StudioLayout,
 } from "@/lib/studio/layout";
+import type { ViewImageKind } from "@/lib/studio/view-types";
+import { createViewPlaceholderImage } from "@/lib/studio/view-image-client";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, Artboard, TechPackProject, WorkflowStatus } from "@/types/project";
 
@@ -41,9 +46,11 @@ export default function StudioPage() {
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("process");
   const [aiLoading, setAiLoading] = useState(false);
+  const [viewGenerating, setViewGenerating] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
+  const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
 
   useEffect(() => {
     const p = getProject(id);
@@ -59,9 +66,20 @@ export default function StudioPage() {
     setActiveArtboardId(p.canvas_data.activeArtboardId);
     setLayout(getStudioLayout(p.canvas_data.studioLayout));
     if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
-      setAiTip("左侧切换视图 · 顶部标注工具 · 右下角 🤖 对话修改");
+      setAiTip("左侧 AI 生成多视角 · 顶部左手动右 AI · 右下角编辑工艺数据");
     }
   }, [id, router]);
+
+  useEffect(() => {
+    if (!project) return;
+    let cancelled = false;
+    computeArtboardSlots(project.canvas_data.artboards).then((slots) => {
+      if (!cancelled) setArtboardSlots(slots);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.canvas_data.artboards]);
 
   const activeArtboard = useMemo(
     () => project?.canvas_data.artboards.find((a) => a.id === activeArtboardId),
@@ -96,7 +114,7 @@ export default function StudioPage() {
     });
   };
 
-  const switchArtboard = (artboardId: string) => {
+  const setActiveArtboard = (artboardId: string) => {
     if (!project) return;
     setActiveArtboardId(artboardId);
     setSelectedHotspotId(null);
@@ -104,6 +122,75 @@ export default function StudioPage() {
       ...project,
       canvas_data: { ...project.canvas_data, activeArtboardId: artboardId },
     });
+  };
+
+  const sourceImageUrl = useMemo(() => {
+    if (!project) return undefined;
+    const withImage = project.canvas_data.artboards.find((a) => a.imageDataUrl);
+    return withImage?.imageDataUrl ?? project.intake.imageDataUrl;
+  }, [project]);
+
+  const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
+    if (!project || !sourceImageUrl) {
+      setAiMessage("请先上传正面款式图");
+      return;
+    }
+    setViewGenerating(true);
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/ai/view-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          customPrompt,
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          sourceImageUrl,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      let imageDataUrl = data.imageDataUrl as string | null;
+      if (!imageDataUrl) {
+        imageDataUrl = await createViewPlaceholderImage(
+          sourceImageUrl,
+          data.artboardName ?? "视角图",
+        );
+        const err = data.synthesisError as string | undefined;
+        setAiTip(
+          err
+            ? `生图失败：${err}。已用占位图，请检查 AI Gateway 配置。`
+            : "生图 API 未返回图片，已生成占位图",
+        );
+      } else {
+        setAiTip(
+          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图`,
+        );
+      }
+
+      const slots = await computeArtboardSlots(project.canvas_data.artboards);
+      const origin = nextArtboardOrigin(slots);
+      const newBoard = createArtboard(data.artboardName ?? "视角图", imageDataUrl);
+      newBoard.canvasOrigin = origin;
+
+      const artboards = [...project.canvas_data.artboards, newBoard];
+      persist({
+        ...project,
+        canvas_data: {
+          ...project.canvas_data,
+          artboards,
+          activeArtboardId: newBoard.id,
+        },
+      });
+      setActiveArtboardId(newBoard.id);
+      setAiMessage(`已添加「${newBoard.name}」到画布`);
+    } catch (e) {
+      setAiMessage(e instanceof Error ? e.message : "视角图生成失败");
+    } finally {
+      setViewGenerating(false);
+    }
   };
 
   const handleSmartAnnotate = async () => {
@@ -143,7 +230,7 @@ export default function StudioPage() {
       updateArtboard(activeArtboard.id, {
         annotations: [...activeArtboard.annotations, ...newAnnotations],
       });
-      setAiTip(data.userTips ?? "已在图上添加智能标注");
+      setAiTip(data.userTips ?? "已在当前画板添加智能标注");
       setAiMessage("智能标注完成");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "标注失败");
@@ -250,26 +337,39 @@ export default function StudioPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
-      {/* 标注工具 — 固定顶部 */}
       <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
       <div className="flex min-h-0 flex-1">
         <FixedViewSidebar
-          artboards={project.canvas_data.artboards}
-          activeArtboardId={activeArtboardId}
-          onSwitchArtboard={switchArtboard}
           onApplyHotspotTemplate={() => {
             const tpl = applyHotspotTemplate(project.intake.detectedCategory);
             updateArtboard(activeArtboard.id, { hotspots: tpl });
             setAiMessage("已应用热区模板");
           }}
-          onReplaceImage={(url) => updateArtboard(activeArtboard.id, { imageDataUrl: url })}
+          onReplaceImage={(url) => {
+            const main = project.canvas_data.artboards[0];
+            if (main) updateArtboard(main.id, { imageDataUrl: url });
+            else {
+              const ab = createArtboard("正面", url);
+              persist({
+                ...project,
+                canvas_data: {
+                  ...project.canvas_data,
+                  artboards: [ab],
+                  activeArtboardId: ab.id,
+                },
+              });
+            }
+          }}
+          onGenerateView={handleGenerateView}
+          viewGenerating={viewGenerating}
+          compliance={compliance}
           projectTitle={project.title}
           category={project.intake.detectedCategory}
           workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
           progress={progress}
           workflowStatus={project.workflowStatus}
-          onWorkflowChange={(ws) => {
+          onWorkflowChange={(ws: WorkflowStatus) => {
             if (ws === "finalized" && !canFinalize(project)) {
               setAiMessage("请先完善必填项");
               return;
@@ -279,7 +379,6 @@ export default function StudioPage() {
           exportHref={`/project/${id}/export`}
         />
 
-        {/* 无限画布 — 仅款式图 + AI/数据浮动面板 */}
         <div className="relative min-h-0 min-w-0 flex-1">
           <InfiniteCanvas
             viewport={layout.viewport}
@@ -289,6 +388,10 @@ export default function StudioPage() {
               fixedChrome
               stagePosition={layout.stage}
               canvasScale={scale}
+              multiArtboards={project.canvas_data.artboards}
+              artboardSlots={artboardSlots}
+              activeArtboardId={activeArtboardId}
+              onActiveArtboardChange={setActiveArtboard}
               imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
               hotspots={activeArtboard.hotspots}
               annotations={normalizeAnnotations(activeArtboard.annotations)}
@@ -307,49 +410,32 @@ export default function StudioPage() {
               }
               onSmartAnnotate={handleSmartAnnotate}
               smartAnnotateLoading={aiLoading}
-              toolbarMessage={aiMessage}
+              aiLoading={aiLoading || viewGenerating}
+              onGenerateSize={handleGenerateSize}
+              onEnhanceAll={handleEnhanceAll}
+              onExplain={handleExplain}
+              viewportScale={scale}
+              onViewportScaleChange={(nextScale) =>
+                saveLayout({ ...layout, viewport: { ...layout.viewport, scale: nextScale } })
+              }
+              onResetViewport={() =>
+                saveLayout({ ...layout, viewport: { panX: 0, panY: 0, scale: 1 } })
+              }
+              toolbarMessage={aiMessage ?? aiTip}
             />
+          </InfiniteCanvas>
 
-            <DraggablePanel
-              id="ai"
-              title="AI 版房助手"
-              variant="ai"
-              x={layout.ai.x}
-              y={layout.ai.y}
-              width={layout.ai.w}
-              scale={scale}
-              onMove={(x, y) => saveLayout({ ...layout, ai: { ...layout.ai, x, y } })}
-            >
-              <AiAssistantPanel
-                loading={aiLoading}
-                message={aiMessage}
-                tip={aiTip}
-                onGenerateSize={handleGenerateSize}
-                onEnhanceAll={handleEnhanceAll}
-                onExplain={handleExplain}
-              />
-            </DraggablePanel>
-
-            <DraggablePanel
-              id="data"
-              title="工艺 · 物料 · 尺寸"
-              variant="data"
-              x={layout.data.x}
-              y={layout.data.y}
-              width={layout.data.w}
-              height={layout.data.h}
-              scale={scale}
-              onMove={(x, y) => saveLayout({ ...layout, data: { ...layout.data, x, y } })}
-            >
+          <div className="pointer-events-none fixed bottom-4 right-4 z-30 w-[min(100vw-2rem,420px)] pb-16">
+            <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">工艺 · 物料 · 尺寸</h3>
               <StudioDataPanel
                 project={project}
-                compliance={compliance}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onPersist={persist}
               />
-            </DraggablePanel>
-          </InfiniteCanvas>
+            </div>
+          </div>
 
           <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
         </div>

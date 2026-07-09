@@ -29,11 +29,7 @@ export function createDefaultCanvasData(
 ): CanvasData {
   const front = createArtboard(DEFAULT_ARTBOARD_NAMES[0], imageDataUrl, hotspots);
   return {
-    artboards: [
-      front,
-      createArtboard(DEFAULT_ARTBOARD_NAMES[1]),
-      createArtboard(DEFAULT_ARTBOARD_NAMES[2]),
-    ],
+    artboards: [front],
     activeArtboardId: front.id,
   };
 }

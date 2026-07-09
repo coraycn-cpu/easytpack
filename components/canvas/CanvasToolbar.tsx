@@ -17,14 +17,22 @@ type CanvasToolbarProps = {
   canRedo: boolean;
   onDelete: () => void;
   canDelete: boolean;
-  zoom: number;
-  onZoomChange: (z: number) => void;
+  /** 画布视图缩放（统一控制） */
+  viewportScale?: number;
+  onViewportScaleChange?: (scale: number) => void;
+  onResetViewport?: () => void;
+  /** 兼容旧版内部缩放 */
+  zoom?: number;
+  onZoomChange?: (z: number) => void;
   hint?: string;
   flat?: boolean;
   theme?: "light" | "dark";
-  /** AI 智能标注（与标注工具同一栏） */
   onSmartAnnotate?: () => void;
   smartAnnotateLoading?: boolean;
+  aiLoading?: boolean;
+  onGenerateSize?: () => void;
+  onEnhanceAll?: () => void;
+  onExplain?: () => void;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -50,15 +58,24 @@ export default function CanvasToolbar({
   canRedo,
   onDelete,
   canDelete,
-  zoom,
+  viewportScale,
+  onViewportScaleChange,
+  onResetViewport,
+  zoom = 1,
   onZoomChange,
   hint,
   flat,
   theme = "dark",
   onSmartAnnotate,
   smartAnnotateLoading,
+  aiLoading,
+  onGenerateSize,
+  onEnhanceAll,
+  onExplain,
 }: CanvasToolbarProps) {
   const light = theme === "light";
+  const scale = viewportScale ?? zoom;
+  const setScale = onViewportScaleChange ?? onZoomChange ?? (() => {});
 
   const actionBtn = (disabled: boolean, danger?: boolean) =>
     light
@@ -86,113 +103,171 @@ export default function CanvasToolbar({
     ? "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-600 transition hover:bg-slate-100"
     : "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-zinc-300 hover:bg-zinc-800";
 
+  const aiBtn = (primary?: boolean) =>
+    `inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      primary
+        ? "bg-blue-600 text-white hover:bg-blue-700"
+        : light
+          ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          : "border border-blue-500/40 bg-blue-950 text-blue-200 hover:bg-blue-900"
+    }`;
+
+  const hasAi =
+    onSmartAnnotate || onGenerateSize || onEnhanceAll || onExplain;
+
   return (
     <div
       className={`shrink-0 ${
         light ? "border-b border-slate-200/80 bg-white" : flat ? "border-b border-[#333] bg-[#1a1a1a]" : "border-b border-zinc-700/50 bg-[#1a1a1a]"
       }`}
     >
-      <div className="flex flex-wrap items-center gap-3 px-4 py-2">
-        <div
-          className={`inline-flex flex-wrap items-center gap-0.5 rounded-lg p-1 ${
-            light ? "bg-slate-100" : flat ? "bg-[#262626]" : "rounded-lg bg-zinc-800 p-1"
-          }`}
-        >
-          {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              title={t.label}
-              onClick={() => onToolChange(t.id)}
-              className={toolBtn(tool === t.id)}
-            >
-              <span className="text-sm leading-none">{t.icon}</span>
-              <span className="hidden sm:inline">{t.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {onSmartAnnotate && (
-          <>
-            <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-            <button
-              type="button"
-              disabled={smartAnnotateLoading}
-              onClick={onSmartAnnotate}
-              className={`inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                light
-                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-                  : "bg-blue-600 text-white hover:bg-blue-500"
-              }`}
-            >
-              <span>✦</span>
-              {smartAnnotateLoading ? "标注中…" : "AI智能标注"}
-            </button>
-          </>
-        )}
-
-        <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-
-        <div className="flex items-center gap-1.5">
-          {ANNOTATION_COLORS.slice(0, 5).map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              title={c.label}
-              onClick={() => onColorChange(c.value)}
-              className={`h-6 w-6 rounded-full transition ring-offset-2 ${
-                light ? "ring-offset-white" : "ring-offset-[#1a1a1a]"
-              } ${
-                color === c.value
-                  ? "ring-2 ring-slate-400 scale-110"
-                  : "ring-1 ring-black/10 hover:scale-105"
-              }`}
-              style={{ backgroundColor: c.value }}
-            />
-          ))}
-        </div>
-
-        <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-
-        <div className="flex items-center gap-0.5">
-          <button type="button" disabled={!canUndo} onClick={onUndo} className={actionBtn(!canUndo)}>
-            撤销
-          </button>
-          <button type="button" disabled={!canRedo} onClick={onRedo} className={actionBtn(!canRedo)}>
-            重做
-          </button>
-          <button
-            type="button"
-            disabled={!canDelete}
-            onClick={onDelete}
-            className={actionBtn(!canDelete, true)}
-          >
-            删除
-          </button>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-          <button
-            type="button"
-            onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))}
-            className={zoomBtn}
-          >
-            −
-          </button>
-          <span
-            className={`min-w-[3rem] text-center text-xs font-medium tabular-nums ${
-              light ? "text-slate-600" : "text-zinc-400"
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+        {/* 左侧：手动标注 */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-slate-400 lg:inline">
+            手动
+          </span>
+          <div
+            className={`inline-flex flex-wrap items-center gap-0.5 rounded-lg p-1 ${
+              light ? "bg-slate-100" : flat ? "bg-[#262626]" : "rounded-lg bg-zinc-800 p-1"
             }`}
           >
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={() => onZoomChange(Math.min(2, zoom + 0.1))}
-            className={zoomBtn}
-          >
-            +
-          </button>
+            {TOOLS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                title={t.label}
+                onClick={() => onToolChange(t.id)}
+                className={toolBtn(tool === t.id)}
+              >
+                <span className="text-sm leading-none">{t.icon}</span>
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+
+          <div className="flex items-center gap-1.5">
+            {ANNOTATION_COLORS.slice(0, 5).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                title={c.label}
+                onClick={() => onColorChange(c.value)}
+                className={`h-6 w-6 rounded-full transition ring-offset-2 ${
+                  light ? "ring-offset-white" : "ring-offset-[#1a1a1a]"
+                } ${
+                  color === c.value
+                    ? "ring-2 ring-slate-400 scale-110"
+                    : "ring-1 ring-black/10 hover:scale-105"
+                }`}
+                style={{ backgroundColor: c.value }}
+              />
+            ))}
+          </div>
+
+          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+
+          <div className="flex items-center gap-0.5">
+            <button type="button" disabled={!canUndo} onClick={onUndo} className={actionBtn(!canUndo)}>
+              撤销
+            </button>
+            <button type="button" disabled={!canRedo} onClick={onRedo} className={actionBtn(!canRedo)}>
+              重做
+            </button>
+            <button
+              type="button"
+              disabled={!canDelete}
+              onClick={onDelete}
+              className={actionBtn(!canDelete, true)}
+            >
+              删除
+            </button>
+          </div>
+        </div>
+
+        {/* 右侧：AI 辅助 + 视图缩放 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {hasAi && (
+            <>
+              <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-blue-500 lg:inline">
+                AI 辅助
+              </span>
+              {onSmartAnnotate && (
+                <button
+                  type="button"
+                  disabled={smartAnnotateLoading || aiLoading}
+                  onClick={onSmartAnnotate}
+                  className={aiBtn(true)}
+                >
+                  <span>✦</span>
+                  {smartAnnotateLoading ? "标注中…" : "智能标注"}
+                </button>
+              )}
+              {onGenerateSize && (
+                <button
+                  type="button"
+                  disabled={aiLoading}
+                  onClick={onGenerateSize}
+                  className={aiBtn()}
+                >
+                  生成尺码
+                </button>
+              )}
+              {onEnhanceAll && (
+                <button
+                  type="button"
+                  disabled={aiLoading}
+                  onClick={onEnhanceAll}
+                  className={aiBtn()}
+                >
+                  一键补全
+                </button>
+              )}
+              {onExplain && (
+                <button
+                  type="button"
+                  disabled={aiLoading}
+                  onClick={onExplain}
+                  className={aiBtn()}
+                >
+                  通俗解释
+                </button>
+              )}
+              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+            </>
+          )}
+
+          <span className="text-[10px] font-medium text-slate-500">视图缩放</span>
+          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setScale(Math.max(0.25, scale - 0.1))}
+              className={zoomBtn}
+            >
+              −
+            </button>
+            <span className="min-w-[3rem] text-center text-xs font-medium tabular-nums text-slate-600">
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setScale(Math.min(2, scale + 0.1))}
+              className={zoomBtn}
+            >
+              +
+            </button>
+            {onResetViewport && (
+              <button
+                type="button"
+                onClick={onResetViewport}
+                className="ml-0.5 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                重置
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {hint && (

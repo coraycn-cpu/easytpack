@@ -16,6 +16,15 @@ export function getModel(): string {
   return process.env.AI_MODEL_GATEWAY || "google/gemini-2.5-flash";
 }
 
+/** Gateway 生图模型（Nano Banana / Imagen / Flux 等） */
+export function getImageModel(): string {
+  return process.env.AI_MODEL_GATEWAY_IMAGE || "google/gemini-2.5-flash-image";
+}
+
+export function isGatewayConfigured(): boolean {
+  return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN);
+}
+
 type UserContent =
   | string
   | Array<

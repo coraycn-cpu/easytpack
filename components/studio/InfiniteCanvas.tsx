@@ -105,41 +105,6 @@ export default function InfiniteCanvas({
         {children}
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 flex gap-0 border border-[#999] bg-white text-[11px] text-[#333]">
-        <button
-          type="button"
-          className="pointer-events-auto border-r border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
-          onClick={() =>
-            onViewportChange({
-              ...viewport,
-              scale: Math.max(0.25, viewport.scale - 0.1),
-            })
-          }
-        >
-          −
-        </button>
-        <span className="px-2 py-1 tabular-nums">{Math.round(viewport.scale * 100)}%</span>
-        <button
-          type="button"
-          className="pointer-events-auto border-l border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
-          onClick={() =>
-            onViewportChange({
-              ...viewport,
-              scale: Math.min(2, viewport.scale + 0.1),
-            })
-          }
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="pointer-events-auto border-l border-[#999] px-2 py-1 hover:bg-[#f0f0f0]"
-          onClick={() => onViewportChange({ panX: 0, panY: 0, scale: 1 })}
-        >
-          重置视图
-        </button>
-      </div>
-
       <p className="pointer-events-none absolute bottom-3 right-3 text-[10px] text-[#888]">
         空白处拖动平移 · 滚轮缩放 · 空格可临时抓手
       </p>

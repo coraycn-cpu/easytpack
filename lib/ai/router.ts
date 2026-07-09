@@ -202,6 +202,8 @@ export function getAiConfigStatus() {
     zhipu: Boolean(process.env.ZHIPU_API_KEY),
     models: {
       gateway: getGatewayModel(),
+      gatewayImage:
+        process.env.AI_MODEL_GATEWAY_IMAGE || "google/gemini-2.5-flash-image",
       dashscope: getDashscopeModel(),
       zhipu: getZhipuModel(),
     },

@@ -16,11 +16,16 @@ import {
 } from "react-konva";
 import type Konva from "konva";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
-import { computeStudioStageBounds, computeImagePlacement } from "@/lib/canvas/bounds";
+import {
+  computeStudioStageBounds,
+  computeMultiStudioStageBounds,
+  computeImagePlacement,
+} from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
 import type { Hotspot } from "@/types/process";
-import type { Annotation } from "@/types/project";
+import type { Annotation, Artboard } from "@/types/project";
 import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
 import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
@@ -61,6 +66,18 @@ type AnnotationCanvasProps = {
   onSmartAnnotate?: () => void;
   smartAnnotateLoading?: boolean;
   toolbarMessage?: string | null;
+  /** 多画板并排模式 */
+  multiArtboards?: Artboard[];
+  artboardSlots?: ArtboardSlot[];
+  activeArtboardId?: string;
+  onActiveArtboardChange?: (id: string) => void;
+  viewportScale?: number;
+  onViewportScaleChange?: (scale: number) => void;
+  onResetViewport?: () => void;
+  onGenerateSize?: () => void;
+  onEnhanceAll?: () => void;
+  onExplain?: () => void;
+  aiLoading?: boolean;
 };
 
 function createId(prefix: string) {
@@ -105,9 +122,27 @@ export default function AnnotationCanvas({
   onSmartAnnotate,
   smartAnnotateLoading,
   toolbarMessage,
+  multiArtboards,
+  artboardSlots,
+  activeArtboardId,
+  onActiveArtboardChange,
+  viewportScale,
+  onViewportScaleChange,
+  onResetViewport,
+  onGenerateSize,
+  onEnhanceAll,
+  onExplain,
+  aiLoading,
 }: AnnotationCanvasProps) {
+  const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
+  const activeSlot = multiMode
+    ? artboardSlots!.find((s) => s.id === activeArtboardId)
+    : undefined;
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
+  const [artboardImages, setArtboardImages] = useState<
+    Map<string, { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }>
+  >(new Map());
   const [tool, setTool] = useState<CanvasTool>("select");
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -178,9 +213,45 @@ export default function AnnotationCanvas({
   );
 
   useEffect(() => {
+    if (multiMode) return;
     if (imageUrl) loadImage(imageUrl);
     else setImage(null);
-  }, [imageUrl, loadImage]);
+  }, [imageUrl, loadImage, multiMode]);
+
+  useEffect(() => {
+    if (!multiMode || !multiArtboards) return;
+    let cancelled = false;
+    const next = new Map<
+      string,
+      { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }
+    >();
+
+    const loadAll = async () => {
+      for (const ab of multiArtboards) {
+        if (!ab.imageDataUrl) continue;
+        await new Promise<void>((resolve) => {
+          const img = new window.Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            if (cancelled) return;
+            next.set(ab.id, {
+              img,
+              fit: computeImagePlacement(img.naturalWidth, img.naturalHeight),
+            });
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = ab.imageDataUrl!;
+        });
+      }
+      if (!cancelled) setArtboardImages(new Map(next));
+    };
+
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
+  }, [multiMode, multiArtboards]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -242,12 +313,17 @@ export default function AnnotationCanvas({
   };
 
   const studioBounds = fixedChrome
-    ? computeStudioStageBounds({
-        imageFit: image ? imageFit : null,
-        imageOffset,
-        hotspots,
-        annotations: normalizedAnnotations,
-      })
+    ? multiMode && artboardSlots && multiArtboards
+      ? computeMultiStudioStageBounds({
+          slots: artboardSlots,
+          artboards: multiArtboards,
+        })
+      : computeStudioStageBounds({
+          imageFit: image ? imageFit : null,
+          imageOffset,
+          hotspots,
+          annotations: normalizedAnnotations,
+        })
     : null;
 
   const logicalW = fixedChrome ? studioBounds!.width : CANVAS_W;
@@ -265,7 +341,7 @@ export default function AnnotationCanvas({
         containerSize.w / CANVAS_W,
         containerSize.h / (embedded || splitOnCanvas ? panelStageH : CANVAS_H),
       );
-  const fitScale = baseFit * zoom;
+  const fitScale = baseFit * (fixedChrome ? 1 : zoom);
   const stageW = logicalW * fitScale;
   const stageH = logicalH * fitScale;
 
@@ -273,12 +349,19 @@ export default function AnnotationCanvas({
     const stage = e.target.getStage();
     const pos = stage?.getPointerPosition();
     if (!pos) return null;
-    // Konva 已处理 stage 缩放，只需减去 Group 偏移
-    return {
-      x: pos.x - contentOffsetX,
-      y: pos.y - contentOffsetY,
-    };
+    let x = pos.x - contentOffsetX;
+    let y = pos.y - contentOffsetY;
+    if (multiMode && activeSlot) {
+      x -= activeSlot.origin.x;
+      y -= activeSlot.origin.y;
+    }
+    return { x, y };
   };
+
+  const activeImageEntry = multiMode && activeArtboardId
+    ? artboardImages.get(activeArtboardId)
+    : null;
+  const displayImage = multiMode ? activeImageEntry?.img ?? null : image;
 
   const isDrawingMode = tool !== "select";
 
@@ -320,7 +403,7 @@ export default function AnnotationCanvas({
   };
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!image) return;
+    if (!displayImage) return;
     const currentTool = toolRef.current;
 
     // 选择工具：点空白取消选中；点图片由图片自身处理
@@ -667,12 +750,12 @@ export default function AnnotationCanvas({
     }
   };
 
-  const renderAnnotation = (ann: Annotation) => {
+  const renderAnnotation = (ann: Annotation, interactive = true) => {
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
-    const draggable = tool === "select";
-    const listening = tool === "select";
+    const draggable = tool === "select" && interactive;
+    const listening = interactive && (tool === "select" || !isDrawingMode);
 
     switch (ann.type) {
       case "rect":
@@ -848,13 +931,20 @@ export default function AnnotationCanvas({
       canRedo={canRedo}
       onDelete={deleteSelected}
       canDelete={Boolean(selectedAnnId || selectedHotspotId)}
-      zoom={zoom}
-      onZoomChange={setZoom}
+      zoom={fixedChrome ? 1 : zoom}
+      onZoomChange={fixedChrome ? undefined : setZoom}
+      viewportScale={viewportScale}
+      onViewportScaleChange={onViewportScaleChange}
+      onResetViewport={onResetViewport}
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarMessage ?? toolbarHint}
       onSmartAnnotate={onSmartAnnotate}
       smartAnnotateLoading={smartAnnotateLoading}
+      aiLoading={aiLoading}
+      onGenerateSize={onGenerateSize}
+      onEnhanceAll={onEnhanceAll}
+      onExplain={onExplain}
     />
   );
 
@@ -921,7 +1011,142 @@ export default function AnnotationCanvas({
               listening={false}
             />
           )}
-          {image && (
+          {multiMode && artboardSlots && multiArtboards
+            ? artboardSlots.map((slot) => {
+                const ab = multiArtboards.find((a) => a.id === slot.id);
+                const entry = ab ? artboardImages.get(ab.id) : undefined;
+                if (!ab || !entry) return null;
+                const isActive = ab.id === activeArtboardId;
+                const abOffset = ab.imageOffset ?? { x: 0, y: 0 };
+                const abAnns = normalizeAnnotations(ab.annotations);
+
+                return (
+                  <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
+                    <Text
+                      text={ab.name}
+                      x={0}
+                      y={-22}
+                      fontSize={13}
+                      fontStyle="600"
+                      fill={isActive ? "#2563eb" : "#64748b"}
+                      listening={false}
+                    />
+                    <KonvaImage
+                      id={isActive ? "garment_image" : undefined}
+                      image={entry.img}
+                      x={entry.fit.x + abOffset.x}
+                      y={entry.fit.y + abOffset.y}
+                      width={entry.fit.width}
+                      height={entry.fit.height}
+                      listening={!isDrawingMode || !isActive}
+                      draggable={isActive && tool === "select" && imageSelected}
+                      stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
+                      strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
+                      opacity={isActive ? 1 : 0.92}
+                      onClick={(e) => {
+                        if (tool !== "select") return;
+                        e.cancelBubble = true;
+                        if (!isActive) {
+                          onActiveArtboardChange?.(ab.id);
+                          return;
+                        }
+                        selectImage();
+                      }}
+                      onTap={(e) => {
+                        e.cancelBubble = true;
+                        if (!isActive) {
+                          onActiveArtboardChange?.(ab.id);
+                          return;
+                        }
+                        if (tool !== "select") return;
+                        selectImage();
+                      }}
+                      onDragEnd={(e) => {
+                        if (!isActive) return;
+                        onImageOffsetChange?.({
+                          x: e.target.x() - entry.fit.x,
+                          y: e.target.y() - entry.fit.y,
+                        });
+                      }}
+                    />
+                    {abAnns.map((ann) => renderAnnotation(ann, isActive))}
+                    {ab.hotspots.map((hs) => (
+                      <Rect
+                        key={hs.id}
+                        id={isActive ? `hs_${hs.id}` : undefined}
+                        x={hs.x}
+                        y={hs.y}
+                        width={hs.width}
+                        height={hs.height}
+                        stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
+                        strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
+                        dash={[6, 3]}
+                        fill={
+                          selectedHotspotId === hs.id
+                            ? "rgba(59, 130, 246, 0.12)"
+                            : "rgba(59, 130, 246, 0.03)"
+                        }
+                        listening={isActive && !isDrawingMode}
+                        draggable={isActive && tool === "select"}
+                        onClick={(e) => {
+                          if (!isActive) return;
+                          e.cancelBubble = true;
+                          if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
+                            selectHotspot(hs.id);
+                          }
+                        }}
+                        onTap={(e) => {
+                          if (!isActive) return;
+                          e.cancelBubble = true;
+                          selectHotspot(hs.id);
+                          if (tool !== "select") setTool("select");
+                        }}
+                        onDragEnd={(e) => {
+                          if (!isActive) return;
+                          pushHistory();
+                          const next = ab.hotspots.map((h) =>
+                            h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
+                          );
+                          onHotspotsChange(next);
+                        }}
+                      />
+                    ))}
+                    {isActive && draftRect && (
+                      <Rect
+                        x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
+                        y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
+                        width={Math.abs(draftRect.width)}
+                        height={Math.abs(draftRect.height)}
+                        stroke="#22c55e"
+                        dash={[6, 4]}
+                        strokeWidth={2}
+                        listening={false}
+                      />
+                    )}
+                    {isActive && draftLine && (
+                      <Arrow
+                        points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
+                        stroke="#22c55e"
+                        fill="#22c55e"
+                        dash={[4, 4]}
+                        listening={false}
+                      />
+                    )}
+                    {isActive && freehandPoints.length > 1 && (
+                      <Line
+                        points={freehandPoints}
+                        stroke={color}
+                        strokeWidth={3}
+                        lineCap="round"
+                        tension={0.4}
+                        listening={false}
+                      />
+                    )}
+                  </Group>
+                );
+              })
+            : null}
+          {!multiMode && image && (
             <KonvaImage
               id="garment_image"
               image={image}
@@ -951,46 +1176,47 @@ export default function AnnotationCanvas({
               }}
             />
           )}
-          {normalizedAnnotations.map(renderAnnotation)}
-          {hotspots.map((hs) => (
-            <Rect
-              key={hs.id}
-              id={`hs_${hs.id}`}
-              x={hs.x}
-              y={hs.y}
-              width={hs.width}
-              height={hs.height}
-              stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
-              strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
-              dash={[6, 3]}
-              fill={
-                selectedHotspotId === hs.id
-                  ? "rgba(59, 130, 246, 0.12)"
-                  : "rgba(59, 130, 246, 0.03)"
-              }
-              listening={!isDrawingMode}
-              draggable={tool === "select"}
-              onClick={(e) => {
-                e.cancelBubble = true;
-                if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
-                  selectHotspot(hs.id);
+          {!multiMode && normalizedAnnotations.map((ann) => renderAnnotation(ann))}
+          {!multiMode &&
+            hotspots.map((hs) => (
+              <Rect
+                key={hs.id}
+                id={`hs_${hs.id}`}
+                x={hs.x}
+                y={hs.y}
+                width={hs.width}
+                height={hs.height}
+                stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
+                strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
+                dash={[6, 3]}
+                fill={
+                  selectedHotspotId === hs.id
+                    ? "rgba(59, 130, 246, 0.12)"
+                    : "rgba(59, 130, 246, 0.03)"
                 }
-              }}
-              onTap={(e) => {
-                e.cancelBubble = true;
-                selectHotspot(hs.id);
-                if (tool !== "select") setTool("select");
-              }}
-              onDragEnd={(e) => {
-                pushHistory();
-                const next = hotspots.map((h) =>
-                  h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
-                );
-                onHotspotsChange(next);
-              }}
-            />
-          ))}
-          {draftRect && (
+                listening={!isDrawingMode}
+                draggable={tool === "select"}
+                onClick={(e) => {
+                  e.cancelBubble = true;
+                  if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
+                    selectHotspot(hs.id);
+                  }
+                }}
+                onTap={(e) => {
+                  e.cancelBubble = true;
+                  selectHotspot(hs.id);
+                  if (tool !== "select") setTool("select");
+                }}
+                onDragEnd={(e) => {
+                  pushHistory();
+                  const next = hotspots.map((h) =>
+                    h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
+                  );
+                  onHotspotsChange(next);
+                }}
+              />
+            ))}
+          {!multiMode && draftRect && (
             <Rect
               x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
               y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
@@ -1002,7 +1228,7 @@ export default function AnnotationCanvas({
               listening={false}
             />
           )}
-          {draftLine && (
+          {!multiMode && draftLine && (
             <Arrow
               points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
               stroke="#22c55e"
@@ -1011,7 +1237,7 @@ export default function AnnotationCanvas({
               listening={false}
             />
           )}
-          {freehandPoints.length > 1 && (
+          {!multiMode && freehandPoints.length > 1 && (
             <Line
               points={freehandPoints}
               stroke={color}
@@ -1058,9 +1284,14 @@ export default function AnnotationCanvas({
         </Layer>
       </Stage>
 
-      {!image && (
+      {!displayImage && !multiMode && (
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
-          点击「更换图片」导入款式图
+          点击「更换主图」导入款式图
+        </p>
+      )}
+      {multiMode && artboardImages.size === 0 && (
+        <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
+          点击左侧生成款式图或更换主图
         </p>
       )}
     </div>

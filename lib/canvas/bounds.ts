@@ -1,6 +1,7 @@
 import type { Hotspot } from "@/types/process";
-import type { Annotation } from "@/types/project";
+import type { Annotation, Artboard } from "@/types/project";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
+import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
 
 export type RectBounds = {
   minX: number;
@@ -86,6 +87,56 @@ function annotationBounds(ann: Annotation): RectBounds {
     minY: ann.y,
     maxX: ann.x + (ann.width ?? 0),
     maxY: ann.y + (ann.height ?? 0),
+  };
+}
+
+export function computeMultiStudioStageBounds(input: {
+  slots: ArtboardSlot[];
+  artboards: Artboard[];
+}): { width: number; height: number; offsetX: number; offsetY: number } {
+  let content: RectBounds = {
+    minX: 0,
+    minY: 0,
+    maxX: MIN_STUDIO_W,
+    maxY: MIN_STUDIO_H,
+  };
+
+  for (const slot of input.slots) {
+    const ab = input.artboards.find((a) => a.id === slot.id);
+    if (!ab) continue;
+    const ox = slot.origin.x + slot.imageOffset.x;
+    const oy = slot.origin.y + slot.imageOffset.y;
+    content = mergeBounds(content, {
+      minX: ox + slot.imageFit.x,
+      minY: oy + slot.imageFit.y,
+      maxX: ox + slot.imageFit.x + slot.imageFit.width,
+      maxY: oy + slot.imageFit.y + slot.imageFit.height,
+    });
+    for (const hs of ab.hotspots) {
+      content = mergeBounds(content, {
+        minX: slot.origin.x + hs.x,
+        minY: slot.origin.y + hs.y,
+        maxX: slot.origin.x + hs.x + hs.width,
+        maxY: slot.origin.y + hs.y + hs.height,
+      });
+    }
+    for (const ann of ab.annotations) {
+      const b = annotationBounds(ann);
+      content = mergeBounds(content, {
+        minX: slot.origin.x + b.minX,
+        minY: slot.origin.y + b.minY,
+        maxX: slot.origin.x + b.maxX,
+        maxY: slot.origin.y + b.maxY,
+      });
+    }
+  }
+
+  const pad = STUDIO_CONTENT_PAD;
+  return {
+    width: Math.max(MIN_STUDIO_W, content.maxX + pad),
+    height: Math.max(MIN_STUDIO_H, content.maxY + pad),
+    offsetX: pad,
+    offsetY: pad,
   };
 }
 
