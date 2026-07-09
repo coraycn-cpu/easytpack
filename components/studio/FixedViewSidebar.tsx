@@ -7,7 +7,6 @@ import { VIEW_IMAGE_PRESETS, type ViewImageKind } from "@/lib/studio/view-types"
 import type { WorkflowStatus } from "@/types/project";
 
 type FixedViewSidebarProps = {
-  onApplyHotspotTemplate: () => void;
   onReplaceImage: (dataUrl: string) => void;
   onGenerateView: (kind: ViewImageKind, customPrompt?: string) => void;
   viewGenerating: boolean;
@@ -34,7 +33,6 @@ const VIEW_BUTTONS: Array<{
 ];
 
 export default function FixedViewSidebar({
-  onApplyHotspotTemplate,
   onReplaceImage,
   onGenerateView,
   viewGenerating,
@@ -81,15 +79,7 @@ export default function FixedViewSidebar({
         ))}
       </div>
 
-      <div className="space-y-1.5 border-t border-slate-100 p-2.5">
-        <button
-          type="button"
-          onClick={onApplyHotspotTemplate}
-          className="flex w-full items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-        >
-          <span>⊞</span>
-          热区模板
-        </button>
+      <div className="border-t border-slate-100 p-2.5">
         <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">
           <span>🖼</span>
           更换主图

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import { getProject, saveProject } from "@/lib/project/storage";
-import { createDefaultCanvasData, mergeHotspots } from "@/lib/project/hotspots";
+import { createDefaultCanvasData, mergeSuggestedPartAnnotations } from "@/lib/project/hotspots";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 export default function CollectPage() {
@@ -138,21 +138,19 @@ export default function CollectPage() {
         }),
       );
 
-      const hotspots = mergeHotspots(
+      const partAnnotations = mergeSuggestedPartAnnotations(
         rawHotspots,
         project.intake.detectedCategory,
       );
 
       const canvas_data = createDefaultCanvasData(project.intake.imageDataUrl);
       if (canvas_data.artboards[0]) {
-        canvas_data.artboards[0].hotspots = hotspots;
+        canvas_data.artboards[0].annotations = partAnnotations;
       }
 
-      const hotspotIdByLabel = new Map(hotspots.map((h) => [h.label, h.id]));
       const processItems = (draft.process_items ?? []).map(
         (item: { part: string; process: string; stitch?: string; seam_allowance?: string }) => ({
           ...item,
-          hotspotId: hotspotIdByLabel.get(item.part),
         }),
       );
 

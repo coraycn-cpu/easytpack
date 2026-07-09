@@ -1,9 +1,8 @@
-import type { Artboard } from "@/types/project";
-import type { Hotspot } from "@/types/process";
-import type { Annotation } from "@/types/project";
+import type { Artboard, Annotation } from "@/types/project";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import { computeImageFit } from "@/lib/canvas/fit";
+import { migrateArtboardHotspots } from "@/lib/project/hotspots";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -13,17 +12,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
-}
-
-function drawHotspot(ctx: CanvasRenderingContext2D, hs: Hotspot) {
-  ctx.strokeStyle = "#3b82f6";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 3]);
-  ctx.strokeRect(hs.x, hs.y, hs.width, hs.height);
-  ctx.setLineDash([]);
-  ctx.fillStyle = "#1d4ed8";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText(hs.label, hs.x + 4, hs.y > 16 ? hs.y - 6 : hs.y + 16);
 }
 
 function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
@@ -36,9 +24,17 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
   switch (a.type) {
     case "rect":
       if (a.width && a.height) {
+        if (a.linkedPart) ctx.setLineDash([6, 3]);
         ctx.fillStyle = `${c}33`;
         ctx.fillRect(a.x, a.y, a.width, a.height);
         ctx.strokeRect(a.x, a.y, a.width, a.height);
+        ctx.setLineDash([]);
+        const label = a.linkedPart ?? a.text;
+        if (label) {
+          ctx.fillStyle = a.linkedPart ? "#1d4ed8" : c;
+          ctx.font = "bold 13px sans-serif";
+          ctx.fillText(label, a.x + 4, a.y > 16 ? a.y - 6 : a.y + 16);
+        }
       }
       break;
     case "circle": {
@@ -126,8 +122,8 @@ export async function renderArtboardToDataUrl(
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.drawImage(img, fit.x, fit.y, fit.width, fit.height);
 
-  artboard.hotspots.forEach((hs) => drawHotspot(ctx, hs));
-  normalizeAnnotations(artboard.annotations).forEach((ann) => drawAnnotation(ctx, ann));
+  const ab = migrateArtboardHotspots(artboard);
+  normalizeAnnotations(ab.annotations).forEach((ann) => drawAnnotation(ctx, ann));
 
   return canvas.toDataURL("image/png");
 }

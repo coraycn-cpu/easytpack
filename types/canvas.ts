@@ -6,5 +6,4 @@ export type CanvasTool =
   | "text"
   | "dimension"
   | "freehand"
-  | "marker"
-  | "hotspot";
+  | "marker";

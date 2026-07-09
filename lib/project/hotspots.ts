@@ -1,6 +1,7 @@
 import type { Hotspot } from "@/types/process";
 import {
   DEFAULT_ARTBOARD_NAMES,
+  type Annotation,
   type Artboard,
   type CanvasData,
   type LegacyCanvasData,
@@ -9,25 +10,59 @@ import {
 
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 
+export const PART_ANNOTATION_COLOR = "#3b82f6";
+
+export function hotspotToAnnotation(hs: Hotspot): Annotation {
+  return {
+    id: hs.id.startsWith("hs_") ? hs.id.replace(/^hs_/, "ann_") : `ann_${hs.id}`,
+    type: "rect",
+    color: PART_ANNOTATION_COLOR,
+    strokeWidth: 2,
+    x: hs.x,
+    y: hs.y,
+    width: hs.width,
+    height: hs.height,
+    text: hs.label,
+    linkedPart: hs.label,
+  };
+}
+
+/** 将旧热区合并进 annotations 并清除 hotspots */
+export function migrateArtboardHotspots(artboard: Artboard): Artboard {
+  const legacy = artboard.hotspots ?? [];
+  if (legacy.length === 0) {
+    const { hotspots: _h, ...rest } = artboard;
+    return rest as Artboard;
+  }
+  const existingIds = new Set(artboard.annotations.map((a) => a.id));
+  const migrated = legacy
+    .map(hotspotToAnnotation)
+    .filter((a) => !existingIds.has(a.id));
+  const { hotspots: _h, ...rest } = artboard;
+  return {
+    ...rest,
+    annotations: [...artboard.annotations, ...migrated],
+  };
+}
+
 export function createArtboard(
   name: string,
   imageDataUrl?: string,
-  hotspots: Hotspot[] = [],
+  annotations: Annotation[] = [],
 ): Artboard {
   return {
     id: `ab_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     name,
     imageDataUrl,
-    hotspots,
-    annotations: [],
+    annotations,
   };
 }
 
 export function createDefaultCanvasData(
   imageDataUrl?: string,
-  hotspots: Hotspot[] = [],
+  annotations: Annotation[] = [],
 ): CanvasData {
-  const front = createArtboard(DEFAULT_ARTBOARD_NAMES[0], imageDataUrl, hotspots);
+  const front = createArtboard(DEFAULT_ARTBOARD_NAMES[0], imageDataUrl, annotations);
   return {
     artboards: [front],
     activeArtboardId: front.id,
@@ -36,21 +71,26 @@ export function createDefaultCanvasData(
 
 export function migrateProject(project: TechPackProject): TechPackProject {
   const legacy = project.canvas_data as CanvasData & LegacyCanvasData;
+  let canvas_data: CanvasData;
+
   if (legacy.artboards?.length) {
-    return {
-      ...project,
-      workflowStatus: project.workflowStatus ?? "draft",
+    canvas_data = {
+      ...project.canvas_data,
+      artboards: project.canvas_data.artboards.map(migrateArtboardHotspots),
     };
+  } else {
+    const legacyHotspots = legacy.hotspots ?? [];
+    canvas_data = createDefaultCanvasData(
+      project.intake.imageDataUrl,
+      legacyHotspots.map(hotspotToAnnotation),
+    );
   }
 
-  const hotspots = legacy.hotspots ?? [];
   return {
     ...project,
     workflowStatus: project.workflowStatus ?? "draft",
-    canvas_data: createDefaultCanvasData(
-      project.intake.imageDataUrl,
-      hotspots,
-    ),
+    canvas_data,
+    process_items: project.process_items.map(({ hotspotId: _id, ...item }) => item),
   };
 }
 
@@ -65,33 +105,27 @@ function overlapRatio(a: Hotspot, b: Hotspot): number {
   return areaA > 0 ? inter / areaA : 0;
 }
 
-/** 过滤 AI 热区：去除面部区域、过大过小、重叠框，限制数量 */
-export function filterHotspots(
-  hotspots: Hotspot[],
+function filterSuggestedRegions(
+  regions: Hotspot[],
   options?: { maxCount?: number; category?: string },
 ): Hotspot[] {
   const maxCount = options?.maxCount ?? 8;
 
-  let filtered = hotspots.filter((hs) => {
+  let filtered = regions.filter((hs) => {
     const cx = hs.x + hs.width / 2;
     const cy = hs.y + hs.height / 2;
     const area = hs.width * hs.height;
     const stageArea = CANVAS_W * CANVAS_H;
 
-    // 排除画面上方 18%（常见人脸区域）
     if (cy < CANVAS_H * 0.18) return false;
-    // 排除过小或过大
     if (area < 600 || area > stageArea * 0.35) return false;
-    // 排除极扁/极竖的异常框
     const ratio = hs.width / (hs.height || 1);
     if (ratio > 8 || ratio < 0.12) return false;
-    // 排除居中偏上的小块（常见误标脸部）
     if (cy < CANVAS_H * 0.28 && hs.width < CANVAS_W * 0.25) return false;
 
     return cx > 0 && cy > 0 && cx < CANVAS_W && cy < CANVAS_H;
   });
 
-  // 去重叠：保留面积较大的
   filtered = filtered.filter((hs, i) => {
     for (let j = 0; j < filtered.length; j++) {
       if (i === j) continue;
@@ -107,13 +141,13 @@ export function filterHotspots(
   return filtered.slice(0, maxCount);
 }
 
-type TemplateHotspot = Omit<Hotspot, "id">;
+type TemplateRegion = Omit<Hotspot, "id">;
 
 function scaleCoord(v: number, base = 800) {
   return Math.round(v * (CANVAS_W / base));
 }
 
-function scaleHotspotFromLegacy(hs: Hotspot): Hotspot {
+function scaleRegionFromLegacy(hs: Hotspot): Hotspot {
   return {
     ...hs,
     x: scaleCoord(hs.x),
@@ -123,8 +157,7 @@ function scaleHotspotFromLegacy(hs: Hotspot): Hotspot {
   };
 }
 
-/** 品类热区模板（基于 CANVAS_W×CANVAS_H） */
-export function getCategoryHotspotTemplate(category?: string): TemplateHotspot[] {
+function getCategoryPartTemplate(category?: string): TemplateRegion[] {
   const c = (category ?? "").toLowerCase();
   const s = scaleCoord;
 
@@ -167,22 +200,40 @@ export function getCategoryHotspotTemplate(category?: string): TemplateHotspot[]
   ];
 }
 
-export function applyHotspotTemplate(
-  category: string | undefined,
-  prefix = "hs_tpl",
-): Hotspot[] {
-  return getCategoryHotspotTemplate(category).map((hs, i) => ({
-    ...hs,
-    id: `${prefix}_${i}_${Date.now()}`,
-  }));
+function regionsToAnnotations(regions: TemplateRegion[], prefix: string): Annotation[] {
+  const ts = Date.now();
+  return regions.map((r, i) =>
+    hotspotToAnnotation({
+      ...r,
+      id: `${prefix}_${i}_${ts}`,
+    }),
+  );
 }
 
-export function mergeHotspots(
-  aiHotspots: Hotspot[],
+/** AI 建议部位 → 标注（Collect 流程） */
+export function mergeSuggestedPartAnnotations(
+  aiRegions: Hotspot[],
   category?: string,
-): Hotspot[] {
-  const scaled = aiHotspots.map(scaleHotspotFromLegacy);
-  const filtered = filterHotspots(scaled, { category });
-  if (filtered.length >= 3) return filtered;
-  return applyHotspotTemplate(category, "hs_merged");
+): Annotation[] {
+  const scaled = aiRegions.map(scaleRegionFromLegacy);
+  const filtered = filterSuggestedRegions(scaled, { category });
+  const regions =
+    filtered.length >= 3
+      ? filtered
+      : getCategoryPartTemplate(category).map((r, i) => ({
+          ...r,
+          id: `tpl_${i}`,
+        }));
+  return regionsToAnnotations(regions, "ann_ai");
 }
+
+/** @deprecated 使用 mergeSuggestedPartAnnotations */
+export const mergeHotspots = mergeSuggestedPartAnnotations;
+
+/** @deprecated 热区已合并至标注 */
+export function applyHotspotTemplate(category?: string): Annotation[] {
+  return regionsToAnnotations(getCategoryPartTemplate(category), "ann_tpl");
+}
+
+/** @deprecated 使用 applyHotspotTemplate */
+export const applyPartAnnotationTemplate = applyHotspotTemplate;

@@ -1,4 +1,3 @@
-import type { Hotspot } from "@/types/process";
 import type { Annotation, Artboard } from "@/types/project";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
@@ -112,14 +111,6 @@ export function computeMultiStudioStageBounds(input: {
       maxX: ox + slot.imageFit.x + slot.imageFit.width,
       maxY: oy + slot.imageFit.y + slot.imageFit.height,
     });
-    for (const hs of ab.hotspots) {
-      content = mergeBounds(content, {
-        minX: slot.origin.x + hs.x,
-        minY: slot.origin.y + hs.y,
-        maxX: slot.origin.x + hs.x + hs.width,
-        maxY: slot.origin.y + hs.y + hs.height,
-      });
-    }
     for (const ann of ab.annotations) {
       const b = annotationBounds(ann);
       content = mergeBounds(content, {
@@ -143,7 +134,6 @@ export function computeMultiStudioStageBounds(input: {
 export function computeStudioStageBounds(input: {
   imageFit?: { x: number; y: number; width: number; height: number } | null;
   imageOffset?: { x: number; y: number };
-  hotspots: Hotspot[];
   annotations: Annotation[];
 }): { width: number; height: number; offsetX: number; offsetY: number } {
   let content: RectBounds = {
@@ -161,15 +151,6 @@ export function computeStudioStageBounds(input: {
       minY: input.imageFit.y + oy,
       maxX: input.imageFit.x + ox + input.imageFit.width,
       maxY: input.imageFit.y + oy + input.imageFit.height,
-    });
-  }
-
-  for (const hs of input.hotspots) {
-    content = mergeBounds(content, {
-      minX: hs.x,
-      minY: hs.y,
-      maxX: hs.x + hs.width,
-      maxY: hs.y + hs.height,
     });
   }
 
@@ -209,7 +190,7 @@ export function mapAiAnnotationToCanvas(
     strokeWidth: ann.strokeWidth ?? 3,
     text: ann.text ?? ann.label,
     markerIndex: ann.markerIndex,
-    linkedPart: ann.linkedPart,
+    linkedPart: ann.linkedPart ?? ann.label,
   };
 
   if (ann.width != null) mapped.width = ann.width * sx;

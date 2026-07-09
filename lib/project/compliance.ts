@@ -1,4 +1,9 @@
 import type { TechPackProject } from "@/types/project";
+import {
+  countLinkedProcessParts,
+  getAllLinkedParts,
+  hasCanvasAnnotations,
+} from "@/lib/canvas/part-annotations";
 
 export type ComplianceIssue = {
   level: "error" | "warning";
@@ -12,9 +17,8 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
     issues.push({ level: "error", message: "缺少款式名称" });
   }
 
-  const allHotspots = project.canvas_data.artboards.flatMap((a) => a.hotspots);
-  if (allHotspots.length === 0) {
-    issues.push({ level: "warning", message: "画板未标注任何部位热区" });
+  if (!hasCanvasAnnotations(project)) {
+    issues.push({ level: "warning", message: "建议在款式图上标注部位（可用智能标注）" });
   }
 
   if (project.process_items.length === 0) {
@@ -36,13 +40,14 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
     }
   });
 
-  const unlinkedHotspots = allHotspots.filter(
-    (hs) => !project.process_items.some((p) => p.hotspotId === hs.id),
+  const linkedParts = new Set(getAllLinkedParts(project));
+  const unlinkedProcess = project.process_items.filter(
+    (p) => p.part?.trim() && !linkedParts.has(p.part.trim()),
   );
-  if (unlinkedHotspots.length > 0) {
+  if (unlinkedProcess.length > 0 && hasCanvasAnnotations(project)) {
     issues.push({
       level: "warning",
-      message: `${unlinkedHotspots.length} 个热区尚未关联工艺条目`,
+      message: `${unlinkedProcess.length} 条工艺尚未在图上标注对应部位`,
     });
   }
 

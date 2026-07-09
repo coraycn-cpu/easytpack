@@ -13,7 +13,7 @@ import {
 } from "@/lib/canvas/bounds";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
-import { applyHotspotTemplate, createArtboard } from "@/lib/project/hotspots";
+import { createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import {
@@ -43,7 +43,6 @@ export default function StudioPage() {
   const router = useRouter();
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [activeArtboardId, setActiveArtboardId] = useState("");
-  const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("process");
   const [aiLoading, setAiLoading] = useState(false);
   const [viewGenerating, setViewGenerating] = useState(false);
@@ -117,7 +116,6 @@ export default function StudioPage() {
   const setActiveArtboard = (artboardId: string) => {
     if (!project) return;
     setActiveArtboardId(artboardId);
-    setSelectedHotspotId(null);
     persist({
       ...project,
       canvas_data: { ...project.canvas_data, activeArtboardId: artboardId },
@@ -341,11 +339,6 @@ export default function StudioPage() {
 
       <div className="flex min-h-0 flex-1">
         <FixedViewSidebar
-          onApplyHotspotTemplate={() => {
-            const tpl = applyHotspotTemplate(project.intake.detectedCategory);
-            updateArtboard(activeArtboard.id, { hotspots: tpl });
-            setAiMessage("已应用热区模板");
-          }}
           onReplaceImage={(url) => {
             const main = project.canvas_data.artboards[0];
             if (main) updateArtboard(main.id, { imageDataUrl: url });
@@ -393,14 +386,10 @@ export default function StudioPage() {
               activeArtboardId={activeArtboardId}
               onActiveArtboardChange={setActiveArtboard}
               imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
-              hotspots={activeArtboard.hotspots}
               annotations={normalizeAnnotations(activeArtboard.annotations)}
-              onHotspotsChange={(hotspots) => updateArtboard(activeArtboard.id, { hotspots })}
               onAnnotationsChange={(annotations) =>
                 updateArtboard(activeArtboard.id, { annotations })
               }
-              selectedHotspotId={selectedHotspotId}
-              onHotspotSelect={setSelectedHotspotId}
               imageOffset={activeArtboard.imageOffset ?? { x: 0, y: 0 }}
               onImageOffsetChange={(imageOffset) =>
                 updateArtboard(activeArtboard.id, { imageOffset })
@@ -425,15 +414,19 @@ export default function StudioPage() {
             />
           </InfiniteCanvas>
 
-          <div className="pointer-events-none fixed bottom-4 right-4 z-30 w-[min(100vw-2rem,420px)] pb-16">
-            <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">工艺 · 物料 · 尺寸</h3>
-              <StudioDataPanel
-                project={project}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                onPersist={persist}
-              />
+          <div className="pointer-events-none fixed bottom-4 right-4 z-30 w-[min(100vw-1.5rem,340px)] pb-14">
+            <div className="pointer-events-auto flex max-h-[calc(100vh-5.5rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+              <div className="shrink-0 border-b border-slate-100 px-2.5 py-2">
+                <h3 className="text-[11px] font-semibold text-slate-700">工艺 · 物料 · 尺寸</h3>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+                <StudioDataPanel
+                  project={project}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  onPersist={persist}
+                />
+              </div>
             </div>
           </div>
 

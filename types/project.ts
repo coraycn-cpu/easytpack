@@ -1,4 +1,4 @@
-import type { BomItem, Hotspot, ProcessItem } from "./process";
+import type { BomItem, ProcessItem } from "./process";
 import type { StudioLayout } from "@/lib/studio/layout";
 
 export type ProjectStatus =
@@ -81,12 +81,13 @@ export type Artboard = {
   id: string;
   name: string;
   imageDataUrl?: string;
-  hotspots: Hotspot[];
   annotations: Annotation[];
   /** 款式图在画板内的偏移（可拖动） */
   imageOffset?: { x: number; y: number };
   /** 画板在无限画布上的锚点（多图并排） */
   canvasOrigin?: { x: number; y: number };
+  /** @deprecated 已合并至 annotations，加载时自动迁移 */
+  hotspots?: import("./process").Hotspot[];
 };
 
 export type CanvasData = {
@@ -97,7 +98,7 @@ export type CanvasData = {
 
 /** @deprecated 旧格式，仅用于迁移 */
 export type LegacyCanvasData = {
-  hotspots?: Hotspot[];
+  hotspots?: import("./process").Hotspot[];
 };
 
 export type TechPackProject = {

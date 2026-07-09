@@ -5,7 +5,7 @@ export const ProcessItemSchema = z.object({
   process: z.string().describe("工艺描述"),
   stitch: z.string().optional().describe("针法/线迹"),
   seam_allowance: z.string().optional().describe("缝份"),
-  hotspotId: z.string().optional().describe("关联热区 ID"),
+  hotspotId: z.string().optional().describe("@deprecated 已改用标注 linkedPart"),
 });
 
 export const ProcessListSchema = z.object({

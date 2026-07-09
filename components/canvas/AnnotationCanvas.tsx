@@ -24,7 +24,6 @@ import {
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
-import type { Hotspot } from "@/types/process";
 import type { Annotation, Artboard } from "@/types/project";
 import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
 import type { CanvasTool } from "@/types/canvas";
@@ -32,16 +31,12 @@ import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
 
-type Snapshot = { annotations: Annotation[]; hotspots: Hotspot[] };
+type Snapshot = { annotations: Annotation[] };
 
 type AnnotationCanvasProps = {
   imageUrl?: string | null;
-  hotspots: Hotspot[];
   annotations: Annotation[];
-  onHotspotsChange: (hotspots: Hotspot[]) => void;
   onAnnotationsChange: (annotations: Annotation[]) => void;
-  selectedHotspotId?: string | null;
-  onHotspotSelect?: (id: string | null) => void;
   showImport?: boolean;
   onImageChange?: (dataUrl: string) => void;
   nextMarkerIndex?: number;
@@ -92,17 +87,12 @@ const DRAW_TOOLS: CanvasTool[] = [
   "dimension",
   "freehand",
   "marker",
-  "hotspot",
 ];
 
 export default function AnnotationCanvas({
   imageUrl,
-  hotspots,
   annotations,
-  onHotspotsChange,
   onAnnotationsChange,
-  selectedHotspotId,
-  onHotspotSelect,
   showImport = false,
   onImageChange,
   nextMarkerIndex = 1,
@@ -266,18 +256,15 @@ export default function AnnotationCanvas({
   const pushHistory = useCallback(() => {
     undoStack.current.push({
       annotations: structuredClone(annotations),
-      hotspots: structuredClone(hotspots),
     });
     if (undoStack.current.length > 40) undoStack.current.shift();
     redoStack.current = [];
     syncHistoryButtons();
-  }, [annotations, hotspots]);
+  }, [annotations]);
 
   const applySnapshot = (snap: Snapshot) => {
     onAnnotationsChange(snap.annotations);
-    onHotspotsChange(snap.hotspots);
     setSelectedAnnId(null);
-    onHotspotSelect?.(null);
   };
 
   const undo = useCallback(() => {
@@ -285,31 +272,24 @@ export default function AnnotationCanvas({
     if (!prev) return;
     redoStack.current.push({
       annotations: structuredClone(annotations),
-      hotspots: structuredClone(hotspots),
     });
     applySnapshot(prev);
     syncHistoryButtons();
-  }, [annotations, hotspots, onAnnotationsChange, onHotspotsChange, onHotspotSelect]);
+  }, [annotations, onAnnotationsChange]);
 
   const redo = useCallback(() => {
     const next = redoStack.current.pop();
     if (!next) return;
     undoStack.current.push({
       annotations: structuredClone(annotations),
-      hotspots: structuredClone(hotspots),
     });
     applySnapshot(next);
     syncHistoryButtons();
-  }, [annotations, hotspots, onAnnotationsChange, onHotspotsChange, onHotspotSelect]);
+  }, [annotations, onAnnotationsChange]);
 
   const commitAnnotations = (next: Annotation[]) => {
     pushHistory();
     onAnnotationsChange(next);
-  };
-
-  const commitHotspots = (next: Hotspot[]) => {
-    pushHistory();
-    onHotspotsChange(next);
   };
 
   const studioBounds = fixedChrome
@@ -321,7 +301,6 @@ export default function AnnotationCanvas({
       : computeStudioStageBounds({
           imageFit: image ? imageFit : null,
           imageOffset,
-          hotspots,
           annotations: normalizedAnnotations,
         })
     : null;
@@ -368,19 +347,11 @@ export default function AnnotationCanvas({
   const selectAnnotation = (id: string) => {
     setSelectedAnnId(id);
     setImageSelected(false);
-    onHotspotSelect?.(null);
-  };
-
-  const selectHotspot = (id: string) => {
-    onHotspotSelect?.(id);
-    setSelectedAnnId(null);
-    setImageSelected(false);
   };
 
   const selectImage = () => {
     setImageSelected(true);
     setSelectedAnnId(null);
-    onHotspotSelect?.(null);
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
     }
@@ -411,7 +382,6 @@ export default function AnnotationCanvas({
       if (isEmptyTarget(e)) {
         setSelectedAnnId(null);
         setImageSelected(false);
-        onHotspotSelect?.(null);
       }
       return;
     }
@@ -421,15 +391,6 @@ export default function AnnotationCanvas({
 
     e.cancelBubble = true;
     setImageSelected(false);
-
-    if (currentTool === "hotspot") {
-      const next = { x: pos.x, y: pos.y, width: 0, height: 0 };
-      draftRectRef.current = next;
-      setDraftRect(next);
-      onHotspotSelect?.(null);
-      setSelectedAnnId(null);
-      return;
-    }
 
     if (currentTool === "rect" || currentTool === "circle") {
       const next = { x: pos.x, y: pos.y, width: 0, height: 0 };
@@ -525,7 +486,7 @@ export default function AnnotationCanvas({
     const line = draftLineRef.current;
     const points = freehandRef.current;
 
-    if (rect && (currentTool === "rect" || currentTool === "circle" || currentTool === "hotspot")) {
+    if (rect && (currentTool === "rect" || currentTool === "circle")) {
       const n = {
         x: rect.width < 0 ? rect.x + rect.width : rect.x,
         y: rect.height < 0 ? rect.y + rect.height : rect.y,
@@ -533,28 +494,18 @@ export default function AnnotationCanvas({
         height: Math.abs(rect.height),
       };
       if (n.width > 8 && n.height > 8) {
-        if (currentTool === "hotspot") {
-          const hs: Hotspot = {
-            id: createId("hs"),
+        const id = createId("ann");
+        commitAnnotations([
+          ...annotations,
+          {
+            id,
+            type: currentTool,
+            color,
             ...n,
-            label: `部位 ${hotspots.length + 1}`,
-          };
-          commitHotspots([...hotspots, hs]);
-          selectHotspot(hs.id);
-        } else {
-          const id = createId("ann");
-          commitAnnotations([
-            ...annotations,
-            {
-              id,
-              type: currentTool,
-              color,
-              ...n,
-              strokeWidth: 3,
-            },
-          ]);
-          selectAnnotation(id);
-        }
+            strokeWidth: 3,
+          },
+        ]);
+        selectAnnotation(id);
       }
       draftRectRef.current = null;
       setDraftRect(null);
@@ -611,7 +562,7 @@ export default function AnnotationCanvas({
     setIsDrawing(false);
     freehandRef.current = [];
     setFreehandPoints([]);
-  }, [annotations, hotspots, color, commitAnnotations, commitHotspots]);
+  }, [annotations, color, commitAnnotations]);
 
   useEffect(() => {
     if (tool === "select") return;
@@ -630,19 +581,8 @@ export default function AnnotationCanvas({
       onAnnotationsChange(annotations.filter((a) => a.id !== selectedAnnId));
       setSelectedAnnId(null);
       syncHistoryButtons();
-    } else if (selectedHotspotId) {
-      commitHotspots(hotspots.filter((h) => h.id !== selectedHotspotId));
-      onHotspotSelect?.(null);
     }
-  }, [
-    selectedAnnId,
-    selectedHotspotId,
-    annotations,
-    hotspots,
-    pushHistory,
-    onAnnotationsChange,
-    onHotspotSelect,
-  ]);
+  }, [selectedAnnId, annotations, pushHistory, onAnnotationsChange]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -679,17 +619,9 @@ export default function AnnotationCanvas({
         return;
       }
     }
-    if (selectedHotspotId) {
-      const node = stage.findOne(`#hs_${selectedHotspotId}`);
-      if (node) {
-        tr.nodes([node]);
-        tr.getLayer()?.batchDraw();
-        return;
-      }
-    }
     tr.nodes([]);
     tr.getLayer()?.batchDraw();
-  }, [selectedAnnId, selectedHotspotId, annotations, hotspots]);
+  }, [selectedAnnId, annotations]);
 
   const updateAnnotation = (id: string, patch: Partial<Annotation>) => {
     onAnnotationsChange(
@@ -758,26 +690,41 @@ export default function AnnotationCanvas({
     const listening = interactive && (tool === "select" || !isDrawingMode);
 
     switch (ann.type) {
-      case "rect":
+      case "rect": {
+        const partLabel = ann.linkedPart ?? ann.text;
         return (
-          <Rect
-            key={ann.id}
-            id={`ann_${ann.id}`}
-            x={ann.x}
-            y={ann.y}
-            width={ann.width ?? 0}
-            height={ann.height ?? 0}
-            stroke={c}
-            strokeWidth={isSelected ? sw + 1 : sw}
-            fill={`${c}22`}
-            listening={listening}
-            draggable={draggable}
-            onClick={(e) => handleAnnClick(e, ann.id)}
-            onTap={(e) => handleAnnClick(e, ann.id)}
-            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
-            onTransformEnd={(e) => handleAnnTransformEnd(ann.id, e)}
-          />
+          <Group key={ann.id}>
+            <Rect
+              id={`ann_${ann.id}`}
+              x={ann.x}
+              y={ann.y}
+              width={ann.width ?? 0}
+              height={ann.height ?? 0}
+              stroke={c}
+              strokeWidth={isSelected ? sw + 1 : sw}
+              dash={ann.linkedPart ? [6, 3] : undefined}
+              fill={`${c}22`}
+              listening={listening}
+              draggable={draggable}
+              onClick={(e) => handleAnnClick(e, ann.id)}
+              onTap={(e) => handleAnnClick(e, ann.id)}
+              onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+              onTransformEnd={(e) => handleAnnTransformEnd(ann.id, e)}
+            />
+            {partLabel && (
+              <Text
+                x={ann.x + 4}
+                y={ann.y > 16 ? ann.y - 6 : ann.y + 16}
+                text={partLabel}
+                fontSize={13}
+                fontStyle="600"
+                fill={ann.linkedPart ? "#1d4ed8" : c}
+                listening={false}
+              />
+            )}
+          </Group>
         );
+      }
       case "circle":
         return (
           <Rect
@@ -912,7 +859,7 @@ export default function AnnotationCanvas({
       ? "绘制完成后自动切回选择"
       : imageSelected
         ? "款式图已选中 — 可拖动位置"
-        : selectedAnnId || selectedHotspotId
+        : selectedAnnId
           ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
           : "点击款式图或标注进行选中";
 
@@ -930,7 +877,7 @@ export default function AnnotationCanvas({
       canUndo={canUndo}
       canRedo={canRedo}
       onDelete={deleteSelected}
-      canDelete={Boolean(selectedAnnId || selectedHotspotId)}
+      canDelete={Boolean(selectedAnnId)}
       zoom={fixedChrome ? 1 : zoom}
       onZoomChange={fixedChrome ? undefined : setZoom}
       viewportScale={viewportScale}
@@ -1070,47 +1017,6 @@ export default function AnnotationCanvas({
                       }}
                     />
                     {abAnns.map((ann) => renderAnnotation(ann, isActive))}
-                    {ab.hotspots.map((hs) => (
-                      <Rect
-                        key={hs.id}
-                        id={isActive ? `hs_${hs.id}` : undefined}
-                        x={hs.x}
-                        y={hs.y}
-                        width={hs.width}
-                        height={hs.height}
-                        stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
-                        strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
-                        dash={[6, 3]}
-                        fill={
-                          selectedHotspotId === hs.id
-                            ? "rgba(59, 130, 246, 0.12)"
-                            : "rgba(59, 130, 246, 0.03)"
-                        }
-                        listening={isActive && !isDrawingMode}
-                        draggable={isActive && tool === "select"}
-                        onClick={(e) => {
-                          if (!isActive) return;
-                          e.cancelBubble = true;
-                          if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
-                            selectHotspot(hs.id);
-                          }
-                        }}
-                        onTap={(e) => {
-                          if (!isActive) return;
-                          e.cancelBubble = true;
-                          selectHotspot(hs.id);
-                          if (tool !== "select") setTool("select");
-                        }}
-                        onDragEnd={(e) => {
-                          if (!isActive) return;
-                          pushHistory();
-                          const next = ab.hotspots.map((h) =>
-                            h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
-                          );
-                          onHotspotsChange(next);
-                        }}
-                      />
-                    ))}
                     {isActive && draftRect && (
                       <Rect
                         x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
@@ -1177,45 +1083,6 @@ export default function AnnotationCanvas({
             />
           )}
           {!multiMode && normalizedAnnotations.map((ann) => renderAnnotation(ann))}
-          {!multiMode &&
-            hotspots.map((hs) => (
-              <Rect
-                key={hs.id}
-                id={`hs_${hs.id}`}
-                x={hs.x}
-                y={hs.y}
-                width={hs.width}
-                height={hs.height}
-                stroke={selectedHotspotId === hs.id ? "#60a5fa" : "#93c5fd"}
-                strokeWidth={selectedHotspotId === hs.id ? 2 : 1}
-                dash={[6, 3]}
-                fill={
-                  selectedHotspotId === hs.id
-                    ? "rgba(59, 130, 246, 0.12)"
-                    : "rgba(59, 130, 246, 0.03)"
-                }
-                listening={!isDrawingMode}
-                draggable={tool === "select"}
-                onClick={(e) => {
-                  e.cancelBubble = true;
-                  if (tool === "select" || !DRAW_TOOLS.includes(tool)) {
-                    selectHotspot(hs.id);
-                  }
-                }}
-                onTap={(e) => {
-                  e.cancelBubble = true;
-                  selectHotspot(hs.id);
-                  if (tool !== "select") setTool("select");
-                }}
-                onDragEnd={(e) => {
-                  pushHistory();
-                  const next = hotspots.map((h) =>
-                    h.id === hs.id ? { ...h, x: e.target.x(), y: e.target.y() } : h,
-                  );
-                  onHotspotsChange(next);
-                }}
-              />
-            ))}
           {!multiMode && draftRect && (
             <Rect
               x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}

@@ -44,7 +44,6 @@ const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
   { id: "dimension", label: "尺寸", icon: "↔" },
   { id: "freehand", label: "画笔", icon: "✎" },
   { id: "marker", label: "序号", icon: "①" },
-  { id: "hotspot", label: "部位", icon: "⊞" },
 ];
 
 export default function CanvasToolbar({
