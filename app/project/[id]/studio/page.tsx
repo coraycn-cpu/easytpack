@@ -12,6 +12,11 @@ import {
   mapAiAnnotationToCanvas,
 } from "@/lib/canvas/bounds";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import {
+  findAnnotationForProcessInProject,
+  findProcessIndexForAnnotation,
+  linkAnnotationToProcess,
+} from "@/lib/canvas/part-annotations";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
@@ -50,6 +55,11 @@ export default function StudioPage() {
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
+  const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
+  const [highlightedProcessIndex, setHighlightedProcessIndex] = useState<number | null>(
+    null,
+  );
+  const [linkedHighlightAnnId, setLinkedHighlightAnnId] = useState<string | null>(null);
 
   useEffect(() => {
     const p = getProject(id);
@@ -112,6 +122,82 @@ export default function StudioPage() {
       canvas_data: { ...project.canvas_data, artboards, activeArtboardId },
     });
   };
+
+  const handleProcessRowSelect = useCallback(
+    (processIndex: number) => {
+      if (!project) return;
+      setHighlightedProcessIndex(processIndex);
+      setActiveTab("process");
+      const found = findAnnotationForProcessInProject(project, processIndex);
+      if (found) {
+        if (found.artboardId !== activeArtboardId) {
+          setActiveArtboardId(found.artboardId);
+          persist({
+            ...project,
+            canvas_data: {
+              ...project.canvas_data,
+              activeArtboardId: found.artboardId,
+            },
+          });
+        }
+        setSelectedAnnId(found.annotation.id);
+        setLinkedHighlightAnnId(found.annotation.id);
+      } else {
+        setLinkedHighlightAnnId(null);
+      }
+    },
+    [project, activeArtboardId, persist],
+  );
+
+  const handleSelectedAnnIdChange = useCallback(
+    (annId: string | null) => {
+      setSelectedAnnId(annId);
+      if (!project || !annId) {
+        setHighlightedProcessIndex(null);
+        setLinkedHighlightAnnId(null);
+        return;
+      }
+      const ab = project.canvas_data.artboards.find((a) => a.id === activeArtboardId);
+      const ann = ab?.annotations.find((a) => a.id === annId);
+      if (!ann) return;
+      const processIndex = findProcessIndexForAnnotation(
+        ab?.annotations ?? [],
+        project.process_items,
+        ann,
+      );
+      setHighlightedProcessIndex(processIndex >= 0 ? processIndex : null);
+      setLinkedHighlightAnnId(annId);
+      if (processIndex >= 0) setActiveTab("process");
+    },
+    [project, activeArtboardId],
+  );
+
+  const handleLinkSelectedAnnotation = useCallback(
+    (processIndex: number) => {
+      if (!project || !selectedAnnId) return;
+      const part = project.process_items[processIndex]?.part?.trim() ?? "";
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboardId
+          ? {
+              ...ab,
+              annotations: linkAnnotationToProcess(
+                ab.annotations,
+                selectedAnnId,
+                processIndex,
+                part,
+              ),
+            }
+          : ab,
+      );
+      persist({
+        ...project,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+      setHighlightedProcessIndex(processIndex);
+      setLinkedHighlightAnnId(selectedAnnId);
+    },
+    [project, selectedAnnId, activeArtboardId, persist],
+  );
 
   const setActiveArtboard = (artboardId: string) => {
     if (!project) return;
@@ -413,22 +499,29 @@ export default function StudioPage() {
               viewport={layout.viewport}
               onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
               toolbarMessage={aiMessage ?? aiTip}
+              processItems={project.process_items}
+              selectedAnnId={selectedAnnId}
+              onSelectedAnnIdChange={handleSelectedAnnIdChange}
+              linkedHighlightAnnId={linkedHighlightAnnId}
             />
           </InfiniteCanvas>
 
-          <div className="pointer-events-none fixed bottom-4 right-4 z-30 w-[min(100vw-1.5rem,340px)] pb-14">
-            <div className="pointer-events-auto flex max-h-[calc(100vh-5.5rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-              <div className="shrink-0 border-b border-slate-100 px-2.5 py-2">
-                <h3 className="text-[11px] font-semibold text-slate-700">工艺 · 物料 · 尺寸</h3>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
-                <StudioDataPanel
-                  project={project}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  onPersist={persist}
-                />
-              </div>
+          <div className="pointer-events-none fixed top-14 right-4 z-30 w-[min(100vw-1.5rem,340px)]">
+            <div className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+              <StudioDataPanel
+                project={project}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onPersist={persist}
+                activeArtboardAnnotations={activeArtboard?.annotations ?? []}
+                highlightedProcessIndex={highlightedProcessIndex}
+                onProcessRowSelect={handleProcessRowSelect}
+                selectedAnnId={selectedAnnId}
+                onLinkSelectedAnnotation={handleLinkSelectedAnnotation}
+                findLinkedAnnotation={(i) =>
+                  findAnnotationForProcessInProject(project, i)?.annotation
+                }
+              />
             </div>
           </div>
 

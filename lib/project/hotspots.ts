@@ -226,14 +226,3 @@ export function mergeSuggestedPartAnnotations(
         }));
   return regionsToAnnotations(regions, "ann_ai");
 }
-
-/** @deprecated 使用 mergeSuggestedPartAnnotations */
-export const mergeHotspots = mergeSuggestedPartAnnotations;
-
-/** @deprecated 热区已合并至标注 */
-export function applyHotspotTemplate(category?: string): Annotation[] {
-  return regionsToAnnotations(getCategoryPartTemplate(category), "ann_tpl");
-}
-
-/** @deprecated 使用 applyHotspotTemplate */
-export const applyPartAnnotationTemplate = applyHotspotTemplate;

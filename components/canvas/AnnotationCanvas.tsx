@@ -24,6 +24,8 @@ import {
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
+import { linkedPartForMarkerIndex } from "@/lib/canvas/part-annotations";
+import type { ProcessItem } from "@/types/process";
 import type { Annotation, Artboard } from "@/types/project";
 import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
 import type { CanvasTool } from "@/types/canvas";
@@ -75,6 +77,10 @@ type AnnotationCanvasProps = {
   aiLoading?: boolean;
   viewport?: { panX: number; panY: number; scale: number };
   onViewportChange?: (viewport: { panX: number; panY: number; scale: number }) => void;
+  processItems?: ProcessItem[];
+  selectedAnnId?: string | null;
+  onSelectedAnnIdChange?: (id: string | null) => void;
+  linkedHighlightAnnId?: string | null;
 };
 
 function createId(prefix: string) {
@@ -127,6 +133,10 @@ export default function AnnotationCanvas({
   aiLoading,
   viewport,
   onViewportChange,
+  processItems,
+  selectedAnnId: controlledSelectedAnnId,
+  onSelectedAnnIdChange,
+  linkedHighlightAnnId,
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -140,7 +150,18 @@ export default function AnnotationCanvas({
   const [tool, setTool] = useState<CanvasTool>("select");
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
-  const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
+  const [internalSelectedAnnId, setInternalSelectedAnnId] = useState<string | null>(null);
+  const isSelectionControlled = controlledSelectedAnnId !== undefined;
+  const selectedAnnId = isSelectionControlled
+    ? (controlledSelectedAnnId ?? null)
+    : internalSelectedAnnId;
+  const setSelectedAnnId = useCallback(
+    (id: string | null) => {
+      if (isSelectionControlled) onSelectedAnnIdChange?.(id);
+      else setInternalSelectedAnnId(id);
+    },
+    [isSelectionControlled, onSelectedAnnIdChange],
+  );
   const [imageSelected, setImageSelected] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -496,6 +517,9 @@ export default function AnnotationCanvas({
 
     if (currentTool === "marker") {
       const idx = nextMarkerIndex + annotations.filter((a) => a.type === "marker").length;
+      const linkedPart = processItems
+        ? linkedPartForMarkerIndex(processItems, idx)
+        : undefined;
       commitAnnotations([
         ...annotations,
         {
@@ -505,6 +529,7 @@ export default function AnnotationCanvas({
           x: pos.x,
           y: pos.y,
           markerIndex: idx,
+          linkedPart,
           strokeWidth: 3,
         },
       ]);
@@ -754,6 +779,7 @@ export default function AnnotationCanvas({
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
+    const isLinkedHighlight = linkedHighlightAnnId === ann.id;
     const draggable = tool === "select" && interactive && !isPanActive;
     const listening = interactive && !isPanActive && (tool === "select" || !isDrawingMode);
 
@@ -768,8 +794,8 @@ export default function AnnotationCanvas({
               y={ann.y}
               width={ann.width ?? 0}
               height={ann.height ?? 0}
-              stroke={c}
-              strokeWidth={isSelected ? sw + 1 : sw}
+              stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+              strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
               dash={ann.linkedPart ? [6, 3] : undefined}
               fill={`${c}22`}
               listening={listening}
@@ -803,8 +829,8 @@ export default function AnnotationCanvas({
             width={ann.width ?? 0}
             height={ann.height ?? 0}
             cornerRadius={9999}
-            stroke={c}
-            strokeWidth={isSelected ? sw + 1 : sw}
+            stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+            strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
             fill={`${c}22`}
             listening={listening}
             draggable={draggable}
@@ -883,7 +909,15 @@ export default function AnnotationCanvas({
             onTap={(e) => handleAnnClick(e, ann.id)}
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
           >
-            <Circle radius={14} fill={c} stroke={isSelected ? "#fff" : undefined} strokeWidth={2} />
+            <Circle
+              radius={14}
+              fill={c}
+              stroke={isSelected ? "#fff" : isLinkedHighlight ? "#fbbf24" : undefined}
+              strokeWidth={isSelected || isLinkedHighlight ? 3 : 2}
+            />
+            {isLinkedHighlight && (
+              <Circle radius={18} stroke="#f59e0b" strokeWidth={2} listening={false} />
+            )}
             <Text
               text={label}
               fontSize={14}
