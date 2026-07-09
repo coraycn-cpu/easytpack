@@ -12,10 +12,13 @@ export type StudioLayout = {
   artboard?: PanelPosition;
 };
 
+/** 浮动面板默认在款式图右侧、首屏可见区域 */
+export const STUDIO_PANEL_X = 1700;
+
 export const DEFAULT_STUDIO_LAYOUT: StudioLayout = {
   stage: { x: 48, y: 48, w: 0, h: 0 },
-  ai: { x: 48, y: 1680, w: 340 },
-  data: { x: 420, y: 1680, w: 340, h: 420 },
+  ai: { x: STUDIO_PANEL_X, y: 80, w: 340 },
+  data: { x: STUDIO_PANEL_X, y: 420, w: 340, h: 420 },
   viewport: { panX: 0, panY: 0, scale: 1 },
 };
 
@@ -30,12 +33,12 @@ export function getStudioLayout(saved?: StudioLayout): StudioLayout {
     viewport: { ...base.viewport, ...saved.viewport },
   };
 
-  // 旧版布局：AI/数据面板在款式图右侧，容易遮挡款式图
-  if (merged.ai.x > 600) {
-    merged.ai = { ...base.ai, ...saved.ai, x: base.ai.x, y: base.ai.y };
+  // 旧版布局：面板被放到画板下方，首屏看不到
+  if (merged.ai.y > 800) {
+    merged.ai = { ...merged.ai, x: base.ai.x, y: base.ai.y };
   }
-  if (merged.data.x > 600) {
-    merged.data = { ...base.data, ...saved.data, x: base.data.x, y: base.data.y };
+  if (merged.data.y > 800) {
+    merged.data = { ...merged.data, x: base.data.x, y: base.data.y };
   }
 
   return merged;

@@ -126,13 +126,12 @@ export function computeStudioStageBounds(input: {
   }
 
   const pad = STUDIO_CONTENT_PAD;
-  const contentW = content.maxX - content.minX;
-  const contentH = content.maxY - content.minY;
 
+  // 固定内容原点偏移，不随拖动补偿 minX/minY（否则图片会被拉回中心）
   return {
-    width: Math.max(MIN_STUDIO_W, contentW + pad * 2),
-    height: Math.max(MIN_STUDIO_H, contentH + pad * 2),
-    offsetX: pad - content.minX,
-    offsetY: pad - content.minY,
+    width: Math.max(MIN_STUDIO_W, content.maxX + pad),
+    height: Math.max(MIN_STUDIO_H, content.maxY + pad),
+    offsetX: pad,
+    offsetY: pad,
   };
 }
