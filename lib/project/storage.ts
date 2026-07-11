@@ -15,7 +15,14 @@ function readAll(): Record<string, TechPackProject> {
 }
 
 function writeAll(projects: Record<string, TechPackProject>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "QuotaExceededError") {
+      throw new Error("本地存储空间已满，请删除旧项目或大图后重试");
+    }
+    throw err;
+  }
 }
 
 export function generateProjectId() {

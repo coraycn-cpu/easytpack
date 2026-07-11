@@ -10,6 +10,7 @@ import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
+import { pickImageDataUrlForAi } from "@/lib/ai/image-for-request";
 import {
   annotationToLogicalRect,
   loadImagePlacement,
@@ -114,9 +115,16 @@ export default function StudioPage() {
     [project, activeArtboardId],
   );
 
-  const persist = useCallback((updated: TechPackProject) => {
+  const persist = useCallback((updated: TechPackProject): boolean => {
     setProject(updated);
-    saveProject(updated);
+    try {
+      saveProject(updated);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "保存失败";
+      setAiMessage(msg);
+      return false;
+    }
   }, []);
 
   const handleNewStyle = () => router.push("/");
@@ -604,10 +612,11 @@ export default function StudioPage() {
     setAiTask("explain");
     setAiMessage(null);
     try {
-      const imageDataUrl =
-        activeArtboard?.imageDataUrl ??
-        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl ??
-        project.intake.imageDataUrl;
+      const imageDataUrl = pickImageDataUrlForAi(
+        project.intake.imageDataUrl,
+        activeArtboard?.imageDataUrl,
+        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl,
+      );
 
       const res = await fetch("/api/ai/style-review", {
         method: "POST",
@@ -617,17 +626,30 @@ export default function StudioPage() {
           category: project.intake.detectedCategory,
           description: project.intake.description,
           imageDataUrl,
-          processItems: project.process_items,
-          bomItems: project.bom_items,
+          processItems: project.process_items.map(({ part, process, stitch }) => ({
+            part,
+            process,
+            stitch,
+          })),
+          bomItems: project.bom_items.map(({ name, category, spec }) => ({
+            name,
+            category,
+            spec,
+          })),
           existingReview: project.style_review,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      const review = String(data.review ?? "").slice(0, 300);
-      persist({ ...project, style_review: review });
+      if (!res.ok) throw new Error(data.error ?? "评语生成失败");
+
+      const review = String(data.review ?? "").trim().slice(0, 300);
+      if (review.length < 20) {
+        throw new Error("AI 未返回有效评语，请重试");
+      }
+
+      const saved = persist({ ...project, style_review: review });
       focusTab("review");
-      setAiMessage("款式评语已生成");
+      setAiMessage(saved ? "款式评语已生成" : "评语已显示但未能保存到本地，请清理存储空间");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "评语生成失败");
     } finally {

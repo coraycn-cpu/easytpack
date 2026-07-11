@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import type { z } from "zod";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
@@ -266,18 +266,40 @@ ${bomText}
 ${input.existingReview ? `已有评语（可改写优化）：${input.existingReview}` : ""}
 `.trim();
 
-  return callStructured({
-    instructions: `你是资深版房专家，为 Tech Pack 撰写「款式评语」。
+  const instructions = `你是资深版房专家，为 Tech Pack 撰写「款式评语」。
 
 要求：
 1. 用通俗语言简要说明这款式的工艺做法要点（结构、关键工序、品质感）。
 2. 说明主要面料/辅料特点及它们如何支撑这款式。
 3. 帮助非服装专业人士快速理解「这件是什么、怎么做、用什么料」。
 4. 总字数严格控制在 300 字以内（含标点）。
-5. 不要列清单式堆砌，写成 2–4 段连贯短文。`,
-    userText: context,
-    imageDataUrl: input.imageDataUrl,
-    schema: StyleReviewSchema,
-    schemaName: "style_review",
+5. 不要列清单式堆砌，写成 2–4 段连贯短文。`;
+
+  const userContent = buildContent(context, input.imageDataUrl);
+
+  try {
+    const structured = await callStructured({
+      instructions,
+      userText: context,
+      imageDataUrl: input.imageDataUrl,
+      schema: StyleReviewSchema,
+      schemaName: "style_review",
+    });
+    const review = structured.review?.trim() ?? "";
+    if (review.length >= 20) return { review: review.slice(0, 300) };
+  } catch (err) {
+    console.warn("[style-review] structured output failed, falling back to text", err);
+  }
+
+  const { text } = await generateText({
+    model: getModel(),
+    system: instructions,
+    messages: [{ role: "user", content: userContent }],
   });
+
+  const review = text.trim().slice(0, 300);
+  if (review.length < 20) {
+    throw new Error("AI 未返回有效评语，请稍后重试");
+  }
+  return { review };
 }
