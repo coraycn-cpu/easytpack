@@ -11,6 +11,7 @@ import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import { pickImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
   annotationToLogicalRect,
   loadImagePlacement,
@@ -642,7 +643,7 @@ export default function StudioPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "评语生成失败");
 
-      const review = String(data.review ?? "").trim().slice(0, 300);
+      const review = String(data.review ?? "").trim().slice(0, STYLE_REVIEW_MAX);
       if (review.length < 20) {
         throw new Error("AI 未返回有效评语，请重试");
       }

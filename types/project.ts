@@ -127,7 +127,7 @@ export type TechPackProject = {
   process_items: ProcessItem[];
   bom_items: BomItem[];
   size_chart: SizeChart;
-  /** AI 或手动填写的款式评语（工艺+面料简述，≤300字） */
+  /** 款式评语：面向版师/车版/设计师，四段式，≤280字 */
   style_review?: string;
 };
 

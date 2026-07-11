@@ -8,6 +8,7 @@ import {
   RegionAnnotateSchema,
   SizeChartAssistSchema,
   StyleReviewSchema,
+  STYLE_REVIEW_MAX,
   type AiProvider,
 } from "@/types/process";
 import type { BomItem } from "@/types/process";
@@ -266,14 +267,18 @@ ${bomText}
 ${input.existingReview ? `已有评语（可改写优化）：${input.existingReview}` : ""}
 `.trim();
 
-  const instructions = `你是资深版房专家，为 Tech Pack 撰写「款式评语」。
+  const instructions = `你是资深版房总监，为 Tech Pack 撰写「款式评语」，读者是版师、车版师、设计师等业内人员。
 
-要求：
-1. 用通俗语言简要说明这款式的工艺做法要点（结构、关键工序、品质感）。
-2. 说明主要面料/辅料特点及它们如何支撑这款式。
-3. 帮助非服装专业人士快速理解「这件是什么、怎么做、用什么料」。
-4. 总字数严格控制在 300 字以内（含标点）。
-5. 不要列清单式堆砌，写成 2–4 段连贯短文。`;
+输出格式（必须包含以下四段标题，每段标题单独占一行）：
+【款式特点】款式名称、廓形结构、设计亮点与风格定位
+【面料建议】主辅料选型、克重/成分倾向、手感与功能性要求
+【工艺建议】关键工序、缝型线迹、辅料搭配与品质标准
+【注意事项】版型风险、对格对条、缩水/色牢度、车版与质检要点
+
+写作要求：
+1. 使用业内术语，简洁专业，可直接用于工艺沟通。
+2. 四段内容连贯，不要写成无关清单。
+3. 总字数严格控制在 ${STYLE_REVIEW_MAX} 字以内（含标点与段落标题）。`;
 
   const userContent = buildContent(context, input.imageDataUrl);
 
@@ -286,7 +291,7 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
       schemaName: "style_review",
     });
     const review = structured.review?.trim() ?? "";
-    if (review.length >= 20) return { review: review.slice(0, 300) };
+    if (review.length >= 20) return { review: review.slice(0, STYLE_REVIEW_MAX) };
   } catch (err) {
     console.warn("[style-review] structured output failed, falling back to text", err);
   }
@@ -297,7 +302,7 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
     messages: [{ role: "user", content: userContent }],
   });
 
-  const review = text.trim().slice(0, 300);
+  const review = text.trim().slice(0, STYLE_REVIEW_MAX);
   if (review.length < 20) {
     throw new Error("AI 未返回有效评语，请稍后重试");
   }

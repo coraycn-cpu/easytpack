@@ -276,7 +276,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onExplain}
                   className={aiBtn()}
-                  title="生成工艺与面料的款式评语（≤300字）"
+                  title="生成面向版师/车版/设计师的款式评语（≤280字）"
                 >
                   款式评语
                 </button>

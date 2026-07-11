@@ -94,12 +94,16 @@ export const StudioDraftSchema = z.object({
   aiSummary: z.string().optional().describe("版房专家初稿说明"),
 });
 
+export const STYLE_REVIEW_MAX = 280;
+
 export const StyleReviewSchema = z.object({
   review: z
     .string()
     .min(20)
-    .max(300)
-    .describe("款式评语，300字以内，涵盖工艺做法与面料特点，让用户快速了解款式"),
+    .max(STYLE_REVIEW_MAX)
+    .describe(
+      "款式评语，280字以内，面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段",
+    ),
 });
 
 export const SizeChartAssistSchema = z.object({

@@ -101,8 +101,8 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
   explain: {
     title: "AI 正在生成款式评语",
     subtitle: "约 5–15 秒",
-    steps: [{ icon: "📝", title: "撰写评语", desc: "概括工艺做法与面料特点" }],
-    tips: ["评语将显示在数据面板「评语」Tab", "控制在 300 字以内"],
+    steps: [{ icon: "📝", title: "撰写评语", desc: "款式特点·面料·工艺·注意事项" }],
+    tips: ["评语将显示在数据面板「评语」Tab", "四段式结构，控制在 280 字以内"],
   },
   "region-annotate": {
     title: "AI 正在识别选中区域",

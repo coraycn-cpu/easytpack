@@ -9,12 +9,13 @@ import {
   isLinkableShape,
 } from "@/lib/canvas/part-annotations";
 import { generateProcessId } from "@/lib/process/ids";
+import { STYLE_REVIEW_MAX } from "@/types/process";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, TechPackProject } from "@/types/project";
 
 type Tab = "process" | "bom" | "size" | "review";
 
-const REVIEW_MAX = 300;
+const REVIEW_MAX = STYLE_REVIEW_MAX;
 
 type StudioDataPanelProps = {
   project: TechPackProject;
@@ -386,7 +387,8 @@ export default function StudioDataPanel({
           {activeTab === "review" && (
             <div className="space-y-2">
               <p className="text-[10px] leading-relaxed text-slate-500">
-                简要说明工艺做法与面料特点，帮助快速了解款式（≤300字）。可点工具栏「款式评语」由 AI 生成。
+                面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段（≤{REVIEW_MAX}字）。可点工具栏「款式评语」由
+                AI 生成。
               </p>
               <textarea
                 value={project.style_review ?? ""}
@@ -396,9 +398,9 @@ export default function StudioDataPanel({
                     style_review: e.target.value.slice(0, REVIEW_MAX),
                   })
                 }
-                rows={8}
+                rows={10}
                 maxLength={REVIEW_MAX}
-                placeholder="例如：这款为休闲针织开衫，采用全幅平缝结合罗纹收口…"
+                placeholder={`【款式特点】连帽卫衣，落肩廓形，罗纹收口\n【面料建议】…\n【工艺建议】…\n【注意事项】…`}
                 className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-blue-400"
               />
               <p className="text-right text-[10px] text-slate-400">

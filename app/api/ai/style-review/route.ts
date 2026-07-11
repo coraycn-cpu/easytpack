@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateStyleReview } from "@/lib/ai/assist";
+import { STYLE_REVIEW_MAX } from "@/types/process";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (review.length < 20) {
       return NextResponse.json({ error: "AI 未返回有效评语，请重试" }, { status: 502 });
     }
-    return NextResponse.json({ review: review.slice(0, 300) });
+    return NextResponse.json({ review: review.slice(0, STYLE_REVIEW_MAX) });
   } catch (error) {
     console.error("[AI style-review]", error);
     return NextResponse.json(
