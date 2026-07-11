@@ -28,15 +28,17 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
   project.process_items.forEach((item, i) => {
     if (!item.part?.trim()) {
       issues.push({ level: "error", message: `工艺条目 ${i + 1} 缺少部位名称` });
+      return;
     }
-    if (!item.process?.trim()) {
-      issues.push({ level: "warning", message: `「${item.part || i + 1}」缺少工艺描述` });
-    }
-    if (!item.stitch?.trim()) {
-      issues.push({ level: "warning", message: `「${item.part}」未填写针法/线迹` });
-    }
-    if (!item.seam_allowance?.trim()) {
-      issues.push({ level: "warning", message: `「${item.part}」未填写缝份` });
+    const missing: string[] = [];
+    if (!item.process?.trim()) missing.push("工艺描述");
+    if (!item.stitch?.trim()) missing.push("针法/线迹");
+    if (!item.seam_allowance?.trim()) missing.push("缝份");
+    if (missing.length > 0) {
+      issues.push({
+        level: "warning",
+        message: `「${item.part}」未填写：${missing.join("、")}`,
+      });
     }
   });
 
@@ -55,11 +57,13 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
     issues.push({ level: "warning", message: "BOM 面辅料清单为空" });
   }
 
-  project.bom_items.forEach((item) => {
-    if (!item.name?.trim()) {
-      issues.push({ level: "warning", message: "BOM 存在未命名物料" });
-    }
-  });
+  const unnamedBom = project.bom_items.filter((item) => !item.name?.trim()).length;
+  if (unnamedBom > 0) {
+    issues.push({
+      level: "warning",
+      message: unnamedBom === 1 ? "BOM 存在未命名物料" : `BOM 有 ${unnamedBom} 条未命名物料`,
+    });
+  }
 
   if (project.size_chart.rows.length === 0) {
     issues.push({ level: "warning", message: "尺寸表为空" });
