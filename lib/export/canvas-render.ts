@@ -1,10 +1,21 @@
 import type { Artboard, Annotation } from "@/types/project";
 import type { ProcessItem } from "@/types/process";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import {
+  filterAnnotationsForExport,
+  type ExportLayerFilter,
+} from "@/lib/canvas/annotation-layers";
 import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { migrateArtboardHotspots } from "@/lib/project/hotspots";
+
+export type AnnotatedImageMode = "merged" | "split";
+
+export type RenderArtboardOptions = {
+  layerFilter?: ExportLayerFilter;
+  processItems?: ProcessItem[];
+};
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -113,8 +124,9 @@ function drawSequenceBadges(
 export async function renderArtboardToDataUrl(
   artboard: Artboard,
   imageFallback?: string,
-  processItems: ProcessItem[] = [],
+  options: RenderArtboardOptions = {},
 ): Promise<string | null> {
+  const { layerFilter = "all", processItems = [] } = options;
   const src = artboard.imageDataUrl ?? imageFallback;
   if (!src) return null;
 
@@ -131,9 +143,11 @@ export async function renderArtboardToDataUrl(
   ctx.drawImage(img, fit.x, fit.y, fit.width, fit.height);
 
   const ab = migrateArtboardHotspots(artboard);
-  const anns = normalizeAnnotations(ab.annotations);
+  const anns = filterAnnotationsForExport(normalizeAnnotations(ab.annotations), layerFilter);
   anns.forEach((ann) => drawAnnotation(ctx, ann));
-  drawSequenceBadges(ctx, processItems, anns);
+  if (layerFilter === "all" || layerFilter === "process") {
+    drawSequenceBadges(ctx, processItems, anns);
+  }
 
   return canvas.toDataURL("image/png");
 }
@@ -142,11 +156,30 @@ export async function renderAllArtboards(
   artboards: Artboard[],
   imageFallback?: string,
   processItems: ProcessItem[] = [],
-): Promise<Array<{ name: string; dataUrl: string }>> {
-  const results: Array<{ name: string; dataUrl: string }> = [];
+  mode: AnnotatedImageMode = "merged",
+): Promise<Array<{ name: string; dataUrl: string; group?: "process" | "size" | "merged" }>> {
+  const results: Array<{ name: string; dataUrl: string; group?: "process" | "size" | "merged" }> =
+    [];
+
   for (const ab of artboards) {
-    const dataUrl = await renderArtboardToDataUrl(ab, imageFallback, processItems);
-    if (dataUrl) results.push({ name: ab.name, dataUrl });
+    if (mode === "merged") {
+      const dataUrl = await renderArtboardToDataUrl(ab, imageFallback, {
+        layerFilter: "all",
+        processItems,
+      });
+      if (dataUrl) results.push({ name: ab.name, dataUrl, group: "merged" });
+    } else {
+      const processUrl = await renderArtboardToDataUrl(ab, imageFallback, {
+        layerFilter: "process",
+        processItems,
+      });
+      const sizeUrl = await renderArtboardToDataUrl(ab, imageFallback, {
+        layerFilter: "size",
+        processItems,
+      });
+      if (processUrl) results.push({ name: `${ab.name}-工艺`, dataUrl: processUrl, group: "process" });
+      if (sizeUrl) results.push({ name: `${ab.name}-尺寸`, dataUrl: sizeUrl, group: "size" });
+    }
   }
   return results;
 }

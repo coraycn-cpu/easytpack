@@ -8,9 +8,30 @@ type SizeChartEditorProps = {
   onChange: (chart: SizeChart) => void;
   compact?: boolean;
   flat?: boolean;
+  selectedAnnId?: string | null;
+  dimensionLinkable?: boolean;
+  linkedSizePartForSelection?: string;
+  onToggleSizeLink?: (part: string, linked: boolean) => void;
+  highlightedSizePart?: string;
+  onSizeRowSelect?: (part: string, index: number) => void;
+  dimensionCounts?: Record<string, number>;
+  onRemoveRowPart?: (part: string) => void;
 };
 
-export default function SizeChartEditor({ chart, onChange, compact, flat }: SizeChartEditorProps) {
+export default function SizeChartEditor({
+  chart,
+  onChange,
+  compact,
+  flat,
+  selectedAnnId,
+  dimensionLinkable,
+  linkedSizePartForSelection,
+  onToggleSizeLink,
+  highlightedSizePart,
+  onSizeRowSelect,
+  dimensionCounts,
+  onRemoveRowPart,
+}: SizeChartEditorProps) {
   const sampleSize = chart.sampleSize;
   const regionLabel = regionStandardLabel(chart.regionStandard);
 
@@ -59,7 +80,9 @@ export default function SizeChartEditor({ chart, onChange, compact, flat }: Size
   };
 
   const removeRow = (index: number) => {
+    const part = chart.rows[index]?.part?.trim();
     onChange({ ...chart, rows: chart.rows.filter((_, i) => i !== index) });
+    if (part) onRemoveRowPart?.(part);
   };
 
   if (chart.sizes.length === 0 && chart.rows.length === 0) {
@@ -141,14 +164,50 @@ export default function SizeChartEditor({ chart, onChange, compact, flat }: Size
           </tr>
         </thead>
         <tbody>
-          {chart.rows.map((row, i) => (
-            <tr key={i} className="border-t border-zinc-50">
+          {chart.rows.map((row, i) => {
+            const partKey = row.part.trim();
+            const dimCount = partKey ? dimensionCounts?.[partKey] ?? 0 : 0;
+            const isHighlighted = partKey && highlightedSizePart === partKey;
+            const isLinkedToSelection =
+              partKey && linkedSizePartForSelection === partKey;
+
+            return (
+            <tr
+              key={i}
+              role={onSizeRowSelect && partKey ? "button" : undefined}
+              tabIndex={onSizeRowSelect && partKey ? 0 : undefined}
+              onClick={() => partKey && onSizeRowSelect?.(partKey, i)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && partKey) {
+                  onSizeRowSelect?.(partKey, i);
+                }
+              }}
+              className={`border-t border-zinc-50 ${
+                isHighlighted ? "bg-amber-50 ring-1 ring-amber-200" : ""
+              } ${dimCount > 0 ? "bg-emerald-50/40" : ""}`}
+            >
               <td className="py-1 pr-1">
-                <input
-                  value={row.part}
-                  onChange={(e) => updateRow(i, "part", e.target.value)}
-                  className="w-14 bg-transparent outline-none"
-                />
+                <div className="flex items-center gap-0.5">
+                  {selectedAnnId && dimensionLinkable && partKey && onToggleSizeLink && (
+                    <input
+                      type="checkbox"
+                      checked={Boolean(isLinkedToSelection)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onToggleSizeLink(partKey, e.target.checked)}
+                      className="shrink-0"
+                      title="关联当前选中尺寸线"
+                    />
+                  )}
+                  <input
+                    value={row.part}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => updateRow(i, "part", e.target.value)}
+                    className="w-14 bg-transparent outline-none"
+                  />
+                  {dimCount > 0 && (
+                    <span className="text-[8px] text-emerald-600">{dimCount}线</span>
+                  )}
+                </div>
               </td>
               <td className="max-w-[3.5rem] py-1 pr-0.5">
                 <input
@@ -178,14 +237,18 @@ export default function SizeChartEditor({ chart, onChange, compact, flat }: Size
               <td className="py-1">
                 <button
                   type="button"
-                  onClick={() => removeRow(i)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeRow(i);
+                  }}
                   className="text-zinc-300 hover:text-red-400"
                 >
                   ×
                 </button>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

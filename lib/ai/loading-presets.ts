@@ -8,6 +8,7 @@ export type AiLoadingPresetId =
   | "enhance"
   | "explain"
   | "region-annotate"
+  | "size-dimension"
   | "view-image"
   | "chat"
   | "default";
@@ -82,12 +83,13 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
   },
   "fill-size": {
     title: "AI 正在填尺寸",
-    subtitle: "解析测量点并估算基准码，约 20–40 秒",
+    subtitle: "解析测量点、估算基准码并标注尺寸线，约 30–60 秒",
     steps: [
       { icon: "📏", title: "选定测量点", desc: "按区域标准解析 POM" },
       { icon: "🔢", title: "估算数值", desc: "结合款式图估算基准码尺寸" },
+      { icon: "↔", title: "标注尺寸线", desc: "在款式图上绘制各测量点尺寸线" },
     ],
-    tips: ["其他尺码列预留给跳码功能", "完成后请核对尺寸 tab"],
+    tips: ["尺寸线为蓝色 AI 标注，已有部位不会重复标注", "完成后请核对尺寸 tab 与画布"],
   },
   enhance: {
     title: "AI 正在一键补全",
@@ -112,6 +114,15 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
       { icon: "📝", title: "填写工艺", desc: "生成该部位的工艺说明" },
     ],
     tips: ["处理中请勿移动或删除选区"],
+  },
+  "size-dimension": {
+    title: "AI 正在识别尺寸线",
+    subtitle: "约 10–20 秒",
+    steps: [
+      { icon: "📏", title: "分析尺寸线", desc: "识别测量部位与量法" },
+      { icon: "🔢", title: "估算数值", desc: "填入基准码 cm 值" },
+    ],
+    tips: ["处理中请勿移动或删除尺寸线"],
   },
   "view-image": {
     title: "AI 正在生成款式视角图",

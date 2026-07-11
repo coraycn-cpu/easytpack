@@ -17,6 +17,15 @@ import {
 import type Konva from "konva";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
+  MANUAL_ANNOTATION_COLOR,
+} from "@/lib/canvas/annotation-colors";
+import {
+  DEFAULT_LAYER_VISIBILITY,
+  filterAnnotationsByLayers,
+  type LayerVisibility,
+} from "@/lib/canvas/annotation-layers";
+import { isDimensionAnnotation } from "@/lib/canvas/size-annotations";
+import {
   computeStudioStageBounds,
   computeMultiStudioStageBounds,
   computeImagePlacement,
@@ -63,6 +72,10 @@ type AnnotationCanvasProps = {
   onAnnotateProcess?: () => void;
   annotateProcessLoading?: boolean;
   onRegionAiFill?: () => void;
+  onDimensionAiFill?: () => void;
+  dimensionAiLoading?: boolean;
+  layerVisibility?: LayerVisibility;
+  onLayerVisibilityChange?: (layers: LayerVisibility) => void;
   toolbarMessage?: string | null;
   /** 多画板并排模式 */
   multiArtboards?: Artboard[];
@@ -122,6 +135,10 @@ export default function AnnotationCanvas({
   onAnnotateProcess,
   annotateProcessLoading,
   onRegionAiFill,
+  onDimensionAiFill,
+  dimensionAiLoading,
+  layerVisibility = DEFAULT_LAYER_VISIBILITY,
+  onLayerVisibilityChange,
   toolbarMessage,
   multiArtboards,
   artboardSlots,
@@ -245,6 +262,10 @@ export default function AnnotationCanvas({
   const transformerRef = useRef<Konva.Transformer>(null);
 
   const normalizedAnnotations = normalizeAnnotations(annotations);
+  const visibleAnnotations = useMemo(
+    () => filterAnnotationsByLayers(normalizedAnnotations, layerVisibility),
+    [normalizedAnnotations, layerVisibility],
+  );
 
   const syncHistoryButtons = () => {
     setCanUndo(undoStack.current.length > 0);
@@ -577,7 +598,7 @@ export default function AnnotationCanvas({
           {
             id,
             type: currentTool,
-            color,
+            color: MANUAL_ANNOTATION_COLOR,
             ...n,
             strokeWidth: 3,
           },
@@ -602,7 +623,7 @@ export default function AnnotationCanvas({
           {
             id,
             type: currentTool,
-            color,
+            color: currentTool === "dimension" ? MANUAL_ANNOTATION_COLOR : color,
             x,
             y,
             x2,
@@ -715,19 +736,21 @@ export default function AnnotationCanvas({
     if (ann.type === "marker") {
       updateAnnotation(id, { x: node.x(), y: node.y() });
     } else if (ann.type === "rect" || ann.type === "circle") {
-      updateAnnotation(id, { x: node.x(), y: node.y() });
+      updateAnnotation(id, { x: node.x(), y: node.y(), color: MANUAL_ANNOTATION_COLOR });
     } else if (ann.type === "text") {
       updateAnnotation(id, { x: node.x(), y: node.y() });
     } else if (ann.type === "arrow" || ann.type === "dimension") {
       const dx = node.x();
       const dy = node.y();
       node.position({ x: 0, y: 0 });
-      updateAnnotation(id, {
+      const patch: Partial<Annotation> = {
         x: (ann.x ?? 0) + dx,
         y: (ann.y ?? 0) + dy,
         x2: (ann.x2 ?? ann.x) + dx,
         y2: (ann.y2 ?? ann.y) + dy,
-      });
+      };
+      if (ann.type === "dimension") patch.color = MANUAL_ANNOTATION_COLOR;
+      updateAnnotation(id, patch);
     }
   };
 
@@ -748,6 +771,7 @@ export default function AnnotationCanvas({
         y: node.y(),
         width: Math.max(8, (ann.width ?? 0) * scaleX),
         height: Math.max(8, (ann.height ?? 0) * scaleY),
+        color: MANUAL_ANNOTATION_COLOR,
       });
     } else if (ann.type === "circle") {
       updateAnnotation(id, {
@@ -755,6 +779,7 @@ export default function AnnotationCanvas({
         y: node.y(),
         width: Math.max(8, (ann.width ?? 0) * scaleX),
         height: Math.max(8, (ann.height ?? 0) * scaleY),
+        color: MANUAL_ANNOTATION_COLOR,
       });
     }
   };
@@ -854,7 +879,11 @@ export default function AnnotationCanvas({
               <Text
                 x={(ann.x2 ?? ann.x) + 6}
                 y={(ann.y2 ?? ann.y) - 8}
-                text={ann.text}
+                text={
+                  ann.type === "dimension" && ann.linkedSizePart
+                    ? `${ann.linkedSizePart}${ann.text ? ` ${ann.text}` : ""}`
+                    : ann.text
+                }
                 fontSize={14}
                 fill={c}
                 fontStyle="bold"
@@ -907,6 +936,30 @@ export default function AnnotationCanvas({
     }
   };
 
+  const sequenceBadges = useMemo(
+    () =>
+      layerVisibility.process
+        ? computeSequenceBadges(processItems ?? [], visibleAnnotations)
+        : [],
+    [processItems, visibleAnnotations, layerVisibility.process],
+  );
+
+  const selectedLinkable =
+    selectedAnnId &&
+    visibleAnnotations.some(
+      (a) => a.id === selectedAnnId && isLinkableShape(a.type),
+    );
+
+  const selectedAnn = selectedAnnId
+    ? normalizedAnnotations.find((a) => a.id === selectedAnnId)
+    : undefined;
+  const selectedHasProcessLink = (selectedAnn?.linkedProcessIds?.length ?? 0) > 0;
+  const selectedDimension =
+    selectedAnnId &&
+    selectedAnn &&
+    isDimensionAnnotation(selectedAnn);
+  const selectedHasSizeLink = Boolean(selectedAnn?.linkedSizePart?.trim());
+
   const toolbarHint =
     tool === "pan"
       ? "抓手工具 — 拖动画布视口，不移动款式图"
@@ -916,20 +969,13 @@ export default function AnnotationCanvas({
           ? "绘制完成后自动切回选择"
           : imageSelected
             ? "款式图已选中 — 可拖动位置"
-            : selectedAnnId
-              ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
-              : "点击款式图或标注进行选中";
-
-  const sequenceBadges = useMemo(
-    () => computeSequenceBadges(processItems ?? [], normalizedAnnotations),
-    [processItems, normalizedAnnotations],
-  );
-
-  const selectedLinkable =
-    selectedAnnId &&
-    normalizedAnnotations.some(
-      (a) => a.id === selectedAnnId && isLinkableShape(a.type),
-    );
+            : selectedLinkable && !selectedHasProcessLink
+              ? "已框选区域 — 点「AI 识别工艺」或右侧面板手动关联"
+              : selectedDimension && !selectedHasSizeLink
+                ? "已选尺寸线 — 点「AI 识别尺寸」或右侧面板手动关联"
+                : selectedAnnId
+                ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
+                : "点击款式图或标注进行选中";
 
   const toolbarEl = (
     <CanvasToolbar
@@ -966,6 +1012,8 @@ export default function AnnotationCanvas({
       onEnhanceAll={onEnhanceAll}
       onExplain={onExplain}
       interactionLocked={interactionLocked}
+      layerVisibility={layerVisibility}
+      onLayerVisibilityChange={onLayerVisibilityChange}
     />
   );
 
@@ -1051,7 +1099,10 @@ export default function AnnotationCanvas({
                 if (!ab || !entry) return null;
                 const isActive = ab.id === activeArtboardId;
                 const abOffset = ab.imageOffset ?? { x: 0, y: 0 };
-                const abAnns = normalizeAnnotations(ab.annotations);
+                const abAnns = filterAnnotationsByLayers(
+                  normalizeAnnotations(ab.annotations),
+                  layerVisibility,
+                );
 
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
@@ -1103,7 +1154,8 @@ export default function AnnotationCanvas({
                       }}
                     />
                     {abAnns.map((ann) => renderAnnotation(ann, isActive))}
-                    {computeSequenceBadges(processItems ?? [], abAnns).map((b) => (
+                    {layerVisibility.process &&
+                      computeSequenceBadges(processItems ?? [], abAnns).map((b) => (
                       <Group key={`badge_${ab.id}_${b.processId}_${b.annotationId}`} listening={false}>
                         <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
                         <Text
@@ -1186,8 +1238,9 @@ export default function AnnotationCanvas({
               }}
             />
           )}
-          {!multiMode && normalizedAnnotations.map((ann) => renderAnnotation(ann))}
+          {!multiMode && visibleAnnotations.map((ann) => renderAnnotation(ann))}
           {!multiMode &&
+            layerVisibility.process &&
             sequenceBadges.map((b) => (
               <Group key={`badge_${b.processId}_${b.annotationId}_${b.x}`} listening={false}>
                 <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
@@ -1297,14 +1350,40 @@ export default function AnnotationCanvas({
         </p>
       )}
       {selectedLinkable && onRegionAiFill && (
-        <button
-          type="button"
-          disabled={aiLoading}
-          onClick={onRegionAiFill}
-          className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow hover:bg-violet-700 disabled:opacity-50"
-        >
-          {aiLoading ? "识别中…" : "AI 填工艺"}
-        </button>
+        <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+          <span className="text-[10px] text-slate-500">
+            {selectedHasProcessLink ? "已关联 · " : "已框选区域 · "}
+            <span className="font-medium text-red-600">红=手动</span>
+            <span className="mx-0.5">·</span>
+            <span className="font-medium text-blue-600">蓝=AI</span>
+          </span>
+          <button
+            type="button"
+            disabled={aiLoading}
+            onClick={onRegionAiFill}
+            className="rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {aiLoading ? "识别中…" : "AI 识别工艺"}
+          </button>
+        </div>
+      )}
+      {selectedDimension && onDimensionAiFill && (
+        <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-emerald-200 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+          <span className="text-[10px] text-slate-500">
+            {selectedHasSizeLink ? "已关联 · " : "已选尺寸线 · "}
+            <span className="font-medium text-red-600">红=手动</span>
+            <span className="mx-0.5">·</span>
+            <span className="font-medium text-blue-600">蓝=AI</span>
+          </span>
+          <button
+            type="button"
+            disabled={dimensionAiLoading || aiLoading}
+            onClick={onDimensionAiFill}
+            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {dimensionAiLoading ? "识别中…" : "AI 识别尺寸"}
+          </button>
+        </div>
       )}
       {multiMode && artboardImages.size === 0 && (
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">

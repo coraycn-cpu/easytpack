@@ -12,7 +12,9 @@ import {
 
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 
-export const PART_ANNOTATION_COLOR = "#3b82f6";
+import { AI_ANNOTATION_COLOR } from "@/lib/canvas/annotation-colors";
+
+export const PART_ANNOTATION_COLOR = AI_ANNOTATION_COLOR;
 
 export function hotspotToAnnotation(hs: Hotspot): Annotation {
   return {

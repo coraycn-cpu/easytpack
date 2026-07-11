@@ -149,6 +149,25 @@ export const RegionAnnotateSchema = z.object({
   seam_allowance: z.string().optional(),
 });
 
+export const SizeDimensionAssistSchema = z.object({
+  part: z.string().describe("测量点名称"),
+  method: z.string().max(12).describe("简写量法，≤12字"),
+  baseline_cm: z.coerce.string().describe("基准码测量值（cm，一位小数）"),
+});
+
+export const BatchSizeDimensionLineSchema = z.object({
+  part: z.string().describe("对应尺码表部位名，必须与输入列表一致"),
+  x: z.number().describe("线段起点 x（1000×750 逻辑坐标）"),
+  y: z.number().describe("线段起点 y"),
+  x2: z.number().describe("线段终点 x2"),
+  y2: z.number().describe("线段终点 y2"),
+});
+
+export const BatchSizeDimensionSchema = z.object({
+  dimensions: z.array(BatchSizeDimensionLineSchema).max(12),
+  userTips: z.string(),
+});
+
 export const SmartAnnotationItemSchema = z.object({
   type: z.enum(["rect", "circle", "arrow", "text", "dimension", "marker"]),
   label: z.string(),

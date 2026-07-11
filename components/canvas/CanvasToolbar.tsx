@@ -4,6 +4,7 @@ import {
   ANNOTATION_COLORS,
   DEFAULT_ANNOTATION_COLOR,
 } from "@/lib/canvas/constants";
+import type { LayerVisibility } from "@/lib/canvas/annotation-layers";
 import type { CanvasTool } from "@/types/canvas";
 
 type CanvasToolbarProps = {
@@ -40,6 +41,8 @@ type CanvasToolbarProps = {
   aiLoading?: boolean;
   /** 锁定手动工具，防止 AI 处理中误操作 */
   interactionLocked?: boolean;
+  layerVisibility?: LayerVisibility;
+  onLayerVisibilityChange?: (layers: LayerVisibility) => void;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -81,6 +84,8 @@ export default function CanvasToolbar({
   onExplain,
   aiLoading,
   interactionLocked,
+  layerVisibility,
+  onLayerVisibilityChange,
 }: CanvasToolbarProps) {
   const light = theme === "light";
   const scale = viewportScale ?? zoom;
@@ -189,6 +194,44 @@ export default function CanvasToolbar({
           </div>
 
           <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+
+          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+
+          {layerVisibility && onLayerVisibilityChange && (
+            <>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={layerVisibility.process}
+                    onChange={(e) =>
+                      onLayerVisibilityChange({
+                        ...layerVisibility,
+                        process: e.target.checked,
+                      })
+                    }
+                    className="rounded"
+                  />
+                  工艺层
+                </label>
+                <label className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={layerVisibility.size}
+                    onChange={(e) =>
+                      onLayerVisibilityChange({
+                        ...layerVisibility,
+                        size: e.target.checked,
+                      })
+                    }
+                    className="rounded"
+                  />
+                  尺寸层
+                </label>
+              </div>
+              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+            </>
+          )}
 
           <div className="flex items-center gap-0.5">
             <button type="button" disabled={!canUndo} onClick={onUndo} className={actionBtn(!canUndo)}>

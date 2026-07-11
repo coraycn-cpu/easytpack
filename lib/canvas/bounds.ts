@@ -190,6 +190,7 @@ export function mapAiAnnotationToCanvas(
     strokeWidth: ann.strokeWidth ?? 3,
     text: ann.text ?? ann.label,
     linkedProcessIds: ann.linkedProcessIds,
+    linkedSizePart: ann.linkedSizePart,
   };
 
   if (ann.width != null) mapped.width = ann.width * sx;
@@ -218,6 +219,24 @@ export function annotationToLogicalRect(
     y: Math.round((ann.y - oy) * sy),
     width: Math.round((ann.width ?? 0) * sx),
     height: Math.round((ann.height ?? 0) * sy),
+  };
+}
+
+/** 画布坐标 → 1000×750 逻辑线段（尺寸 AI 识别用） */
+export function annotationToLogicalLine(
+  ann: Pick<Annotation, "x" | "y" | "x2" | "y2">,
+  imageFit: { x: number; y: number; width: number; height: number },
+  imageOffset: { x: number; y: number },
+) {
+  const sx = CANVAS_W / imageFit.width;
+  const sy = CANVAS_H / imageFit.height;
+  const ox = imageFit.x + imageOffset.x;
+  const oy = imageFit.y + imageOffset.y;
+  return {
+    x: Math.round((ann.x - ox) * sx),
+    y: Math.round((ann.y - oy) * sy),
+    x2: Math.round(((ann.x2 ?? ann.x) - ox) * sx),
+    y2: Math.round(((ann.y2 ?? ann.y) - oy) * sy),
   };
 }
 

@@ -7,6 +7,8 @@ import {
   EnhanceTechPackSchema,
   RegionAnnotateSchema,
   SizeChartAssistSchema,
+  SizeDimensionAssistSchema,
+  BatchSizeDimensionSchema,
   StyleReviewSchema,
   STYLE_REVIEW_MAX,
   type AiProvider,
@@ -179,6 +181,86 @@ userTips 简要说明标注了什么。`.trim();
     imageDataUrl: input.imageDataUrl,
     schema: BatchAnnotateSchema,
     schemaName: "batch_annotate",
+  });
+}
+
+export async function generateSizeDimensionAssist(input: {
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  line: { x: number; y: number; x2: number; y2: number };
+  sampleSize: string;
+  regionStandard: SizeRegionStandard;
+  existingPart?: string;
+}) {
+  const region = getRegionOption(input.regionStandard);
+  const context = `
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+区域标准：${region.label}
+样衣基准码：${input.sampleSize}
+用户绘制的尺寸线（1000×750 坐标）：(${input.line.x},${input.line.y}) → (${input.line.x2},${input.line.y2})
+${input.existingPart ? `已有部位参考：${input.existingPart}` : ""}
+请识别该尺寸线对应的测量部位，输出 part/method/baseline_cm。`.trim();
+
+  return callStructured({
+    instructions: `你是资深版师。根据款式图上的尺寸标注线，识别测量部位并估算基准码「${input.sampleSize}」的 cm 值（一位小数）。method 简写 ≤12 字。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: SizeDimensionAssistSchema,
+    schemaName: "size_dimension_assist",
+  });
+}
+
+export async function generateBatchSizeDimensions(input: {
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  sizeChart: SizeChart;
+  sampleSize: string;
+  regionStandard: SizeRegionStandard;
+  /** 已有尺寸线关联的部位，跳过 */
+  skipParts?: string[];
+}) {
+  const region = getRegionOption(input.regionStandard);
+  const rows = input.sizeChart.rows.filter((r) => r.part.trim());
+  const skipSet = new Set((input.skipParts ?? []).map((p) => p.trim().toLowerCase()));
+  const targetRows = rows.filter((r) => !skipSet.has(r.part.trim().toLowerCase()));
+
+  if (targetRows.length === 0) {
+    return { dimensions: [], userTips: "所有测量点已有尺寸线，未新增标注" };
+  }
+
+  const rowsText = targetRows
+    .map((r) => {
+      const val = input.sampleSize ? r.values[input.sampleSize]?.trim() : "";
+      return `- ${r.part}（量法：${r.method}${val ? `，${input.sampleSize}码 ${val}cm` : ""}）`;
+    })
+    .join("\n");
+
+  const context = `
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+区域标准：${region.label}
+样衣基准码：${input.sampleSize}
+需在款式图上标注的测量点（每条输出一条 dimension 线段）：
+${rowsText}
+
+画布尺寸：${CANVAS_W}×${CANVAS_H} 像素，原点在左上角。
+每条线段用 (x,y)→(x2,y2) 表示，方向应符合该部位的标准量法（如衣长竖直、胸围水平）。
+part 必须与上方列表中的部位名完全一致。`.trim();
+
+  return callStructured({
+    instructions: `你是资深版师，在 Tech Pack 款式图上为尺码表测量点绘制尺寸标注线。
+要求：
+1. 为每个测量点输出一条线段，坐标落在服装对应测量位置，不要标注背景。
+2. 线段长度合理（>30px），方向符合量法习惯。
+3. 只输出 type=dimension 的线段数据，不要矩形或文字框。
+4. userTips 简要说明标注了哪些测量点。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: BatchSizeDimensionSchema,
+    schemaName: "batch_size_dimensions",
   });
 }
 

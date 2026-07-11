@@ -14,15 +14,37 @@ import { pickImageDataUrlForAi } from "@/lib/ai/image-for-request";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
   annotationToLogicalRect,
+  annotationToLogicalLine,
   loadImagePlacement,
   mapAiAnnotationToCanvas,
 } from "@/lib/canvas/bounds";
-import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import {
+  DEFAULT_LAYER_VISIBILITY,
+  TAB_LAYER_PRESETS,
+  type LayerVisibility,
+} from "@/lib/canvas/annotation-layers";
+import {
+  findAnnotationsForSizePartInProject,
+  getAnnotationSizePart,
+  isDimensionAnnotation,
+  toggleDimensionSizePartLink,
+} from "@/lib/canvas/size-annotations";
+import {
+  applyBatchSizeDimensions,
+  collectLinkedSizePartsFromProject,
+} from "@/lib/canvas/apply-size-dimensions";
 import {
   findAnnotationsForProcessInProject,
   findProcessIdsForAnnotation,
+  isLinkableShape,
   toggleShapeProcessLink,
 } from "@/lib/canvas/part-annotations";
+import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import {
+  AI_ANNOTATION_COLOR,
+  MANUAL_ANNOTATION_COLOR,
+  mapAnnotationColor,
+} from "@/lib/canvas/annotation-colors";
 import { PART_ANNOTATION_COLOR } from "@/lib/project/hotspots";
 import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
@@ -71,16 +93,10 @@ export default function StudioPage() {
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
+  const [highlightedSizePart, setHighlightedSizePart] = useState<string>("");
   const [sizeAiDialogOpen, setSizeAiDialogOpen] = useState(false);
   const [aiHighlightTab, setAiHighlightTab] = useState<Tab | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const focusTab = useCallback((tab: Tab) => {
-    setActiveTab(tab);
-    setAiHighlightTab(tab);
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(() => setAiHighlightTab(null), 2000);
-  }, []);
 
   useEffect(() => {
     const p = getProject(id);
@@ -161,6 +177,35 @@ export default function StudioPage() {
     [project, persist],
   );
 
+  const focusTab = useCallback(
+    (tab: Tab) => {
+      setActiveTab(tab);
+      setAiHighlightTab(tab);
+      const preset = TAB_LAYER_PRESETS[tab];
+      saveLayout({ ...layout, annotationLayers: preset });
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setAiHighlightTab(null), 2000);
+    },
+    [layout, saveLayout],
+  );
+
+  const handleTabChange = useCallback(
+    (tab: Tab) => {
+      focusTab(tab);
+    },
+    [focusTab],
+  );
+
+  const layerVisibility: LayerVisibility =
+    layout.annotationLayers ?? DEFAULT_LAYER_VISIBILITY;
+
+  const handleLayerVisibilityChange = useCallback(
+    (annotationLayers: LayerVisibility) => {
+      saveLayout({ ...layout, annotationLayers });
+    },
+    [layout, saveLayout],
+  );
+
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
     if (!project) return;
     const artboards = project.canvas_data.artboards.map((a) =>
@@ -176,7 +221,7 @@ export default function StudioPage() {
     (processId: string, _index: number) => {
       if (!project) return;
       setHighlightedProcessIds([processId]);
-      setActiveTab("process");
+      focusTab("process");
       const linked = findAnnotationsForProcessInProject(project, processId);
       if (linked.length > 0) {
         const first = linked[0];
@@ -205,6 +250,7 @@ export default function StudioPage() {
       if (!project || !annId) {
         setHighlightedProcessIds([]);
         setLinkedHighlightAnnIds([]);
+        setHighlightedSizePart("");
         return;
       }
       const ab = project.canvas_data.artboards.find((a) => a.id === activeArtboardId);
@@ -213,9 +259,23 @@ export default function StudioPage() {
       const pids = findProcessIdsForAnnotation(ann, project.process_items);
       setHighlightedProcessIds(pids);
       setLinkedHighlightAnnIds([annId]);
-      if (pids.length > 0) setActiveTab("process");
+      if (isLinkableShape(ann.type)) {
+        focusTab("process");
+        if (pids.length === 0) {
+          setAiMessage("已框选区域 — 可 AI 识别工艺，或在工艺 Tab 勾选行手动关联");
+        }
+      } else if (isDimensionAnnotation(ann)) {
+        focusTab("size");
+        const part = getAnnotationSizePart(ann);
+        setHighlightedSizePart(part ?? "");
+        if (!part) {
+          setAiMessage("已选尺寸线 — 可 AI 识别尺寸，或在尺寸 Tab 勾选行手动关联");
+        }
+      } else if (pids.length > 0) {
+        setActiveTab("process");
+      }
     },
-    [project, activeArtboardId],
+    [project, activeArtboardId, focusTab],
   );
 
   const handleToggleProcessLink = useCallback(
@@ -225,11 +285,10 @@ export default function StudioPage() {
         ab.id === activeArtboardId
           ? {
               ...ab,
-              annotations: toggleShapeProcessLink(
-                ab.annotations,
+              annotations: mapAnnotationColor(
+                toggleShapeProcessLink(ab.annotations, selectedAnnId, processId, linked),
                 selectedAnnId,
-                processId,
-                linked,
+                MANUAL_ANNOTATION_COLOR,
               ),
             }
           : ab,
@@ -254,6 +313,152 @@ export default function StudioPage() {
     if (!selectedAnn) return [];
     return findProcessIdsForAnnotation(selectedAnn, project?.process_items ?? []);
   }, [selectedAnn, project?.process_items]);
+
+  const linkedSizePartForSelection = useMemo(() => {
+    if (!selectedAnn) return undefined;
+    return getAnnotationSizePart(selectedAnn);
+  }, [selectedAnn]);
+
+  const handleToggleSizeLink = useCallback(
+    (part: string, linked: boolean) => {
+      if (!project || !selectedAnnId) return;
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboardId
+          ? {
+              ...ab,
+              annotations: mapAnnotationColor(
+                toggleDimensionSizePartLink(ab.annotations, selectedAnnId, part, linked),
+                selectedAnnId,
+                MANUAL_ANNOTATION_COLOR,
+              ),
+            }
+          : ab,
+      );
+      persist({
+        ...project,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+      if (linked) setHighlightedSizePart(part);
+    },
+    [project, selectedAnnId, activeArtboardId, persist],
+  );
+
+  const handleSizeRowSelect = useCallback(
+    (part: string, _index: number) => {
+      if (!project) return;
+      setHighlightedSizePart(part);
+      focusTab("size");
+      const linked = findAnnotationsForSizePartInProject(project, part);
+      if (linked.length > 0) {
+        const first = linked[0];
+        if (first.artboardId !== activeArtboardId) {
+          setActiveArtboardId(first.artboardId);
+          persist({
+            ...project,
+            canvas_data: {
+              ...project.canvas_data,
+              activeArtboardId: first.artboardId,
+            },
+          });
+        }
+        setSelectedAnnId(first.annotation.id);
+        setLinkedHighlightAnnIds(linked.map((l) => l.annotation.id));
+      } else {
+        setLinkedHighlightAnnIds([]);
+      }
+    },
+    [project, activeArtboardId, persist, focusTab],
+  );
+
+  const handleDimensionAiFill = async () => {
+    if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
+    if (!isDimensionAnnotation(selectedAnn)) return;
+    setAiTask("size-dimension");
+    setAiMessage(null);
+    try {
+      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
+      const imageFit = imgUrl
+        ? await loadImagePlacement(imgUrl)
+        : { x: 0, y: 0, width: 1000, height: 750 };
+      const line = annotationToLogicalLine(selectedAnn, imageFit, imageOffset);
+      const sampleSize = project.size_chart.sampleSize ?? "M";
+      const regionStandard = project.size_chart.regionStandard ?? "cn";
+
+      const res = await fetch("/api/ai/size-dimension", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          imageDataUrl: imgUrl,
+          line,
+          sampleSize,
+          regionStandard,
+          existingPart: selectedAnn.linkedSizePart,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const baseline = String(data.baseline_cm ?? "").trim();
+      if (!baseline) throw new Error("AI 未返回有效尺寸值");
+
+      const size_chart = applySizeChartAssist(
+        {
+          sizes: project.size_chart.sizes.length
+            ? project.size_chart.sizes
+            : [sampleSize],
+          rows: [
+            {
+              part: data.part,
+              method: data.method,
+              baseline_cm: baseline,
+            },
+          ],
+        },
+        { regionStandard, sampleSize },
+        project.size_chart,
+      );
+
+      const part = data.part.trim();
+      const displayText = `${baseline}cm`;
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboardId
+          ? {
+              ...ab,
+              annotations: mapAnnotationColor(
+                toggleDimensionSizePartLink(
+                  ab.annotations.map((a) =>
+                    a.id === selectedAnn.id
+                      ? { ...a, text: displayText, linkedSizePart: part }
+                      : a,
+                  ),
+                  selectedAnn.id,
+                  part,
+                  true,
+                ),
+                selectedAnn.id,
+                AI_ANNOTATION_COLOR,
+              ),
+            }
+          : ab,
+      );
+
+      persist({
+        ...project,
+        size_chart,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+      setHighlightedSizePart(part);
+      focusTab("size");
+      setAiMessage(`已识别：${part} ${displayText}`);
+    } catch (e) {
+      setAiMessage(e instanceof Error ? e.message : "尺寸识别失败");
+    } finally {
+      setAiTask(null);
+    }
+  };
 
   const setActiveArtboard = (artboardId: string) => {
     if (!project) return;
@@ -494,11 +699,10 @@ export default function StudioPage() {
         ab.id === activeArtboardId
           ? {
               ...ab,
-              annotations: toggleShapeProcessLink(
-                ab.annotations,
+              annotations: mapAnnotationColor(
+                toggleShapeProcessLink(ab.annotations, selectedAnn.id, processId!, true),
                 selectedAnn.id,
-                processId!,
-                true,
+                AI_ANNOTATION_COLOR,
               ),
             }
           : ab,
@@ -510,6 +714,7 @@ export default function StudioPage() {
         canvas_data: { ...project.canvas_data, artboards },
       });
       setHighlightedProcessIds([processId!]);
+      focusTab("process");
       setAiMessage(`已识别：${data.part}`);
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "区域识别失败");
@@ -562,10 +767,85 @@ export default function StudioPage() {
       if (filled === 0) {
         throw new Error("AI 未返回基准码数值，请确认款式图清晰并重试");
       }
-      persist({ ...project, size_chart });
+
+      const targetArtboard =
+        activeArtboard ??
+        project.canvas_data.artboards.find((a) => a.imageDataUrl) ??
+        project.canvas_data.artboards[0];
+      let addedDimensions = 0;
+      let dimensionTips: string | undefined;
+      let dimensionBatchFailed = false;
+
+      if (targetArtboard && imageDataUrl) {
+        try {
+          const skipParts = collectLinkedSizePartsFromProject(project.canvas_data.artboards);
+          const dimRes = await fetch("/api/ai/size-dimension-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              category: project.intake.detectedCategory,
+              description: project.intake.description,
+              imageDataUrl,
+              sizeChart: size_chart,
+              sampleSize: input.sampleSize,
+              regionStandard: input.regionStandard,
+              skipParts,
+            }),
+          });
+          const dimData = await dimRes.json();
+          if (!dimRes.ok) throw new Error(dimData.error);
+
+          if (dimData.dimensions?.length) {
+            const imageOffset = targetArtboard.imageOffset ?? { x: 0, y: 0 };
+            const imageFit = await loadImagePlacement(imageDataUrl);
+            const artboards = project.canvas_data.artboards.map((ab) => {
+              if (ab.id !== targetArtboard.id) return ab;
+              const result = applyBatchSizeDimensions(
+                ab.annotations,
+                dimData.dimensions,
+                size_chart,
+                imageFit,
+                imageOffset,
+              );
+              addedDimensions = result.added;
+              return { ...ab, annotations: result.annotations };
+            });
+            persist({
+              ...project,
+              size_chart,
+              canvas_data: { ...project.canvas_data, artboards },
+            });
+            dimensionTips = dimData.userTips;
+          } else {
+            persist({ ...project, size_chart });
+          }
+        } catch (dimErr) {
+          persist({ ...project, size_chart });
+          dimensionBatchFailed = true;
+          const msg = dimErr instanceof Error ? dimErr.message : "尺寸线生成失败";
+          setAiTip(`尺码表已生成，但画布尺寸线未完全生成：${msg}`);
+        }
+      } else {
+        persist({ ...project, size_chart });
+      }
+
       focusTab("size");
-      setAiTip(data.plainExplanation ?? "尺码表已生成");
-      setAiMessage(`已填入 ${input.sampleSize} 码 ${filled} 项估算值`);
+      if (!dimensionBatchFailed) {
+        if (dimensionTips) {
+          setAiTip(dimensionTips);
+        } else {
+          setAiTip(
+            addedDimensions > 0
+              ? `已在款式图上标注 ${addedDimensions} 条尺寸线（蓝色）`
+              : (data.plainExplanation ?? "尺码表已生成"),
+          );
+        }
+      }
+      setAiMessage(
+        addedDimensions > 0
+          ? `已填入 ${input.sampleSize} 码 ${filled} 项，并标注 ${addedDimensions} 条尺寸线`
+          : `已填入 ${input.sampleSize} 码 ${filled} 项估算值`,
+      );
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {
@@ -734,6 +1014,10 @@ export default function StudioPage() {
                 updateArtboard(activeArtboard.id, { imageOffset })
               }
               onRegionAiFill={handleRegionAiFill}
+              onDimensionAiFill={handleDimensionAiFill}
+              dimensionAiLoading={aiTask === "size-dimension"}
+              layerVisibility={layerVisibility}
+              onLayerVisibilityChange={handleLayerVisibilityChange}
               onFullCollect={handleFullCollect}
               onAnnotateProcess={handleBatchAnnotate}
               annotateProcessLoading={aiTask === "annotate-process"}
@@ -765,7 +1049,7 @@ export default function StudioPage() {
               <StudioDataPanel
                 project={project}
                 activeTab={activeTab}
-                onTabChange={setActiveTab}
+                onTabChange={handleTabChange}
                 onPersist={persist}
                 highlightedProcessIds={highlightedProcessIds}
                 onProcessRowSelect={handleProcessRowSelect}
@@ -773,6 +1057,14 @@ export default function StudioPage() {
                 selectedAnn={selectedAnn}
                 linkedProcessIdsForSelection={linkedProcessIdsForSelection}
                 onToggleProcessLink={handleToggleProcessLink}
+                onRegionAiFill={handleRegionAiFill}
+                regionAiLoading={aiTask === "region-annotate"}
+                onDimensionAiFill={handleDimensionAiFill}
+                dimensionAiLoading={aiTask === "size-dimension"}
+                linkedSizePartForSelection={linkedSizePartForSelection}
+                onToggleSizeLink={handleToggleSizeLink}
+                highlightedSizePart={highlightedSizePart}
+                onSizeRowSelect={handleSizeRowSelect}
                 highlightTab={aiHighlightTab}
                 interactionLocked={aiBusy}
               />

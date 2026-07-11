@@ -1,4 +1,11 @@
+import {
+  DEFAULT_LAYER_VISIBILITY,
+  type LayerVisibility,
+} from "@/lib/canvas/annotation-layers";
+
 export type PanelPosition = { x: number; y: number; w: number; h?: number };
+
+export type AnnotationLayerVisibility = LayerVisibility;
 
 export type StudioLayout = {
   /** 款式图在无限画布上的锚点（仅 x/y，尺寸随内容扩展） */
@@ -6,6 +13,8 @@ export type StudioLayout = {
   ai: PanelPosition;
   data: PanelPosition;
   viewport: { panX: number; panY: number; scale: number };
+  /** 工艺/尺寸标注图层可见性 */
+  annotationLayers?: AnnotationLayerVisibility;
   /** @deprecated */
   tabs?: PanelPosition;
   toolbar?: PanelPosition;
@@ -20,6 +29,7 @@ export const DEFAULT_STUDIO_LAYOUT: StudioLayout = {
   ai: { x: STUDIO_PANEL_X, y: 80, w: 340 },
   data: { x: STUDIO_PANEL_X, y: 420, w: 340, h: 420 },
   viewport: { panX: 0, panY: 0, scale: 1 },
+  annotationLayers: { ...DEFAULT_LAYER_VISIBILITY },
 };
 
 export function getStudioLayout(saved?: StudioLayout): StudioLayout {
@@ -31,6 +41,10 @@ export function getStudioLayout(saved?: StudioLayout): StudioLayout {
     ai: { ...base.ai, ...saved.ai },
     data: { ...base.data, ...saved.data },
     viewport: { ...base.viewport, ...saved.viewport },
+    annotationLayers: {
+      ...DEFAULT_LAYER_VISIBILITY,
+      ...saved.annotationLayers,
+    },
   };
 
   // 旧版布局：面板被放到画板下方，首屏看不到

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
 import { exportBomCsv, exportSizeChartCsv } from "@/lib/export/excel";
-import { renderAllArtboards } from "@/lib/export/canvas-render";
+import { renderAllArtboards, type AnnotatedImageMode } from "@/lib/export/canvas-render";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
@@ -17,6 +17,7 @@ export default function ExportPage() {
   const [annotatedImages, setAnnotatedImages] = useState<
     Array<{ name: string; dataUrl: string }>
   >([]);
+  const [imageMode, setImageMode] = useState<AnnotatedImageMode>("merged");
 
   useEffect(() => {
     const p = getProject(id);
@@ -31,6 +32,7 @@ export default function ExportPage() {
     } else {
       setProject(p);
     }
+    setImageMode(p.exportSettings?.annotatedImageMode ?? "merged");
   }, [id, router]);
 
   useEffect(() => {
@@ -39,8 +41,20 @@ export default function ExportPage() {
       project.canvas_data.artboards,
       project.intake.imageDataUrl,
       project.process_items,
+      imageMode,
     ).then(setAnnotatedImages);
-  }, [project]);
+  }, [project, imageMode]);
+
+  const handleImageModeChange = (mode: AnnotatedImageMode) => {
+    setImageMode(mode);
+    if (!project) return;
+    const updated: TechPackProject = {
+      ...project,
+      exportSettings: { ...project.exportSettings, annotatedImageMode: mode },
+    };
+    saveProject(updated);
+    setProject(updated);
+  };
 
   const handlePrint = () => window.print();
 
@@ -69,7 +83,31 @@ export default function ExportPage() {
               <h1 className="text-lg font-semibold text-zinc-900">Tech Pack 预览</h1>
               <p className="text-xs text-zinc-500">完成度 {progress}%</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-lg border border-zinc-200 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleImageModeChange("merged")}
+                  className={`rounded-md px-2.5 py-1.5 ${
+                    imageMode === "merged"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-600 hover:bg-zinc-50"
+                  }`}
+                >
+                  合并标注图
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleImageModeChange("split")}
+                  className={`rounded-md px-2.5 py-1.5 ${
+                    imageMode === "split"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-600 hover:bg-zinc-50"
+                  }`}
+                >
+                  工艺/尺寸分图
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => exportBomCsv(project.bom_items, `${project.title}-BOM.csv`)}

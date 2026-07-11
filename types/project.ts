@@ -80,6 +80,8 @@ export type Annotation = {
   points?: number[];
   /** 闭合形状关联的工艺行 ID（多对多） */
   linkedProcessIds?: string[];
+  /** 关联尺码表部位名（尺寸标注 dimension） */
+  linkedSizePart?: string;
   /** @deprecated 迁移至 linkedProcessIds */
   markerIndex?: number;
   /** @deprecated 迁移至 linkedProcessIds */
@@ -129,6 +131,11 @@ export type TechPackProject = {
   size_chart: SizeChart;
   /** 款式评语：面向版师/车版/设计师，四段式，≤280字 */
   style_review?: string;
+  /** 导出偏好 */
+  exportSettings?: {
+    /** 标注图稿：合并一张或工艺/尺寸各一张 */
+    annotatedImageMode?: "merged" | "split";
+  };
 };
 
 export const DEFAULT_ARTBOARD_NAMES = ["正面", "背面", "细节"];

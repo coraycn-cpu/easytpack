@@ -8,6 +8,11 @@ import {
   getMarkerLabel,
   isLinkableShape,
 } from "@/lib/canvas/part-annotations";
+import {
+  clearSizePartFromAnnotations,
+  countDimensionsLinkedToSizePart,
+  isDimensionAnnotation,
+} from "@/lib/canvas/size-annotations";
 import { generateProcessId } from "@/lib/process/ids";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import type { BomItem, ProcessItem } from "@/types/process";
@@ -28,6 +33,14 @@ type StudioDataPanelProps = {
   selectedAnn?: Annotation | null;
   linkedProcessIdsForSelection?: string[];
   onToggleProcessLink?: (processId: string, linked: boolean) => void;
+  onRegionAiFill?: () => void;
+  regionAiLoading?: boolean;
+  onDimensionAiFill?: () => void;
+  dimensionAiLoading?: boolean;
+  linkedSizePartForSelection?: string;
+  onToggleSizeLink?: (part: string, linked: boolean) => void;
+  highlightedSizePart?: string;
+  onSizeRowSelect?: (part: string, index: number) => void;
   highlightTab?: Tab | null;
   /** AI 处理中锁定面板编辑 */
   interactionLocked?: boolean;
@@ -69,11 +82,27 @@ export default function StudioDataPanel({
   selectedAnn,
   linkedProcessIdsForSelection = [],
   onToggleProcessLink,
+  onRegionAiFill,
+  regionAiLoading,
+  onDimensionAiFill,
+  dimensionAiLoading,
+  linkedSizePartForSelection,
+  onToggleSizeLink,
+  highlightedSizePart,
+  onSizeRowSelect,
   highlightTab,
   interactionLocked,
 }: StudioDataPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const shapeLinkable = selectedAnn ? isLinkableShape(selectedAnn.type) : false;
+  const dimensionLinkable = selectedAnn ? isDimensionAnnotation(selectedAnn) : false;
+
+  const dimensionCounts = Object.fromEntries(
+    project.size_chart.rows.map((row) => [
+      row.part.trim(),
+      countDimensionsLinkedToSizePart(project, row.part),
+    ]),
+  );
 
   const updateProcess = (index: number, patch: Partial<ProcessItem>) => {
     const items = [...project.process_items];
@@ -164,13 +193,85 @@ export default function StudioDataPanel({
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
-          {selectedAnnId && !shapeLinkable && (
+          {selectedAnnId && !shapeLinkable && !dimensionLinkable && (
             <p className="mb-2 text-[10px] text-slate-400">
-              装饰标注不可关联工艺，请选方框/圆圈
+              装饰标注不可关联工艺/尺寸，请选方框/圆圈或尺寸线
             </p>
           )}
           {selectedAnnId && shapeLinkable && (
-            <p className="mb-2 text-[10px] text-blue-600">勾选下方工艺行以关联当前区域</p>
+            <div className="mb-2 rounded-lg border border-blue-200 bg-blue-50/90 p-2">
+              <p className="mb-1.5 text-[11px] font-semibold text-blue-900">已框选部位区域</p>
+              <p className="mb-2 text-[10px] leading-relaxed text-blue-700">
+                {linkedProcessIdsForSelection.length > 0
+                  ? "已关联工艺。修改区域或勾选后将标记为红色（手动）。"
+                  : "请选择标注方式：AI 自动识别，或在工艺 Tab 勾选行手动关联"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {onRegionAiFill && (
+                  <button
+                    type="button"
+                    disabled={interactionLocked || regionAiLoading}
+                    onClick={onRegionAiFill}
+                    className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {regionAiLoading ? "识别中…" : "AI 识别工艺"}
+                  </button>
+                )}
+                {activeTab !== "process" && (
+                  <button
+                    type="button"
+                    disabled={interactionLocked}
+                    onClick={() => onTabChange("process")}
+                    className="rounded-md border border-blue-300 bg-white px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                  >
+                    手动关联工艺
+                  </button>
+                )}
+              </div>
+              <p className="mt-1.5 text-[9px] text-slate-500">
+                <span className="font-medium text-blue-600">蓝</span>=AI 标注 ·{" "}
+                <span className="font-medium text-red-600">红</span>=手动/已修改
+              </p>
+            </div>
+          )}
+          {selectedAnnId && dimensionLinkable && (
+            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50/90 p-2">
+              <p className="mb-1.5 text-[11px] font-semibold text-emerald-900">已选尺寸线</p>
+              <p className="mb-2 text-[10px] leading-relaxed text-emerald-700">
+                {linkedSizePartForSelection
+                  ? `已关联「${linkedSizePartForSelection}」。修改后将标记为红色（手动）。`
+                  : "请选择：AI 自动识别测量点，或在尺寸 Tab 勾选行手动关联"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {onDimensionAiFill && (
+                  <button
+                    type="button"
+                    disabled={interactionLocked || dimensionAiLoading}
+                    onClick={onDimensionAiFill}
+                    className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {dimensionAiLoading ? "识别中…" : "AI 识别尺寸"}
+                  </button>
+                )}
+                {activeTab !== "size" && (
+                  <button
+                    type="button"
+                    disabled={interactionLocked}
+                    onClick={() => onTabChange("size")}
+                    className="rounded-md border border-emerald-300 bg-white px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    手动关联尺寸
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {selectedAnnId && shapeLinkable && activeTab === "process" && (
+            <p className="mb-2 text-[10px] text-blue-600">勾选工艺行以关联当前区域</p>
+          )}
+
+          {selectedAnnId && dimensionLinkable && activeTab === "size" && (
+            <p className="mb-2 text-[10px] text-emerald-600">勾选尺寸行以关联当前尺寸线</p>
           )}
 
           {activeTab === "process" && (
@@ -381,6 +482,23 @@ export default function StudioDataPanel({
               onChange={(size_chart) => onPersist({ ...project, size_chart })}
               compact
               flat
+              selectedAnnId={selectedAnnId}
+              dimensionLinkable={dimensionLinkable}
+              linkedSizePartForSelection={linkedSizePartForSelection}
+              onToggleSizeLink={onToggleSizeLink}
+              highlightedSizePart={highlightedSizePart}
+              onSizeRowSelect={onSizeRowSelect}
+              dimensionCounts={dimensionCounts}
+              onRemoveRowPart={(part) => {
+                const artboards = project.canvas_data.artboards.map((ab) => ({
+                  ...ab,
+                  annotations: clearSizePartFromAnnotations(ab.annotations, part),
+                }));
+                onPersist({
+                  ...project,
+                  canvas_data: { ...project.canvas_data, artboards },
+                });
+              }}
             />
           )}
 
