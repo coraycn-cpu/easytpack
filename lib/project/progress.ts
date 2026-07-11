@@ -1,6 +1,6 @@
 import type { TechPackProject } from "@/types/project";
 import {
-  countLinkedProcessParts,
+  countLinkedProcessItems,
   hasCanvasAnnotations,
 } from "@/lib/canvas/part-annotations";
 
@@ -11,13 +11,8 @@ export function calcProgress(project: TechPackProject): number {
   if (project.bom_items.length > 0) score += 15;
   if (project.size_chart.rows.length > 0) score += 15;
 
-  const linked = countLinkedProcessParts(project);
-  if (linked > 0) score += 10;
-
-  const hasMarkers = project.canvas_data.artboards.some((a) =>
-    a.annotations.some((ann) => ann.type === "marker"),
-  );
-  if (hasMarkers) score += 5;
+  const linked = countLinkedProcessItems(project);
+  if (linked > 0) score += 15;
 
   if (project.workflowStatus === "finalized") score += 5;
 

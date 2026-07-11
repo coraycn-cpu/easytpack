@@ -1,5 +1,7 @@
 import type { Artboard, Annotation } from "@/types/project";
+import type { ProcessItem } from "@/types/process";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
+import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { migrateArtboardHotspots } from "@/lib/project/hotspots";
@@ -24,14 +26,14 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
   switch (a.type) {
     case "rect":
       if (a.width && a.height) {
-        if (a.linkedPart) ctx.setLineDash([6, 3]);
+        if (a.linkedProcessIds?.length) ctx.setLineDash([6, 3]);
         ctx.fillStyle = `${c}33`;
         ctx.fillRect(a.x, a.y, a.width, a.height);
         ctx.strokeRect(a.x, a.y, a.width, a.height);
         ctx.setLineDash([]);
-        const label = a.linkedPart ?? a.text;
+        const label = a.text;
         if (label) {
-          ctx.fillStyle = a.linkedPart ? "#1d4ed8" : c;
+          ctx.fillStyle = a.linkedProcessIds?.length ? "#1d4ed8" : c;
           ctx.font = "bold 13px sans-serif";
           ctx.fillText(label, a.x + 4, a.y > 16 ? a.y - 6 : a.y + 16);
         }
@@ -76,20 +78,6 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
         ctx.fillText(a.text, a.x, a.y);
       }
       break;
-    case "marker": {
-      const num = a.markerIndex ?? 1;
-      const label = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧"][num - 1] ?? `${num}`;
-      ctx.beginPath();
-      ctx.arc(a.x, a.y, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 14px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(label, a.x, a.y + 5);
-      ctx.textAlign = "left";
-      ctx.fillStyle = c;
-      break;
-    }
     case "freehand":
       if (a.points && a.points.length > 2) {
         ctx.beginPath();
@@ -103,9 +91,29 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
   }
 }
 
+function drawSequenceBadges(
+  ctx: CanvasRenderingContext2D,
+  processItems: ProcessItem[],
+  annotations: Annotation[],
+) {
+  const badges = computeSequenceBadges(processItems, annotations);
+  for (const b of badges) {
+    ctx.beginPath();
+    ctx.arc(b.x + 14, b.y + 14, 14, 0, Math.PI * 2);
+    ctx.fillStyle = "#2563eb";
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(b.label, b.x + 14, b.y + 19);
+    ctx.textAlign = "left";
+  }
+}
+
 export async function renderArtboardToDataUrl(
   artboard: Artboard,
   imageFallback?: string,
+  processItems: ProcessItem[] = [],
 ): Promise<string | null> {
   const src = artboard.imageDataUrl ?? imageFallback;
   if (!src) return null;
@@ -123,7 +131,9 @@ export async function renderArtboardToDataUrl(
   ctx.drawImage(img, fit.x, fit.y, fit.width, fit.height);
 
   const ab = migrateArtboardHotspots(artboard);
-  normalizeAnnotations(ab.annotations).forEach((ann) => drawAnnotation(ctx, ann));
+  const anns = normalizeAnnotations(ab.annotations);
+  anns.forEach((ann) => drawAnnotation(ctx, ann));
+  drawSequenceBadges(ctx, processItems, anns);
 
   return canvas.toDataURL("image/png");
 }
@@ -131,10 +141,11 @@ export async function renderArtboardToDataUrl(
 export async function renderAllArtboards(
   artboards: Artboard[],
   imageFallback?: string,
+  processItems: ProcessItem[] = [],
 ): Promise<Array<{ name: string; dataUrl: string }>> {
   const results: Array<{ name: string; dataUrl: string }> = [];
   for (const ab of artboards) {
-    const dataUrl = await renderArtboardToDataUrl(ab, imageFallback);
+    const dataUrl = await renderArtboardToDataUrl(ab, imageFallback, processItems);
     if (dataUrl) results.push({ name: ab.name, dataUrl });
   }
   return results;

@@ -2,9 +2,10 @@ import { generateObject } from "ai";
 import type { z } from "zod";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
+  BatchAnnotateSchema,
   EnhanceTechPackSchema,
+  RegionAnnotateSchema,
   SizeChartAssistSchema,
-  SmartAnnotateSchema,
   type AiProvider,
 } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
@@ -16,7 +17,6 @@ export function getModel(): string {
   return process.env.AI_MODEL_GATEWAY || "google/gemini-2.5-flash";
 }
 
-/** Gateway 生图模型（Nano Banana / Imagen / Flux 等） */
 export function getImageModel(): string {
   return process.env.AI_MODEL_GATEWAY_IMAGE || "google/gemini-2.5-flash-image";
 }
@@ -69,22 +69,23 @@ export async function generateSizeChartAssist(input: {
   imageDataUrl?: string;
   answers?: Record<string, string | string[]>;
   existingChart?: SizeChart;
+  sampleSize: string;
 }) {
   const context = `
 品类：${input.category ?? "未指定"}
 用户描述：${input.description ?? "无"}
+图片中样衣基准码：${input.sampleSize}
 已有尺码表：${JSON.stringify(input.existingChart ?? {})}
 补充信息：${JSON.stringify(input.answers ?? {})}
 `.trim();
 
   return callStructured({
-    instructions: `你是资深版师，正在为「非服装专业人士」生成尺码表。
+    instructions: `你是资深版师，正在为「非服装专业人士」生成尺码表（POM）。
 要求：
-- 根据品类给出行业标准尺码（通常 S/M/L/XL 或 26-34）
-- 数值单位 cm，保留一位小数
-- method 字段用通俗语言说明怎么量（如「衣服平铺，量腋下最宽处」）
-- plainExplanation 用小白能懂的话总结，告诉用户这些数字代表什么
-- 如果是套装，上下装分开列出部位`,
+- 以用户提供的样衣基准码「${input.sampleSize}」为参考，估算各部位数值（cm，一位小数）
+- 同时生成该品类常用尺码列（如 S/M/L/XL），按行业标准比例推算各码数值
+- method 字段用通俗语言说明怎么量
+- plainExplanation 用小白能懂的话总结`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: SizeChartAssistSchema,
@@ -92,39 +93,69 @@ export async function generateSizeChartAssist(input: {
   });
 }
 
+export async function generateBatchAnnotations(input: {
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  processItems: Array<{ id?: string; part: string; process: string }>;
+}) {
+  const parts = input.processItems
+    .map((p) => `- id=${p.id ?? "?"} | ${p.part}：${p.process}`)
+    .join("\n");
+
+  const context = `
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+现有工艺条目：
+${parts || "（尚无，请识别主要结构部位并创建工艺描述）"}
+
+画布尺寸：${CANVAS_W}×${CANVAS_H} 像素，原点在左上角。
+请输出最多 6 个矩形区域（x,y,width,height），每个区域对应一条工艺。
+若已有工艺 id 匹配，填 linkToExistingProcessId；否则在 process 字段给出 part/process/stitch/seam_allowance。
+只输出 rect 区域数据，不要 arrow/marker/text。
+userTips 简要说明标注了什么。`.trim();
+
+  return callStructured({
+    instructions: `你是服装 Tech Pack 版师，在款式图上标注结构部位区域。
+坐标必须落在服装结构上，不要标注人脸或背景。每个区域一个矩形框。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: BatchAnnotateSchema,
+    schemaName: "batch_annotate",
+  });
+}
+
+export async function generateRegionAnnotate(input: {
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  region: { x: number; y: number; width: number; height: number };
+  existingPart?: string;
+}) {
+  const context = `
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+用户框选区域（1000×750 坐标）：x=${input.region.x}, y=${input.region.y}, width=${input.region.width}, height=${input.region.height}
+${input.existingPart ? `已有部位名参考：${input.existingPart}` : ""}
+请识别该区域的服装结构部位，输出 part/process/stitch/seam_allowance。`.trim();
+
+  return callStructured({
+    instructions: `你是版房工艺师，根据款式图局部区域填写工艺说明。输出简洁专业。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: RegionAnnotateSchema,
+    schemaName: "region_annotate",
+  });
+}
+
+/** @deprecated 使用 generateBatchAnnotations */
 export async function generateSmartAnnotations(input: {
   category?: string;
   description?: string;
   imageDataUrl?: string;
   processItems: Array<{ part: string; process: string }>;
 }) {
-  const parts = input.processItems
-    .map((p, i) => `${i + 1}. ${p.part}：${p.process}`)
-    .join("\n");
-
-  const context = `
-品类：${input.category ?? "未指定"}
-描述：${input.description ?? "无"}
-工艺条目：
-${parts || "（尚无，请根据图片识别主要部位）"}
-
-画布尺寸：${CANVAS_W}×${CANVAS_H} 像素。坐标原点在左上角。
-请只在服装区域标注，不要标注人脸。标注类型：
-- marker：序号圆点 ①②③，linkedPart 填对应工艺部位名
-- arrow：箭头指向细节
-- rect：框选结构区域
-- dimension：尺寸线，text 写如「胸宽 52cm」
-- text：简短说明文字
-最多 8 个标注，避免拥挤。userTips 告诉用户「图上标了什么、版师会怎么看」。`;
-
-  return callStructured({
-    instructions: `你是服装技术插画师，帮非专业用户在款式图上做清晰标注，方便版师和工厂理解。
-标注坐标必须合理落在服装结构上。`,
-    userText: context,
-    imageDataUrl: input.imageDataUrl,
-    schema: SmartAnnotateSchema,
-    schemaName: "smart_annotate",
-  });
+  return generateBatchAnnotations({ ...input, processItems: input.processItems });
 }
 
 export async function enhanceTechPack(project: TechPackProject) {

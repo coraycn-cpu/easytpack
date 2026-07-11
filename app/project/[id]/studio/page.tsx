@@ -8,15 +8,18 @@ import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import {
+  annotationToLogicalRect,
   loadImagePlacement,
   mapAiAnnotationToCanvas,
 } from "@/lib/canvas/bounds";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import {
-  findAnnotationForProcessInProject,
-  findProcessIndexForAnnotation,
-  linkAnnotationToProcess,
+  findAnnotationsForProcessInProject,
+  findProcessIdsForAnnotation,
+  toggleShapeProcessLink,
 } from "@/lib/canvas/part-annotations";
+import { PART_ANNOTATION_COLOR } from "@/lib/project/hotspots";
+import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
@@ -56,10 +59,8 @@ export default function StudioPage() {
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
-  const [highlightedProcessIndex, setHighlightedProcessIndex] = useState<number | null>(
-    null,
-  );
-  const [linkedHighlightAnnId, setLinkedHighlightAnnId] = useState<string | null>(null);
+  const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
+  const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
 
   useEffect(() => {
     const p = getProject(id);
@@ -124,26 +125,27 @@ export default function StudioPage() {
   };
 
   const handleProcessRowSelect = useCallback(
-    (processIndex: number) => {
+    (processId: string, _index: number) => {
       if (!project) return;
-      setHighlightedProcessIndex(processIndex);
+      setHighlightedProcessIds([processId]);
       setActiveTab("process");
-      const found = findAnnotationForProcessInProject(project, processIndex);
-      if (found) {
-        if (found.artboardId !== activeArtboardId) {
-          setActiveArtboardId(found.artboardId);
+      const linked = findAnnotationsForProcessInProject(project, processId);
+      if (linked.length > 0) {
+        const first = linked[0];
+        if (first.artboardId !== activeArtboardId) {
+          setActiveArtboardId(first.artboardId);
           persist({
             ...project,
             canvas_data: {
               ...project.canvas_data,
-              activeArtboardId: found.artboardId,
+              activeArtboardId: first.artboardId,
             },
           });
         }
-        setSelectedAnnId(found.annotation.id);
-        setLinkedHighlightAnnId(found.annotation.id);
+        setSelectedAnnId(first.annotation.id);
+        setLinkedHighlightAnnIds(linked.map((l) => l.annotation.id));
       } else {
-        setLinkedHighlightAnnId(null);
+        setLinkedHighlightAnnIds([]);
       }
     },
     [project, activeArtboardId, persist],
@@ -153,38 +155,33 @@ export default function StudioPage() {
     (annId: string | null) => {
       setSelectedAnnId(annId);
       if (!project || !annId) {
-        setHighlightedProcessIndex(null);
-        setLinkedHighlightAnnId(null);
+        setHighlightedProcessIds([]);
+        setLinkedHighlightAnnIds([]);
         return;
       }
       const ab = project.canvas_data.artboards.find((a) => a.id === activeArtboardId);
       const ann = ab?.annotations.find((a) => a.id === annId);
       if (!ann) return;
-      const processIndex = findProcessIndexForAnnotation(
-        ab?.annotations ?? [],
-        project.process_items,
-        ann,
-      );
-      setHighlightedProcessIndex(processIndex >= 0 ? processIndex : null);
-      setLinkedHighlightAnnId(annId);
-      if (processIndex >= 0) setActiveTab("process");
+      const pids = findProcessIdsForAnnotation(ann, project.process_items);
+      setHighlightedProcessIds(pids);
+      setLinkedHighlightAnnIds([annId]);
+      if (pids.length > 0) setActiveTab("process");
     },
     [project, activeArtboardId],
   );
 
-  const handleLinkSelectedAnnotation = useCallback(
-    (processIndex: number) => {
+  const handleToggleProcessLink = useCallback(
+    (processId: string, linked: boolean) => {
       if (!project || !selectedAnnId) return;
-      const part = project.process_items[processIndex]?.part?.trim() ?? "";
       const artboards = project.canvas_data.artboards.map((ab) =>
         ab.id === activeArtboardId
           ? {
               ...ab,
-              annotations: linkAnnotationToProcess(
+              annotations: toggleShapeProcessLink(
                 ab.annotations,
                 selectedAnnId,
-                processIndex,
-                part,
+                processId,
+                linked,
               ),
             }
           : ab,
@@ -193,11 +190,22 @@ export default function StudioPage() {
         ...project,
         canvas_data: { ...project.canvas_data, artboards },
       });
-      setHighlightedProcessIndex(processIndex);
-      setLinkedHighlightAnnId(selectedAnnId);
+      setHighlightedProcessIds((prev) =>
+        linked ? [...new Set([...prev, processId])] : prev.filter((id) => id !== processId),
+      );
     },
     [project, selectedAnnId, activeArtboardId, persist],
   );
+
+  const selectedAnn = useMemo(() => {
+    if (!selectedAnnId || !activeArtboard) return null;
+    return activeArtboard.annotations.find((a) => a.id === selectedAnnId) ?? null;
+  }, [selectedAnnId, activeArtboard]);
+
+  const linkedProcessIdsForSelection = useMemo(() => {
+    if (!selectedAnn) return [];
+    return findProcessIdsForAnnotation(selectedAnn, project?.process_items ?? []);
+  }, [selectedAnn, project?.process_items]);
 
   const setActiveArtboard = (artboardId: string) => {
     if (!project) return;
@@ -277,12 +285,12 @@ export default function StudioPage() {
     }
   };
 
-  const handleSmartAnnotate = async () => {
+  const handleBatchAnnotate = async () => {
     if (!project || !activeArtboard) return;
     setAiLoading(true);
     setAiMessage(null);
     try {
-      const res = await fetch("/api/ai/smart-annotate", {
+      const res = await fetch("/api/ai/annotate-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -301,23 +309,124 @@ export default function StudioPage() {
         ? await loadImagePlacement(imgUrl)
         : { x: 0, y: 0, width: 1000, height: 750 };
 
-      const newAnnotations: Annotation[] = (data.annotations ?? []).map(
-        (a: Annotation & { label?: string }, i: number) =>
-          mapAiAnnotationToCanvas(
-            a,
-            imageFit,
-            imageOffset,
-            `ann_ai_${i}_${Date.now()}`,
-          ),
+      let processItems = [...project.process_items];
+      const newAnnotations: Annotation[] = [];
+
+      for (const [i, region] of (data.regions ?? []).entries()) {
+        let processId = region.linkToExistingProcessId as string | undefined;
+        const existingIdx = processId
+          ? processItems.findIndex((p) => p.id === processId)
+          : -1;
+
+        if (existingIdx >= 0) {
+          processItems[existingIdx] = {
+            ...processItems[existingIdx],
+            ...region.process,
+            id: processItems[existingIdx].id,
+          };
+          processId = processItems[existingIdx].id;
+        } else {
+          processId = generateProcessId();
+          processItems.push({ id: processId, ...region.process });
+        }
+
+        const ann = mapAiAnnotationToCanvas(
+          {
+            type: "rect",
+            x: region.x,
+            y: region.y,
+            width: region.width,
+            height: region.height,
+            color: PART_ANNOTATION_COLOR,
+            linkedProcessIds: [processId!],
+          },
+          imageFit,
+          imageOffset,
+          `ann_batch_${i}_${Date.now()}`,
+        );
+        newAnnotations.push(ann);
+      }
+
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboard.id
+          ? { ...ab, annotations: [...ab.annotations, ...newAnnotations] }
+          : ab,
+      );
+      persist({
+        ...project,
+        process_items: processItems,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+      setAiTip(data.userTips ?? "已添加 AI 区域标注");
+      setAiMessage("AI 一键标注完成");
+    } catch (e) {
+      setAiMessage(e instanceof Error ? e.message : "一键标注失败");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleRegionAiFill = async () => {
+    if (!project || !activeArtboard || !selectedAnn) return;
+    setAiLoading(true);
+    setAiMessage(null);
+    try {
+      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
+      const imageFit = imgUrl
+        ? await loadImagePlacement(imgUrl)
+        : { x: 0, y: 0, width: 1000, height: 750 };
+      const region = annotationToLogicalRect(selectedAnn, imageFit, imageOffset);
+
+      const res = await fetch("/api/ai/annotate-region", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          imageDataUrl: imgUrl,
+          region,
+          existingPart: selectedAnn.linkedProcessIds?.length
+            ? project.process_items.find((p) => p.id === selectedAnn.linkedProcessIds![0])?.part
+            : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      let processItems = [...project.process_items];
+      let processId = processItems.find((p) => p.part?.trim() === data.part?.trim())?.id;
+      if (processId) {
+        const idx = processItems.findIndex((p) => p.id === processId);
+        processItems[idx] = { ...processItems[idx], ...data, id: processId };
+      } else {
+        processId = generateProcessId();
+        processItems.push({ id: processId, ...data });
+      }
+
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboardId
+          ? {
+              ...ab,
+              annotations: toggleShapeProcessLink(
+                ab.annotations,
+                selectedAnn.id,
+                processId!,
+                true,
+              ),
+            }
+          : ab,
       );
 
-      updateArtboard(activeArtboard.id, {
-        annotations: [...activeArtboard.annotations, ...newAnnotations],
+      persist({
+        ...project,
+        process_items: processItems,
+        canvas_data: { ...project.canvas_data, artboards },
       });
-      setAiTip(data.userTips ?? "已在当前画板添加智能标注");
-      setAiMessage("智能标注完成");
+      setHighlightedProcessIds([processId!]);
+      setAiMessage(`已识别：${data.part}`);
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "标注失败");
+      setAiMessage(e instanceof Error ? e.message : "区域识别失败");
     } finally {
       setAiLoading(false);
     }
@@ -325,6 +434,8 @@ export default function StudioPage() {
 
   const handleGenerateSize = async () => {
     if (!project) return;
+    const sampleSize = window.prompt("请问图片中这件样衣是（ ）码？", "M");
+    if (!sampleSize?.trim()) return;
     setAiLoading(true);
     setAiMessage(null);
     try {
@@ -337,6 +448,7 @@ export default function StudioPage() {
           imageDataUrl: project.intake.imageDataUrl,
           answers: project.questionnaire.answers,
           existingChart: project.size_chart,
+          sampleSize: sampleSize.trim(),
         }),
       });
       const data = await res.json();
@@ -370,7 +482,9 @@ export default function StudioPage() {
         const existing = new Set(updated.process_items.map((p) => p.part));
         updated.process_items = [
           ...updated.process_items,
-          ...data.process_items.filter((p: ProcessItem) => !existing.has(p.part)),
+          ...data.process_items
+            .filter((p: ProcessItem) => !existing.has(p.part))
+            .map((p: ProcessItem) => ({ ...p, id: p.id ?? generateProcessId() })),
         ];
       }
       if (data.bom_items?.length) updated.bom_items = [...updated.bom_items, ...data.bom_items];
@@ -480,11 +594,9 @@ export default function StudioPage() {
               onImageOffsetChange={(imageOffset) =>
                 updateArtboard(activeArtboard.id, { imageOffset })
               }
-              nextMarkerIndex={
-                activeArtboard.annotations.filter((a) => a.type === "marker").length + 1
-              }
-              onSmartAnnotate={handleSmartAnnotate}
-              smartAnnotateLoading={aiLoading}
+              onRegionAiFill={handleRegionAiFill}
+              onBatchAnnotate={handleBatchAnnotate}
+              batchAnnotateLoading={aiLoading}
               aiLoading={aiLoading || viewGenerating}
               onGenerateSize={handleGenerateSize}
               onEnhanceAll={handleEnhanceAll}
@@ -502,7 +614,7 @@ export default function StudioPage() {
               processItems={project.process_items}
               selectedAnnId={selectedAnnId}
               onSelectedAnnIdChange={handleSelectedAnnIdChange}
-              linkedHighlightAnnId={linkedHighlightAnnId}
+              linkedHighlightAnnIds={linkedHighlightAnnIds}
             />
           </InfiniteCanvas>
 
@@ -513,14 +625,12 @@ export default function StudioPage() {
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onPersist={persist}
-                activeArtboardAnnotations={activeArtboard?.annotations ?? []}
-                highlightedProcessIndex={highlightedProcessIndex}
+                highlightedProcessIds={highlightedProcessIds}
                 onProcessRowSelect={handleProcessRowSelect}
                 selectedAnnId={selectedAnnId}
-                onLinkSelectedAnnotation={handleLinkSelectedAnnotation}
-                findLinkedAnnotation={(i) =>
-                  findAnnotationForProcessInProject(project, i)?.annotation
-                }
+                selectedAnn={selectedAnn}
+                linkedProcessIdsForSelection={linkedProcessIdsForSelection}
+                onToggleProcessLink={handleToggleProcessLink}
               />
             </div>
           </div>

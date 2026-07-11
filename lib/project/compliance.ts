@@ -1,7 +1,7 @@
 import type { TechPackProject } from "@/types/project";
 import {
-  countLinkedProcessParts,
-  getAllLinkedParts,
+  countLinkedProcessItems,
+  getAllLinkedProcessIds,
   hasCanvasAnnotations,
 } from "@/lib/canvas/part-annotations";
 
@@ -40,9 +40,9 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
     }
   });
 
-  const linkedParts = new Set(getAllLinkedParts(project));
+  const linkedIds = getAllLinkedProcessIds(project);
   const unlinkedProcess = project.process_items.filter(
-    (p) => p.part?.trim() && !linkedParts.has(p.part.trim()),
+    (p) => p.id && p.part?.trim() && !linkedIds.has(p.id),
   );
   if (unlinkedProcess.length > 0 && hasCanvasAnnotations(project)) {
     issues.push({

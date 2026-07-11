@@ -27,8 +27,8 @@ type CanvasToolbarProps = {
   hint?: string;
   flat?: boolean;
   theme?: "light" | "dark";
-  onSmartAnnotate?: () => void;
-  smartAnnotateLoading?: boolean;
+  onBatchAnnotate?: () => void;
+  batchAnnotateLoading?: boolean;
   aiLoading?: boolean;
   onGenerateSize?: () => void;
   onEnhanceAll?: () => void;
@@ -44,7 +44,6 @@ const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
   { id: "text", label: "文字", icon: "T" },
   { id: "dimension", label: "尺寸", icon: "↔" },
   { id: "freehand", label: "画笔", icon: "✎" },
-  { id: "marker", label: "序号", icon: "①" },
 ];
 
 export default function CanvasToolbar({
@@ -66,8 +65,8 @@ export default function CanvasToolbar({
   hint,
   flat,
   theme = "dark",
-  onSmartAnnotate,
-  smartAnnotateLoading,
+  onBatchAnnotate,
+  batchAnnotateLoading,
   aiLoading,
   onGenerateSize,
   onEnhanceAll,
@@ -113,7 +112,7 @@ export default function CanvasToolbar({
     }`;
 
   const hasAi =
-    onSmartAnnotate || onGenerateSize || onEnhanceAll || onExplain;
+    onBatchAnnotate || onGenerateSize || onEnhanceAll || onExplain;
 
   return (
     <div
@@ -194,15 +193,15 @@ export default function CanvasToolbar({
               <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-blue-500 lg:inline">
                 AI 辅助
               </span>
-              {onSmartAnnotate && (
+              {onBatchAnnotate && (
                 <button
                   type="button"
-                  disabled={smartAnnotateLoading || aiLoading}
-                  onClick={onSmartAnnotate}
+                  disabled={batchAnnotateLoading || aiLoading}
+                  onClick={onBatchAnnotate}
                   className={aiBtn(true)}
                 >
                   <span>✦</span>
-                  {smartAnnotateLoading ? "标注中…" : "智能标注"}
+                  {batchAnnotateLoading ? "标注中…" : "AI 一键标注"}
                 </button>
               )}
               {onGenerateSize && (
@@ -212,7 +211,7 @@ export default function CanvasToolbar({
                   onClick={onGenerateSize}
                   className={aiBtn()}
                 >
-                  生成尺码
+                  AI 填尺寸表
                 </button>
               )}
               {onEnhanceAll && (

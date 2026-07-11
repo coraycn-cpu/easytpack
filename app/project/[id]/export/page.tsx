@@ -38,6 +38,7 @@ export default function ExportPage() {
     renderAllArtboards(
       project.canvas_data.artboards,
       project.intake.imageDataUrl,
+      project.process_items,
     ).then(setAnnotatedImages);
   }, [project]);
 

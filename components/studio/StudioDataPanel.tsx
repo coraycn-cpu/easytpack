@@ -3,11 +3,12 @@
 import { useState } from "react";
 import SizeChartEditor from "@/components/studio/SizeChartEditor";
 import {
-  clearAnnotationLinkForProcessIndex,
-  findAnnotationForProcessIndex,
+  clearProcessIdFromAnnotations,
+  countShapesLinkedToProcess,
   getMarkerLabel,
-  syncLinkedPartOnProcessRename,
+  isLinkableShape,
 } from "@/lib/canvas/part-annotations";
+import { generateProcessId } from "@/lib/process/ids";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, TechPackProject } from "@/types/project";
 
@@ -18,12 +19,12 @@ type StudioDataPanelProps = {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   onPersist: (project: TechPackProject) => void;
-  activeArtboardAnnotations?: Annotation[];
-  highlightedProcessIndex?: number | null;
-  onProcessRowSelect?: (index: number) => void;
+  highlightedProcessIds?: string[];
+  onProcessRowSelect?: (processId: string, index: number) => void;
   selectedAnnId?: string | null;
-  onLinkSelectedAnnotation?: (processIndex: number) => void;
-  findLinkedAnnotation?: (processIndex: number) => Annotation | undefined;
+  selectedAnn?: Annotation | null;
+  linkedProcessIdsForSelection?: string[];
+  onToggleProcessLink?: (processId: string, linked: boolean) => void;
 };
 
 const BOM_CATEGORIES: Array<{ value: BomItem["category"]; label: string }> = [
@@ -56,52 +57,35 @@ export default function StudioDataPanel({
   activeTab,
   onTabChange,
   onPersist,
-  activeArtboardAnnotations = [],
-  highlightedProcessIndex = null,
+  highlightedProcessIds = [],
   onProcessRowSelect,
   selectedAnnId,
-  onLinkSelectedAnnotation,
-  findLinkedAnnotation,
+  selectedAnn,
+  linkedProcessIdsForSelection = [],
+  onToggleProcessLink,
 }: StudioDataPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const shapeLinkable = selectedAnn ? isLinkableShape(selectedAnn.type) : false;
 
   const updateProcess = (index: number, patch: Partial<ProcessItem>) => {
     const items = [...project.process_items];
-    const oldPart = items[index]?.part ?? "";
     items[index] = { ...items[index], ...patch };
-
-    let artboards = project.canvas_data.artboards;
-    if (patch.part !== undefined && patch.part !== oldPart) {
-      artboards = artboards.map((ab) => ({
-        ...ab,
-        annotations: syncLinkedPartOnProcessRename(
-          ab.annotations,
-          oldPart,
-          patch.part ?? "",
-          index,
-        ),
-      }));
-    }
-
-    onPersist({
-      ...project,
-      process_items: items,
-      canvas_data: { ...project.canvas_data, artboards },
-    });
+    onPersist({ ...project, process_items: items });
   };
 
   const addProcess = () => {
     onPersist({
       ...project,
-      process_items: [...project.process_items, { ...EMPTY_PROCESS }],
+      process_items: [...project.process_items, { ...EMPTY_PROCESS, id: generateProcessId() }],
     });
   };
 
   const removeProcess = (index: number) => {
     const item = project.process_items[index];
+    if (!item?.id) return;
     const artboards = project.canvas_data.artboards.map((ab) => ({
       ...ab,
-      annotations: clearAnnotationLinkForProcessIndex(ab.annotations, index, item?.part),
+      annotations: clearProcessIdFromAnnotations(ab.annotations, item.id!),
     }));
     onPersist({
       ...project,
@@ -160,48 +144,65 @@ export default function StudioDataPanel({
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+          {selectedAnnId && !shapeLinkable && (
+            <p className="mb-2 text-[10px] text-slate-400">
+              装饰标注不可关联工艺，请选方框/圆圈
+            </p>
+          )}
+          {selectedAnnId && shapeLinkable && (
+            <p className="mb-2 text-[10px] text-blue-600">勾选下方工艺行以关联当前区域</p>
+          )}
+
           {activeTab === "process" && (
             <div className="space-y-1.5">
               {project.process_items.map((item, i) => {
-                const linkedAnn =
-                  findLinkedAnnotation?.(i) ??
-                  findAnnotationForProcessIndex(
-                    activeArtboardAnnotations,
-                    project.process_items,
-                    i,
-                  );
-                const isHighlighted = highlightedProcessIndex === i;
-                const markerLabel = linkedAnn?.markerIndex
-                  ? getMarkerLabel(linkedAnn.markerIndex)
-                  : getMarkerLabel(i + 1);
+                const processId = item.id;
+                const isHighlighted = processId
+                  ? highlightedProcessIds.includes(processId)
+                  : false;
+                const shapeCount = processId
+                  ? countShapesLinkedToProcess(project, processId)
+                  : 0;
+                const isLinkedToSelection = processId
+                  ? linkedProcessIdsForSelection.includes(processId)
+                  : false;
 
                 return (
                   <div
-                    key={i}
+                    key={item.id ?? i}
                     role="button"
                     tabIndex={0}
-                    onClick={() => onProcessRowSelect?.(i)}
+                    onClick={() => processId && onProcessRowSelect?.(processId, i)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") onProcessRowSelect?.(i);
+                      if ((e.key === "Enter" || e.key === " ") && processId) {
+                        onProcessRowSelect?.(processId, i);
+                      }
                     }}
                     className={`rounded border px-2 py-1.5 transition ${
                       isHighlighted
                         ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300"
-                        : linkedAnn
+                        : shapeCount > 0
                           ? "border-blue-200 bg-blue-50/50 hover:border-blue-300"
                           : "border-slate-200 bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <div className="mb-1 flex items-center gap-1.5">
+                      {selectedAnnId && shapeLinkable && processId && onToggleProcessLink && (
+                        <input
+                          type="checkbox"
+                          checked={isLinkedToSelection}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => onToggleProcessLink(processId, e.target.checked)}
+                          className="shrink-0"
+                          title="关联当前选中区域"
+                        />
+                      )}
                       <span
                         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                          linkedAnn
-                            ? "bg-blue-600 text-white"
-                            : "bg-slate-200 text-slate-500"
+                          shapeCount > 0 ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-500"
                         }`}
-                        title={linkedAnn ? "已关联标注" : "未关联标注"}
                       >
-                        {markerLabel}
+                        {getMarkerLabel(i + 1)}
                       </span>
                       <input
                         value={item.part}
@@ -210,18 +211,8 @@ export default function StudioDataPanel({
                         placeholder="部位名称"
                         className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-800 outline-none"
                       />
-                      {selectedAnnId && onLinkSelectedAnnotation && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onLinkSelectedAnnotation(i);
-                          }}
-                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100"
-                          title="关联当前选中标注"
-                        >
-                          关联
-                        </button>
+                      {shapeCount > 0 && (
+                        <span className="shrink-0 text-[9px] text-blue-500">{shapeCount} 区</span>
                       )}
                       <button
                         type="button"
@@ -253,7 +244,6 @@ export default function StudioDataPanel({
                       />
                       <input
                         value={item.seam_allowance ?? ""}
-                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateProcess(i, { seam_allowance: e.target.value })}
                         placeholder="缝份"
                         className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
@@ -264,7 +254,7 @@ export default function StudioDataPanel({
               })}
               {project.process_items.length === 0 && (
                 <p className="text-[11px] text-slate-400">
-                  暂无工艺条目，可手动添加或点击顶部「一键补全」
+                  暂无工艺条目，可手动添加或使用 AI 一键标注
                 </p>
               )}
               <button
@@ -295,7 +285,6 @@ export default function StudioDataPanel({
                       type="button"
                       onClick={() => removeBom(i)}
                       className="shrink-0 text-slate-300 hover:text-red-500"
-                      title="删除"
                     >
                       ×
                     </button>
@@ -304,9 +293,7 @@ export default function StudioDataPanel({
                     <select
                       value={item.category ?? "fabric"}
                       onChange={(e) =>
-                        updateBom(i, {
-                          category: e.target.value as BomItem["category"],
-                        })
+                        updateBom(i, { category: e.target.value as BomItem["category"] })
                       }
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     >
@@ -356,14 +343,12 @@ export default function StudioDataPanel({
                 </div>
               ))}
               {project.bom_items.length === 0 && (
-                <p className="text-[11px] text-slate-400">
-                  暂无物料，可手动添加或点击顶部「一键补全」
-                </p>
+                <p className="text-[11px] text-slate-400">暂无物料，可手动添加或点击「一键补全」</p>
               )}
               <button
                 type="button"
                 onClick={addBom}
-                className="w-full rounded border border-dashed border-slate-300 py-1.5 text-[11px] text-slate-500 hover:border-slate-400 hover:text-slate-700"
+                className="w-full rounded border border-dashed border-slate-300 py-1.5 text-[11px] text-slate-500"
               >
                 + 添加物料行
               </button>

@@ -69,8 +69,11 @@ export type Annotation = {
   y2?: number;
   text?: string;
   points?: number[];
-  /** 序号标注 ①②③，关联工艺条目 */
+  /** 闭合形状关联的工艺行 ID（多对多） */
+  linkedProcessIds?: string[];
+  /** @deprecated 迁移至 linkedProcessIds */
   markerIndex?: number;
+  /** @deprecated 迁移至 linkedProcessIds */
   linkedPart?: string;
 };
 

@@ -1,4 +1,6 @@
 import type { Hotspot } from "@/types/process";
+import { migrateAnnotationLinks } from "@/lib/canvas/migrate";
+import { ensureProcessItemIds } from "@/lib/process/ids";
 import {
   DEFAULT_ARTBOARD_NAMES,
   type Annotation,
@@ -86,12 +88,14 @@ export function migrateProject(project: TechPackProject): TechPackProject {
     );
   }
 
-  return {
+  return migrateAnnotationLinks({
     ...project,
     workflowStatus: project.workflowStatus ?? "draft",
     canvas_data,
-    process_items: project.process_items.map(({ hotspotId: _id, ...item }) => item),
-  };
+    process_items: ensureProcessItemIds(
+      project.process_items.map(({ hotspotId: _id, ...item }) => item),
+    ),
+  });
 }
 
 function overlapRatio(a: Hotspot, b: Hotspot): number {

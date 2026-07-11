@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 export const ProcessItemSchema = z.object({
+  id: z.string().optional().describe("工艺行稳定 ID，加载时自动补全"),
   part: z.string().describe("部位，如：袖口、领圈"),
   process: z.string().describe("工艺描述"),
   stitch: z.string().optional().describe("针法/线迹"),
   seam_allowance: z.string().optional().describe("缝份"),
-  hotspotId: z.string().optional().describe("@deprecated 已改用标注 linkedPart"),
+  hotspotId: z.string().optional().describe("@deprecated"),
 });
 
 export const ProcessListSchema = z.object({
@@ -98,6 +99,27 @@ export const SizeChartAssistSchema = z.object({
   plainExplanation: z
     .string()
     .describe("用非专业人士能理解的语言解释这份尺码表"),
+});
+
+export const BatchAnnotateRegionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  process: ProcessItemSchema.omit({ id: true }),
+  linkToExistingProcessId: z.string().optional(),
+});
+
+export const BatchAnnotateSchema = z.object({
+  regions: z.array(BatchAnnotateRegionSchema).max(6),
+  userTips: z.string(),
+});
+
+export const RegionAnnotateSchema = z.object({
+  part: z.string(),
+  process: z.string(),
+  stitch: z.string().optional(),
+  seam_allowance: z.string().optional(),
 });
 
 export const SmartAnnotationItemSchema = z.object({

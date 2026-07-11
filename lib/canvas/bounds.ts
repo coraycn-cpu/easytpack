@@ -171,7 +171,7 @@ export function computeStudioStageBounds(input: {
 
 /** 将 AI 返回的 1000×750 坐标映射到当前款式图位置 */
 export function mapAiAnnotationToCanvas(
-  ann: Annotation & { label?: string },
+  ann: Partial<Annotation> & Pick<Annotation, "type" | "x" | "y"> & { label?: string },
   imageFit: { x: number; y: number; width: number; height: number },
   imageOffset: { x: number; y: number },
   id: string,
@@ -189,8 +189,7 @@ export function mapAiAnnotationToCanvas(
     y: ann.y * sy + oy,
     strokeWidth: ann.strokeWidth ?? 3,
     text: ann.text ?? ann.label,
-    markerIndex: ann.markerIndex,
-    linkedPart: ann.linkedPart ?? ann.label,
+    linkedProcessIds: ann.linkedProcessIds,
   };
 
   if (ann.width != null) mapped.width = ann.width * sx;
@@ -202,6 +201,24 @@ export function mapAiAnnotationToCanvas(
   }
 
   return mapped;
+}
+
+/** 画布坐标 → 1000×750 逻辑坐标（AI 区域识别用） */
+export function annotationToLogicalRect(
+  ann: Pick<Annotation, "x" | "y" | "width" | "height">,
+  imageFit: { x: number; y: number; width: number; height: number },
+  imageOffset: { x: number; y: number },
+) {
+  const sx = CANVAS_W / imageFit.width;
+  const sy = CANVAS_H / imageFit.height;
+  const ox = imageFit.x + imageOffset.x;
+  const oy = imageFit.y + imageOffset.y;
+  return {
+    x: Math.round((ann.x - ox) * sx),
+    y: Math.round((ann.y - oy) * sy),
+    width: Math.round((ann.width ?? 0) * sx),
+    height: Math.round((ann.height ?? 0) * sy),
+  };
 }
 
 export function loadImagePlacement(dataUrl: string, maxDim = 900) {

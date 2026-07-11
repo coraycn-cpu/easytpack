@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Stage,
@@ -24,7 +24,8 @@ import {
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
-import { linkedPartForMarkerIndex } from "@/lib/canvas/part-annotations";
+import { isLinkableShape } from "@/lib/canvas/part-annotations";
+import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
 import type { ProcessItem } from "@/types/process";
 import type { Annotation, Artboard } from "@/types/project";
 import CanvasToolbar, { DEFAULT_ANNOTATION_COLOR } from "./CanvasToolbar";
@@ -41,7 +42,6 @@ type AnnotationCanvasProps = {
   onAnnotationsChange: (annotations: Annotation[]) => void;
   showImport?: boolean;
   onImageChange?: (dataUrl: string) => void;
-  nextMarkerIndex?: number;
   className?: string;
   embedded?: boolean;
   stageHeight?: number;
@@ -60,8 +60,9 @@ type AnnotationCanvasProps = {
   stagePosition?: PanelPosition;
   onStagePositionChange?: (patch: Partial<PanelPosition>) => void;
   /** AI 智能标注（固定在顶部工具栏） */
-  onSmartAnnotate?: () => void;
-  smartAnnotateLoading?: boolean;
+  onBatchAnnotate?: () => void;
+  batchAnnotateLoading?: boolean;
+  onRegionAiFill?: () => void;
   toolbarMessage?: string | null;
   /** 多画板并排模式 */
   multiArtboards?: Artboard[];
@@ -80,7 +81,7 @@ type AnnotationCanvasProps = {
   processItems?: ProcessItem[];
   selectedAnnId?: string | null;
   onSelectedAnnIdChange?: (id: string | null) => void;
-  linkedHighlightAnnId?: string | null;
+  linkedHighlightAnnIds?: string[];
 };
 
 function createId(prefix: string) {
@@ -94,7 +95,6 @@ const DRAW_TOOLS: CanvasTool[] = [
   "text",
   "dimension",
   "freehand",
-  "marker",
 ];
 
 export default function AnnotationCanvas({
@@ -103,7 +103,6 @@ export default function AnnotationCanvas({
   onAnnotationsChange,
   showImport = false,
   onImageChange,
-  nextMarkerIndex = 1,
   className = "",
   embedded = false,
   stageHeight = 480,
@@ -117,8 +116,9 @@ export default function AnnotationCanvas({
   fixedChrome = false,
   stagePosition,
   onStagePositionChange,
-  onSmartAnnotate,
-  smartAnnotateLoading,
+  onBatchAnnotate,
+  batchAnnotateLoading,
+  onRegionAiFill,
   toolbarMessage,
   multiArtboards,
   artboardSlots,
@@ -136,7 +136,7 @@ export default function AnnotationCanvas({
   processItems,
   selectedAnnId: controlledSelectedAnnId,
   onSelectedAnnIdChange,
-  linkedHighlightAnnId,
+  linkedHighlightAnnIds = [],
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -515,28 +515,6 @@ export default function AnnotationCanvas({
       return;
     }
 
-    if (currentTool === "marker") {
-      const idx = nextMarkerIndex + annotations.filter((a) => a.type === "marker").length;
-      const linkedPart = processItems
-        ? linkedPartForMarkerIndex(processItems, idx)
-        : undefined;
-      commitAnnotations([
-        ...annotations,
-        {
-          id: createId("ann"),
-          type: "marker",
-          color,
-          x: pos.x,
-          y: pos.y,
-          markerIndex: idx,
-          linkedPart,
-          strokeWidth: 3,
-        },
-      ]);
-      setTool("select");
-      return;
-    }
-
     if (currentTool === "freehand") {
       isDrawingRef.current = true;
       setIsDrawing(true);
@@ -779,13 +757,17 @@ export default function AnnotationCanvas({
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
-    const isLinkedHighlight = linkedHighlightAnnId === ann.id;
+    const isLinkedHighlight = linkedHighlightAnnIds.includes(ann.id);
+    const hasProcessLink = (ann.linkedProcessIds?.length ?? 0) > 0;
     const draggable = tool === "select" && interactive && !isPanActive;
     const listening = interactive && !isPanActive && (tool === "select" || !isDrawingMode);
 
     switch (ann.type) {
       case "rect": {
-        const partLabel = ann.linkedPart ?? ann.text;
+        const partLabel = (ann.linkedProcessIds ?? [])
+          .map((pid) => processItems?.find((p) => p.id === pid)?.part)
+          .filter(Boolean)
+          .join(" · ");
         return (
           <Group key={ann.id}>
             <Rect
@@ -796,7 +778,7 @@ export default function AnnotationCanvas({
               height={ann.height ?? 0}
               stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
-              dash={ann.linkedPart ? [6, 3] : undefined}
+              dash={hasProcessLink ? [6, 3] : undefined}
               fill={`${c}22`}
               listening={listening}
               draggable={draggable}
@@ -812,7 +794,7 @@ export default function AnnotationCanvas({
                 text={partLabel}
                 fontSize={13}
                 fontStyle="600"
-                fill={ann.linkedPart ? "#1d4ed8" : c}
+                fill={hasProcessLink ? "#1d4ed8" : c}
                 listening={false}
               />
             )}
@@ -894,45 +876,8 @@ export default function AnnotationCanvas({
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
           />
         );
-      case "marker": {
-        const num = ann.markerIndex ?? 1;
-        const label = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"][num - 1] ?? `${num}`;
-        return (
-          <Group
-            key={ann.id}
-            id={`ann_${ann.id}`}
-            x={ann.x}
-            y={ann.y}
-            listening={listening}
-            draggable={draggable}
-            onClick={(e) => handleAnnClick(e, ann.id)}
-            onTap={(e) => handleAnnClick(e, ann.id)}
-            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
-          >
-            <Circle
-              radius={14}
-              fill={c}
-              stroke={isSelected ? "#fff" : isLinkedHighlight ? "#fbbf24" : undefined}
-              strokeWidth={isSelected || isLinkedHighlight ? 3 : 2}
-            />
-            {isLinkedHighlight && (
-              <Circle radius={18} stroke="#f59e0b" strokeWidth={2} listening={false} />
-            )}
-            <Text
-              text={label}
-              fontSize={14}
-              fill="#fff"
-              width={28}
-              height={28}
-              align="center"
-              verticalAlign="middle"
-              offsetX={14}
-              offsetY={14}
-              listening={false}
-            />
-          </Group>
-        );
-      }
+      case "marker":
+        return null;
       case "freehand":
         return (
           <Line
@@ -969,6 +914,17 @@ export default function AnnotationCanvas({
               ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
               : "点击款式图或标注进行选中";
 
+  const sequenceBadges = useMemo(
+    () => computeSequenceBadges(processItems ?? [], normalizedAnnotations),
+    [processItems, normalizedAnnotations],
+  );
+
+  const selectedLinkable =
+    selectedAnnId &&
+    normalizedAnnotations.some(
+      (a) => a.id === selectedAnnId && isLinkableShape(a.type),
+    );
+
   const toolbarEl = (
     <CanvasToolbar
       tool={tool}
@@ -995,8 +951,8 @@ export default function AnnotationCanvas({
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarMessage ?? toolbarHint}
-      onSmartAnnotate={onSmartAnnotate}
-      smartAnnotateLoading={smartAnnotateLoading}
+      onBatchAnnotate={onBatchAnnotate}
+      batchAnnotateLoading={batchAnnotateLoading}
       aiLoading={aiLoading}
       onGenerateSize={onGenerateSize}
       onEnhanceAll={onEnhanceAll}
@@ -1136,6 +1092,24 @@ export default function AnnotationCanvas({
                       }}
                     />
                     {abAnns.map((ann) => renderAnnotation(ann, isActive))}
+                    {computeSequenceBadges(processItems ?? [], abAnns).map((b) => (
+                      <Group key={`badge_${ab.id}_${b.processId}_${b.annotationId}`} listening={false}>
+                        <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
+                        <Text
+                          x={b.x + 14}
+                          y={b.y + 14}
+                          text={b.label}
+                          fontSize={14}
+                          fill="#fff"
+                          width={28}
+                          height={28}
+                          align="center"
+                          verticalAlign="middle"
+                          offsetX={14}
+                          offsetY={14}
+                        />
+                      </Group>
+                    ))}
                     {isActive && draftRect && (
                       <Rect
                         x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
@@ -1202,6 +1176,24 @@ export default function AnnotationCanvas({
             />
           )}
           {!multiMode && normalizedAnnotations.map((ann) => renderAnnotation(ann))}
+          {sequenceBadges.map((b) => (
+            <Group key={`badge_${b.processId}_${b.annotationId}_${b.x}`} listening={false}>
+              <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
+              <Text
+                x={b.x + 14}
+                y={b.y + 14}
+                text={b.label}
+                fontSize={14}
+                fill="#fff"
+                width={28}
+                height={28}
+                align="center"
+                verticalAlign="middle"
+                offsetX={14}
+                offsetY={14}
+              />
+            </Group>
+          ))}
           {!multiMode && draftRect && (
             <Rect
               x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
@@ -1291,6 +1283,16 @@ export default function AnnotationCanvas({
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
           点击「更换主图」导入款式图
         </p>
+      )}
+      {selectedLinkable && onRegionAiFill && (
+        <button
+          type="button"
+          disabled={aiLoading}
+          onClick={onRegionAiFill}
+          className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow hover:bg-violet-700 disabled:opacity-50"
+        >
+          {aiLoading ? "识别中…" : "AI 填工艺"}
+        </button>
       )}
       {multiMode && artboardImages.size === 0 && (
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">

@@ -6,6 +6,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import { getProject, saveProject } from "@/lib/project/storage";
 import { createDefaultCanvasData, mergeSuggestedPartAnnotations } from "@/lib/project/hotspots";
+import { generateProcessId } from "@/lib/process/ids";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 export default function CollectPage() {
@@ -138,21 +139,28 @@ export default function CollectPage() {
         }),
       );
 
+      const processItems: TechPackProject["process_items"] = (draft.process_items ?? []).map(
+        (item: { part: string; process: string; stitch?: string; seam_allowance?: string }) => ({
+          ...item,
+          id: generateProcessId(),
+        }),
+      );
+
       const partAnnotations = mergeSuggestedPartAnnotations(
         rawHotspots,
         project.intake.detectedCategory,
-      );
+      ).map((ann) => {
+        const label = ann.linkedPart ?? ann.text;
+        const pid = processItems.find((p) => p.part?.trim() === label?.trim())?.id;
+        if (!pid) return ann;
+        const { linkedPart: _lp, ...rest } = ann;
+        return { ...rest, linkedProcessIds: [pid] };
+      });
 
       const canvas_data = createDefaultCanvasData(project.intake.imageDataUrl);
       if (canvas_data.artboards[0]) {
         canvas_data.artboards[0].annotations = partAnnotations;
       }
-
-      const processItems = (draft.process_items ?? []).map(
-        (item: { part: string; process: string; stitch?: string; seam_allowance?: string }) => ({
-          ...item,
-        }),
-      );
 
       const updated: TechPackProject = {
         ...project,
