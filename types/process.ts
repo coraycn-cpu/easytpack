@@ -34,6 +34,13 @@ export const BomListSchema = z.object({
   items: z.array(BomItemSchema),
 });
 
+export const BomAssistSchema = z.object({
+  bom_items: z.array(BomItemSchema).describe("物料清单条目"),
+  plainExplanation: z
+    .string()
+    .describe("用非专业人士能理解的语言说明物料选择依据"),
+});
+
 export const IntentAnalysisSchema = z.object({
   summary: z.string().describe("对用户意图的简要理解"),
   detectedCategory: z.string().describe("识别出的品类，如：针织T恤"),

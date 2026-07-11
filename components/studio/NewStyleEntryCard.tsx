@@ -28,6 +28,7 @@ export default function NewStyleEntryCard({
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [sizeStandard, setSizeStandard] = useState<SizeStandardInput>(defaultSizeStandard());
   const [loading, setLoading] = useState(false);
+  const [loadingPreset, setLoadingPreset] = useState<"intake" | "default">("default");
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = Boolean(imageDataUrl) && sizeStandard.sampleSize.trim().length > 0;
@@ -41,6 +42,7 @@ export default function NewStyleEntryCard({
   const createProject = async (mode: NewStyleMode) => {
     if (!canSubmit || !imageDataUrl) return;
     setLoading(true);
+    setLoadingPreset(mode === "full" ? "intake" : "default");
     setError(null);
 
     try {
@@ -94,9 +96,13 @@ export default function NewStyleEntryCard({
 
   return (
     <>
-      {loading && <AiAnalysisOverlay imagePreview={imagePreview} />}
+      {loading && (
+        <AiAnalysisOverlay preset={loadingPreset} imagePreview={imagePreview} />
+      )}
       <div
         className={`w-full rounded-2xl border bg-white shadow-xl ${
+          loading ? "pointer-events-none opacity-60" : ""
+        } ${
           isOverlay ? "max-w-md border-slate-200" : "max-w-lg border-slate-200/80"
         }`}
       >

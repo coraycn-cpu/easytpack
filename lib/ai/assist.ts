@@ -3,11 +3,13 @@ import type { z } from "zod";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
   BatchAnnotateSchema,
+  BomAssistSchema,
   EnhanceTechPackSchema,
   RegionAnnotateSchema,
   SizeChartAssistSchema,
   type AiProvider,
 } from "@/types/process";
+import type { BomItem } from "@/types/process";
 import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { SizeChart, TechPackProject } from "@/types/project";
 
@@ -99,6 +101,48 @@ export async function generateSizeChartAssist(input: {
     imageDataUrl: input.imageDataUrl,
     schema: SizeChartAssistSchema,
     schemaName: "size_chart_assist",
+  });
+}
+
+export async function generateBomAssist(input: {
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  processItems?: Array<{ part: string; process: string }>;
+  existingBom?: BomItem[];
+  answers?: Record<string, string | string[]>;
+}) {
+  const processText =
+    input.processItems
+      ?.map((p) => `- ${p.part}：${p.process}`)
+      .join("\n") ?? "（尚无工艺条目）";
+
+  const existingText =
+    input.existingBom?.map((b) => `- ${b.name}（${b.category ?? "未分类"}）`).join("\n") ??
+    "（尚无物料）";
+
+  const context = `
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+现有工艺：
+${processText}
+已有物料（勿重复，可补充完善）：
+${existingText}
+补充信息：${JSON.stringify(input.answers ?? {})}
+`.trim();
+
+  return callStructured({
+    instructions: `你是版房面辅料专员，根据款式图与工艺为 Tech Pack 生成 BOM 物料清单。
+要求：
+1. 列出主要面辅料（面料、里料、衬、拉链、纽扣、线、标等），套装需用 garmentPart 区分上装/下装。
+2. category 必须是 fabric/trim/accessory/packaging 之一。
+3. 不要删除用户已有物料；新条目不与已有 name 重复。
+4. spec/color/usage 尽量填写，用量可估算。
+5. plainExplanation 用小白能懂的话说明物料选择依据。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: BomAssistSchema,
+    schemaName: "bom_assist",
   });
 }
 

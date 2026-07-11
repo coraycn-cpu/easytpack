@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AiChatFab from "@/components/studio/AiChatFab";
+import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
@@ -37,6 +38,7 @@ import {
   type StudioLayout,
 } from "@/lib/studio/layout";
 import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
+import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 import { createViewPlaceholderImage } from "@/lib/studio/view-image-client";
@@ -56,8 +58,10 @@ export default function StudioPage() {
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [activeArtboardId, setActiveArtboardId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("process");
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTask, setAiTask] = useState<AiLoadingPresetId | null>(null);
   const [viewGenerating, setViewGenerating] = useState(false);
+  const aiBusy = aiTask !== null || viewGenerating;
+  const activeAiPreset: AiLoadingPresetId | null = viewGenerating ? "view-image" : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
@@ -66,6 +70,15 @@ export default function StudioPage() {
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
   const [sizeAiDialogOpen, setSizeAiDialogOpen] = useState(false);
+  const [aiHighlightTab, setAiHighlightTab] = useState<Tab | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const focusTab = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+    setAiHighlightTab(tab);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setAiHighlightTab(null), 2000);
+  }, []);
 
   useEffect(() => {
     const p = getProject(id);
@@ -109,7 +122,7 @@ export default function StudioPage() {
   const handleNewStyle = () => router.push("/");
 
   const handleFullCollect = () => {
-    if (!project) return;
+    if (aiBusy || !project) return;
     if (!project.intake.imageDataUrl) {
       setAiMessage("请先上传款式图");
       return;
@@ -249,6 +262,7 @@ export default function StudioPage() {
   }, [project]);
 
   const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
+    if (aiBusy) return;
     if (!project || !sourceImageUrl) {
       setAiMessage("请先上传正面款式图");
       return;
@@ -312,8 +326,9 @@ export default function StudioPage() {
   };
 
   const handleBatchAnnotate = async () => {
-    if (!project || !activeArtboard) return;
-    setAiLoading(true);
+    if (aiBusy || !project || !activeArtboard) return;
+    focusTab("process");
+    setAiTask("annotate-process");
     setAiMessage(null);
     try {
       const res = await fetch("/api/ai/annotate-batch", {
@@ -384,17 +399,53 @@ export default function StudioPage() {
         canvas_data: { ...project.canvas_data, artboards },
       });
       setAiTip(data.userTips ?? "已添加 AI 区域标注");
-      setAiMessage("AI 一键标注完成");
+      setAiMessage("AI 标工艺完成");
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "一键标注失败");
+      setAiMessage(e instanceof Error ? e.message : "标工艺失败");
     } finally {
-      setAiLoading(false);
+      setAiTask(null);
+    }
+  };
+
+  const handleFillBom = async () => {
+    if (aiBusy || !project) return;
+    focusTab("bom");
+    setAiTask("fill-bom");
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/ai/bom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          imageDataUrl: project.intake.imageDataUrl,
+          processItems: project.process_items,
+          existingBom: project.bom_items,
+          answers: project.questionnaire.answers,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const existingNames = new Set(project.bom_items.map((b) => b.name.trim()));
+      const newItems = (data.bom_items ?? []).filter(
+        (b: BomItem) => b.name?.trim() && !existingNames.has(b.name.trim()),
+      );
+
+      persist({ ...project, bom_items: [...project.bom_items, ...newItems] });
+      setAiTip(data.plainExplanation ?? "物料清单已生成");
+      setAiMessage(newItems.length > 0 ? `已添加 ${newItems.length} 条物料` : "物料已是最新");
+    } catch (e) {
+      setAiMessage(e instanceof Error ? e.message : "填物料失败");
+    } finally {
+      setAiTask(null);
     }
   };
 
   const handleRegionAiFill = async () => {
-    if (!project || !activeArtboard || !selectedAnn) return;
-    setAiLoading(true);
+    if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
+    setAiTask("region-annotate");
     setAiMessage(null);
     try {
       const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
@@ -454,12 +505,13 @@ export default function StudioPage() {
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "区域识别失败");
     } finally {
-      setAiLoading(false);
+      setAiTask(null);
     }
   };
 
   const handleGenerateSize = () => {
-    if (!project) return;
+    if (aiBusy || !project) return;
+    focusTab("size");
     setSizeAiDialogOpen(true);
   };
 
@@ -469,7 +521,7 @@ export default function StudioPage() {
   }) => {
     if (!project) return;
     setSizeAiDialogOpen(false);
-    setAiLoading(true);
+    setAiTask("fill-size");
     setAiMessage(null);
     try {
       const res = await fetch("/api/ai/size-chart", {
@@ -493,19 +545,19 @@ export default function StudioPage() {
         project.size_chart,
       );
       persist({ ...project, size_chart });
-      setActiveTab("size");
+      focusTab("size");
       setAiTip(data.plainExplanation ?? "尺码表已生成");
       setAiMessage(`已填入 ${input.sampleSize} 码估算值`);
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {
-      setAiLoading(false);
+      setAiTask(null);
     }
   };
 
   const handleEnhanceAll = async () => {
-    if (!project) return;
-    setAiLoading(true);
+    if (aiBusy || !project) return;
+    setAiTask("enhance");
     setAiMessage(null);
     try {
       const res = await fetch("/api/ai/enhance", {
@@ -534,13 +586,13 @@ export default function StudioPage() {
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "补全失败");
     } finally {
-      setAiLoading(false);
+      setAiTask(null);
     }
   };
 
   const handleExplain = async () => {
-    if (!project) return;
-    setAiLoading(true);
+    if (aiBusy || !project) return;
+    setAiTask("explain");
     try {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
@@ -556,7 +608,7 @@ export default function StudioPage() {
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "解释失败");
     } finally {
-      setAiLoading(false);
+      setAiTask(null);
     }
   };
 
@@ -578,6 +630,7 @@ export default function StudioPage() {
 
       <div className="flex min-h-0 flex-1">
         <FixedViewSidebar
+          onNewStyle={handleNewStyle}
           onReplaceImage={(url) => {
             const main = project.canvas_data.artboards[0];
             if (main) updateArtboard(main.id, { imageDataUrl: url });
@@ -595,6 +648,7 @@ export default function StudioPage() {
           }}
           onGenerateView={handleGenerateView}
           viewGenerating={viewGenerating}
+          aiBusy={aiBusy}
           compliance={compliance}
           projectTitle={project.title}
           category={project.intake.detectedCategory}
@@ -634,10 +688,13 @@ export default function StudioPage() {
                 updateArtboard(activeArtboard.id, { imageOffset })
               }
               onRegionAiFill={handleRegionAiFill}
-              onBatchAnnotate={handleBatchAnnotate}
-              batchAnnotateLoading={aiLoading}
-              aiLoading={aiLoading || viewGenerating}
-              onGenerateSize={handleGenerateSize}
+              onFullCollect={handleFullCollect}
+              onAnnotateProcess={handleBatchAnnotate}
+              annotateProcessLoading={aiTask === "annotate-process"}
+              aiLoading={aiBusy}
+              interactionLocked={aiBusy}
+              onFillBom={handleFillBom}
+              onFillSize={handleGenerateSize}
               onEnhanceAll={handleEnhanceAll}
               onExplain={handleExplain}
               viewportScale={scale}
@@ -670,15 +727,22 @@ export default function StudioPage() {
                 selectedAnn={selectedAnn}
                 linkedProcessIdsForSelection={linkedProcessIdsForSelection}
                 onToggleProcessLink={handleToggleProcessLink}
-                onNewStyle={handleNewStyle}
-                onFullCollect={handleFullCollect}
+                highlightTab={aiHighlightTab}
+                interactionLocked={aiBusy}
               />
             </div>
           </div>
 
-          <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
+          <AiChatFab project={project} onProjectUpdate={persist} disabled={aiBusy} flat />
 
-          {showNewStyleOverlay && (
+          {aiBusy && activeAiPreset && (
+            <AiAnalysisOverlay
+              preset={activeAiPreset}
+              imagePreview={project.intake.imageDataUrl}
+            />
+          )}
+
+          {showNewStyleOverlay && !aiBusy && (
             <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[1px]">
               <div className="pointer-events-auto">
                 <NewStyleEntryCard

@@ -20,6 +20,7 @@ export default function CollectPage() {
   const router = useRouter();
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initPhase, setInitPhase] = useState<"questionnaire" | "intake" | null>("questionnaire");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extraNote, setExtraNote] = useState("");
@@ -34,6 +35,7 @@ export default function CollectPage() {
       }
 
       if (!p.intake.aiIntentAnalysis && p.intake.imageDataUrl) {
+        setInitPhase("intake");
         try {
           const res = await fetch("/api/ai/intake", {
             method: "POST",
@@ -57,9 +59,11 @@ export default function CollectPage() {
         } catch {
           /* 非阻断 */
         }
+        setInitPhase("questionnaire");
       }
 
       if (p.questionnaire.questions.length === 0) {
+        setInitPhase("questionnaire");
         try {
           const res = await fetch("/api/ai/questionnaire", {
             method: "POST",
@@ -92,6 +96,7 @@ export default function CollectPage() {
         sampleSize: p.size_chart.sampleSize ?? defaultSizeStandard().sampleSize,
       });
       setProject(p);
+      setInitPhase(null);
       setLoading(false);
     }
 
@@ -273,19 +278,26 @@ export default function CollectPage() {
 
   if (loading || !project) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
-        加载问卷中...
-      </div>
+      <>
+        <AiAnalysisOverlay
+          preset={initPhase === "intake" ? "intake" : "questionnaire"}
+          imagePreview={undefined}
+        />
+        <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
+          加载中…
+        </div>
+      </>
     );
   }
 
+  const formLocked = submitting;
+
   return (
     <div className="min-h-screen bg-zinc-50">
-      {loading && <AiAnalysisOverlay title="AI 正在准备补充问题" />}
       {submitting && (
         <AiAnalysisOverlay
+          preset="draft"
           imagePreview={project.intake.imageDataUrl}
-          title="AI 正在生成工艺包初稿"
         />
       )}
       <AppHeader />
@@ -303,7 +315,11 @@ export default function CollectPage() {
           )}
         </div>
 
-        <div className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6">
+        <div
+          className={`space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 ${
+            formLocked ? "pointer-events-none opacity-60" : ""
+          }`}
+        >
           <fieldset className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
             <legend className="px-1 text-sm font-medium text-zinc-800">
               尺码标准 <span className="text-red-500">*</span>

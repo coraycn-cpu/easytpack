@@ -7,9 +7,12 @@ import { VIEW_IMAGE_PRESETS, type ViewImageKind } from "@/lib/studio/view-types"
 import type { WorkflowStatus } from "@/types/project";
 
 type FixedViewSidebarProps = {
+  onNewStyle?: () => void;
   onReplaceImage: (dataUrl: string) => void;
   onGenerateView: (kind: ViewImageKind, customPrompt?: string) => void;
   viewGenerating: boolean;
+  /** AI 处理中锁定侧栏操作 */
+  aiBusy?: boolean;
   compliance: ComplianceIssue[];
   projectTitle: string;
   category?: string;
@@ -33,9 +36,11 @@ const VIEW_BUTTONS: Array<{
 ];
 
 export default function FixedViewSidebar({
+  onNewStyle,
   onReplaceImage,
   onGenerateView,
   viewGenerating,
+  aiBusy = false,
   compliance,
   projectTitle,
   category,
@@ -55,8 +60,27 @@ export default function FixedViewSidebar({
     onGenerateView(kind);
   };
 
+  const locked = aiBusy || viewGenerating;
+
   return (
-    <aside className="flex w-44 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside
+      className={`flex w-44 shrink-0 flex-col border-r border-slate-200 bg-white ${
+        locked ? "pointer-events-none opacity-60" : ""
+      }`}
+    >
+      {onNewStyle && (
+        <div className="border-b border-slate-100 p-2.5">
+          <button
+            type="button"
+            onClick={onNewStyle}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+          >
+            <span className="text-sm leading-none">+</span>
+            新建款式
+          </button>
+        </div>
+      )}
+
       <div className="border-b border-slate-100 px-3 py-2.5">
         <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
         <p className="mt-0.5 text-[10px] leading-snug text-slate-400">

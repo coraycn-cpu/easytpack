@@ -59,9 +59,9 @@ type AnnotationCanvasProps = {
   fixedChrome?: boolean;
   stagePosition?: PanelPosition;
   onStagePositionChange?: (patch: Partial<PanelPosition>) => void;
-  /** AI 智能标注（固定在顶部工具栏） */
-  onBatchAnnotate?: () => void;
-  batchAnnotateLoading?: boolean;
+  /** AI 标工艺（batch 标注 + 工艺 tab） */
+  onAnnotateProcess?: () => void;
+  annotateProcessLoading?: boolean;
   onRegionAiFill?: () => void;
   toolbarMessage?: string | null;
   /** 多画板并排模式 */
@@ -72,10 +72,13 @@ type AnnotationCanvasProps = {
   viewportScale?: number;
   onViewportScaleChange?: (scale: number) => void;
   onResetViewport?: () => void;
-  onGenerateSize?: () => void;
+  onFullCollect?: () => void;
+  onFillBom?: () => void;
+  onFillSize?: () => void;
   onEnhanceAll?: () => void;
   onExplain?: () => void;
   aiLoading?: boolean;
+  interactionLocked?: boolean;
   viewport?: { panX: number; panY: number; scale: number };
   onViewportChange?: (viewport: { panX: number; panY: number; scale: number }) => void;
   processItems?: ProcessItem[];
@@ -116,8 +119,8 @@ export default function AnnotationCanvas({
   fixedChrome = false,
   stagePosition,
   onStagePositionChange,
-  onBatchAnnotate,
-  batchAnnotateLoading,
+  onAnnotateProcess,
+  annotateProcessLoading,
   onRegionAiFill,
   toolbarMessage,
   multiArtboards,
@@ -127,10 +130,13 @@ export default function AnnotationCanvas({
   viewportScale,
   onViewportScaleChange,
   onResetViewport,
-  onGenerateSize,
+  onFullCollect,
+  onFillBom,
+  onFillSize,
   onEnhanceAll,
   onExplain,
   aiLoading,
+  interactionLocked,
   viewport,
   onViewportChange,
   processItems,
@@ -951,12 +957,15 @@ export default function AnnotationCanvas({
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarMessage ?? toolbarHint}
-      onBatchAnnotate={onBatchAnnotate}
-      batchAnnotateLoading={batchAnnotateLoading}
+      onFullCollect={onFullCollect}
+      onAnnotateProcess={onAnnotateProcess}
+      annotateProcessLoading={annotateProcessLoading}
       aiLoading={aiLoading}
-      onGenerateSize={onGenerateSize}
+      onFillBom={onFillBom}
+      onFillSize={onFillSize}
       onEnhanceAll={onEnhanceAll}
       onExplain={onExplain}
+      interactionLocked={interactionLocked}
     />
   );
 
@@ -971,6 +980,8 @@ export default function AnnotationCanvas({
     <div
       ref={containerRef}
       className={`relative flex min-h-0 overflow-visible ${
+        interactionLocked ? "pointer-events-none select-none opacity-95" : ""
+      } ${
         transparentStage
           ? "bg-transparent"
           : embedded

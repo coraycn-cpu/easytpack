@@ -17,22 +17,29 @@ type CanvasToolbarProps = {
   canRedo: boolean;
   onDelete: () => void;
   canDelete: boolean;
-  /** 画布视图缩放（统一控制） */
   viewportScale?: number;
   onViewportScaleChange?: (scale: number) => void;
   onResetViewport?: () => void;
-  /** 兼容旧版内部缩放 */
   zoom?: number;
   onZoomChange?: (z: number) => void;
   hint?: string;
   flat?: boolean;
   theme?: "light" | "dark";
-  onBatchAnnotate?: () => void;
-  batchAnnotateLoading?: boolean;
-  aiLoading?: boolean;
-  onGenerateSize?: () => void;
+  /** Collect 全功能标注 */
+  onFullCollect?: () => void;
+  /** 工艺 tab：画布 batch 标注 + 工艺行 */
+  onAnnotateProcess?: () => void;
+  annotateProcessLoading?: boolean;
+  /** 物料 tab */
+  onFillBom?: () => void;
+  /** 尺寸 tab */
+  onFillSize?: () => void;
+  /** 三 tab 补空白 */
   onEnhanceAll?: () => void;
   onExplain?: () => void;
+  aiLoading?: boolean;
+  /** 锁定手动工具，防止 AI 处理中误操作 */
+  interactionLocked?: boolean;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -65,16 +72,21 @@ export default function CanvasToolbar({
   hint,
   flat,
   theme = "dark",
-  onBatchAnnotate,
-  batchAnnotateLoading,
-  aiLoading,
-  onGenerateSize,
+  onFullCollect,
+  onAnnotateProcess,
+  annotateProcessLoading,
+  onFillBom,
+  onFillSize,
   onEnhanceAll,
   onExplain,
+  aiLoading,
+  interactionLocked,
 }: CanvasToolbarProps) {
   const light = theme === "light";
   const scale = viewportScale ?? zoom;
   const setScale = onViewportScaleChange ?? onZoomChange ?? (() => {});
+
+  const manualLocked = interactionLocked ?? false;
 
   const actionBtn = (disabled: boolean, danger?: boolean) =>
     light
@@ -112,7 +124,14 @@ export default function CanvasToolbar({
     }`;
 
   const hasAi =
-    onBatchAnnotate || onGenerateSize || onEnhanceAll || onExplain;
+    onFullCollect ||
+    onAnnotateProcess ||
+    onFillBom ||
+    onFillSize ||
+    onEnhanceAll ||
+    onExplain;
+
+  const aiBusy = aiLoading || annotateProcessLoading;
 
   return (
     <div
@@ -121,8 +140,11 @@ export default function CanvasToolbar({
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-        {/* 左侧：手动标注 */}
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <div
+          className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 ${
+            manualLocked ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
           <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-slate-400 lg:inline">
             手动
           </span>
@@ -186,40 +208,64 @@ export default function CanvasToolbar({
           </div>
         </div>
 
-        {/* 右侧：AI 辅助 + 视图缩放 */}
         <div className="flex flex-wrap items-center gap-2">
           {hasAi && (
             <>
               <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-blue-500 lg:inline">
                 AI 辅助
               </span>
-              {onBatchAnnotate && (
+              {onFullCollect && (
                 <button
                   type="button"
-                  disabled={batchAnnotateLoading || aiLoading}
-                  onClick={onBatchAnnotate}
+                  disabled={aiBusy}
+                  onClick={onFullCollect}
                   className={aiBtn(true)}
+                  title="问卷 + 工艺/BOM/标注/尺寸全量初稿"
                 >
                   <span>✦</span>
-                  {batchAnnotateLoading ? "标注中…" : "AI 一键标注"}
+                  AI 一键标注
                 </button>
               )}
-              {onGenerateSize && (
+              {onAnnotateProcess && (
                 <button
                   type="button"
-                  disabled={aiLoading}
-                  onClick={onGenerateSize}
+                  disabled={aiBusy}
+                  onClick={onAnnotateProcess}
                   className={aiBtn()}
+                  title="画布区域标注 + 工艺 tab"
                 >
-                  AI 填尺寸表
+                  {annotateProcessLoading ? "标注中…" : "AI 标工艺"}
+                </button>
+              )}
+              {onFillBom && (
+                <button
+                  type="button"
+                  disabled={aiBusy}
+                  onClick={onFillBom}
+                  className={aiBtn()}
+                  title="生成物料清单 → 物料 tab"
+                >
+                  AI 填物料
+                </button>
+              )}
+              {onFillSize && (
+                <button
+                  type="button"
+                  disabled={aiBusy}
+                  onClick={onFillSize}
+                  className={aiBtn()}
+                  title="解析测量点 + 基准码估算 → 尺寸 tab"
+                >
+                  AI 填尺寸
                 </button>
               )}
               {onEnhanceAll && (
                 <button
                   type="button"
-                  disabled={aiLoading}
+                  disabled={aiBusy}
                   onClick={onEnhanceAll}
                   className={aiBtn()}
+                  title="补全工艺/物料/尺寸空白项"
                 >
                   一键补全
                 </button>
@@ -227,7 +273,7 @@ export default function CanvasToolbar({
               {onExplain && (
                 <button
                   type="button"
-                  disabled={aiLoading}
+                  disabled={aiBusy}
                   onClick={onExplain}
                   className={aiBtn()}
                 >

@@ -106,7 +106,7 @@ export default function AiChatFab({ project, onProjectUpdate, disabled, flat }: 
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => !disabled && setOpen((v) => !v)}
         className={`fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center text-xl text-white transition disabled:opacity-50 ${
           flat
             ? "border-2 border-[#2563eb] bg-[#2563eb] hover:bg-[#1d4ed8]"
@@ -134,8 +134,9 @@ export default function AiChatFab({ project, onProjectUpdate, disabled, flat }: 
             </div>
             <button
               type="button"
+              disabled={loading}
               onClick={() => setOpen(false)}
-              className="px-2 py-0.5 text-sm hover:bg-white/20"
+              className="px-2 py-0.5 text-sm hover:bg-white/20 disabled:opacity-40"
             >
               ✕
             </button>
@@ -158,25 +159,37 @@ export default function AiChatFab({ project, onProjectUpdate, disabled, flat }: 
                 </div>
               </div>
             ))}
-            {loading && <p className="text-center text-[10px] text-[#94a3b8]">AI 正在思考…</p>}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#64748b]">
+                  <span className="inline-flex gap-0.5">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:300ms]" />
+                  </span>
+                  AI 正在思考，请稍候…
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="shrink-0 border-t border-[#e2e8f0] p-2">
+          <div className={`shrink-0 border-t border-[#e2e8f0] p-2 ${loading ? "opacity-60" : ""}`}>
             <div className="flex gap-1">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
                 placeholder="说说你想怎么改…"
-                className="min-w-0 flex-1 border border-[#cbd5e1] px-2 py-1.5 text-xs outline-none focus:border-[#2563eb]"
+                disabled={loading || disabled}
+                className="min-w-0 flex-1 border border-[#cbd5e1] px-2 py-1.5 text-xs outline-none focus:border-[#2563eb] disabled:bg-slate-50"
               />
               <button
                 type="button"
-                disabled={loading || !input.trim()}
+                disabled={loading || disabled || !input.trim()}
                 onClick={send}
                 className="shrink-0 border border-[#2563eb] bg-[#2563eb] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
               >
-                发送
+                {loading ? "…" : "发送"}
               </button>
             </div>
           </div>
