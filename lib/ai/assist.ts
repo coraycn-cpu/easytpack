@@ -90,13 +90,15 @@ export async function generateSizeChartAssist(input: {
     instructions: `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
 
 业务规则：
-1. 结合款式结构（品类、廓形、袖型、是否有帽/拉链等）与「${region.label}」习惯，选出该款式应有的常用测量点（一般 5–10 个），不要机械照搬模板。
-2. 测量点命名、尺码列标签须符合「${region.label}」行业习惯。
-3. sizes 数组输出该区域常用尺码列（含基准码「${input.sampleSize}」），其他码列数值留空，供后续跳码功能使用。
-4. 仅对基准码「${input.sampleSize}」估算各测量点数值（cm，一位小数），须结合款式图视觉比例与品类经验；看不清的部位给出合理估算并注明不确定性。
-5. values 的 key 必须与 sizes 中字符串完全一致；非基准码一律填空字符串 ""。
-6. method 简写即可（≤12 字），如「夹下1cm平量」「后中直量」，不要长句。
-7. plainExplanation 说明选了哪些测量点、基准码估算依据。`,
+1. 结合款式结构（品类、廓形、袖型等）与「${region.label}」习惯，选出该款式常用测量点（5–10 个）。
+2. sizes 数组输出该区域常用尺码列（必须包含「${input.sampleSize}」）。
+3. 每一行必须填写 baseline_cm（基准码「${input.sampleSize}」的估算值，cm，一位小数，不能为空）。
+4. 其他尺码列不要填数值；values 可省略或仅填基准码 key。
+5. method 简写（≤12 字）。
+6. 即使已有尺码表只有部位名，也必须为每个部位给出 baseline_cm 估算。
+
+输出示例（基准码 M）：
+{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"},{"part":"胸围","method":"夹下1cm","baseline_cm":"108.0"}]}`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: SizeChartAssistSchema,

@@ -101,10 +101,14 @@ export const SizeChartAssistSchema = z.object({
   rows: z.array(
     z.object({
       part: z.string().describe("测量点名称，符合区域标准习惯"),
-      method: z.string().max(12).describe("简写量法，≤12字，如「夹下1cm平量」"),
+      method: z.string().max(12).describe("简写量法，≤12字"),
+      baseline_cm: z.coerce
+        .string()
+        .describe("该部位在样衣基准码下的测量值（cm，一位小数，必填，如 72.5）"),
       values: z
-        .record(z.string(), z.string())
-        .describe("仅填基准码列数值（cm，一位小数），其他码留空字符串"),
+        .record(z.string(), z.coerce.string())
+        .optional()
+        .describe("可选；若提供则仅需填基准码 key"),
     }),
   ),
   plainExplanation: z

@@ -37,7 +37,7 @@ import {
   STUDIO_TOOLBAR_ANCHOR_ID,
   type StudioLayout,
 } from "@/lib/studio/layout";
-import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
+import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-chart/apply-assist";
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
@@ -524,13 +524,18 @@ export default function StudioPage() {
     setAiTask("fill-size");
     setAiMessage(null);
     try {
+      const imageDataUrl =
+        activeArtboard?.imageDataUrl ??
+        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl ??
+        project.intake.imageDataUrl;
+
       const res = await fetch("/api/ai/size-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          imageDataUrl: project.intake.imageDataUrl,
+          imageDataUrl,
           answers: project.questionnaire.answers,
           existingChart: project.size_chart,
           regionStandard: input.regionStandard,
@@ -544,10 +549,14 @@ export default function StudioPage() {
         input,
         project.size_chart,
       );
+      const filled = countFilledBaselineValues(size_chart);
+      if (filled === 0) {
+        throw new Error("AI 未返回基准码数值，请确认款式图清晰并重试");
+      }
       persist({ ...project, size_chart });
       focusTab("size");
       setAiTip(data.plainExplanation ?? "尺码表已生成");
-      setAiMessage(`已填入 ${input.sampleSize} 码估算值`);
+      setAiMessage(`已填入 ${input.sampleSize} 码 ${filled} 项估算值`);
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {

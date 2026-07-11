@@ -33,7 +33,20 @@ export default function NewStyleEntryCard({
 
   const canSubmit = Boolean(imageDataUrl) && sizeStandard.sampleSize.trim().length > 0;
 
+  const clearImage = () => {
+    setImagePreview(null);
+    setImageDataUrl(null);
+    setError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const openFilePicker = () => {
+    if (loading) return;
+    fileRef.current?.click();
+  };
+
   const handleImage = async (file: File) => {
+    setError(null);
     const dataUrl = await fileToDataUrl(file);
     setImageDataUrl(dataUrl);
     setImagePreview(dataUrl);
@@ -85,7 +98,12 @@ export default function NewStyleEntryCard({
       onCreated?.(project.id, mode);
       return project;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建失败");
+      const msg = err instanceof Error ? err.message : "创建失败";
+      setError(
+        /quota|QuotaExceeded/i.test(msg)
+          ? "本地存储空间已满，请删除旧项目或使用更小的图片后重试"
+          : msg,
+      );
       return null;
     } finally {
       setLoading(false);
@@ -107,17 +125,38 @@ export default function NewStyleEntryCard({
         }`}
       >
         {imagePreview ? (
-          <div className="border-b border-slate-100 bg-slate-50 p-3">
-            <img
-              src={imagePreview}
-              alt="款式预览"
-              className="mx-auto max-h-40 rounded-lg object-contain"
-            />
+          <div className="group relative border-b border-slate-100 bg-slate-50 p-3">
+            <div className="relative mx-auto max-w-full overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+              <img
+                src={imagePreview}
+                alt="款式预览"
+                className="mx-auto max-h-44 w-full object-contain"
+              />
+              <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 bg-gradient-to-t from-black/50 to-transparent px-3 pb-2.5 pt-8">
+                <button
+                  type="button"
+                  onClick={openFilePicker}
+                  className="rounded-md bg-white/95 px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-white"
+                >
+                  重传
+                </button>
+                <button
+                  type="button"
+                  onClick={clearImage}
+                  className="rounded-md bg-white/95 px-3 py-1 text-[11px] font-medium text-red-600 shadow-sm hover:bg-white"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-[10px] text-slate-400">
+              点击「重传」更换图片，「删除」后可重新上传
+            </p>
           </div>
         ) : (
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={openFilePicker}
             className="flex w-full flex-col items-center border-b border-dashed border-slate-200 bg-slate-50/80 py-10 text-slate-400 transition hover:bg-blue-50/50 hover:text-blue-600"
           >
             <span className="text-3xl">📷</span>
@@ -141,28 +180,6 @@ export default function NewStyleEntryCard({
           </div>
 
           <SizeStandardFields value={sizeStandard} onChange={setSizeStandard} compact={isOverlay} />
-
-          {imagePreview && (
-            <div className="flex gap-2 text-[11px]">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="text-slate-500 hover:text-blue-600"
-              >
-                换图
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setImagePreview(null);
-                  setImageDataUrl(null);
-                }}
-                className="text-slate-400 hover:text-red-500"
-              >
-                移除
-              </button>
-            </div>
-          )}
 
           <div className="flex flex-col gap-2 pt-1">
             <button
@@ -196,7 +213,8 @@ export default function NewStyleEntryCard({
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleImage(file);
+            if (file) void handleImage(file);
+            e.target.value = "";
           }}
         />
       </div>
