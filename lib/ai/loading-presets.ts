@@ -99,10 +99,10 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
     tips: ["仅补充缺失项，不会覆盖你的修改"],
   },
   explain: {
-    title: "AI 正在生成通俗解释",
+    title: "AI 正在生成款式评语",
     subtitle: "约 5–15 秒",
-    steps: [{ icon: "💡", title: "整理说明", desc: "用大白话解释工艺包内容" }],
-    tips: ["解释会显示在工具栏提示区"],
+    steps: [{ icon: "📝", title: "撰写评语", desc: "概括工艺做法与面料特点" }],
+    tips: ["评语将显示在数据面板「评语」Tab", "控制在 300 字以内"],
   },
   "region-annotate": {
     title: "AI 正在识别选中区域",

@@ -127,6 +127,8 @@ export type TechPackProject = {
   process_items: ProcessItem[];
   bom_items: BomItem[];
   size_chart: SizeChart;
+  /** AI 或手动填写的款式评语（工艺+面料简述，≤300字） */
+  style_review?: string;
 };
 
 export const DEFAULT_ARTBOARD_NAMES = ["正面", "背面", "细节"];

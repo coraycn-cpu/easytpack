@@ -50,7 +50,7 @@ const AnnotationCanvas = dynamic(
   { ssr: false, loading: () => null },
 );
 
-type Tab = "process" | "bom" | "size";
+type Tab = "process" | "bom" | "size" | "review";
 
 export default function StudioPage() {
   const { id } = useParams<{ id: string }>();
@@ -599,23 +599,37 @@ export default function StudioPage() {
     }
   };
 
-  const handleExplain = async () => {
+  const handleStyleReview = async () => {
     if (aiBusy || !project) return;
     setAiTask("explain");
+    setAiMessage(null);
     try {
-      const res = await fetch("/api/ai/generate", {
+      const imageDataUrl =
+        activeArtboard?.imageDataUrl ??
+        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl ??
+        project.intake.imageDataUrl;
+
+      const res = await fetch("/api/ai/style-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `请用非专业人士能听懂的大白话，解释这款「${project.title}」的工艺包包含什么、版师会怎么用。3-5句话。工艺条目：${project.process_items.map((p) => p.part).join("、")}`,
+          title: project.title,
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          imageDataUrl,
+          processItems: project.process_items,
+          bomItems: project.bom_items,
+          existingReview: project.style_review,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      const text = data.items?.[0]?.process ?? data.text;
-      setAiTip(typeof text === "string" ? text : "已生成解释");
+      const review = String(data.review ?? "").slice(0, 300);
+      persist({ ...project, style_review: review });
+      focusTab("review");
+      setAiMessage("款式评语已生成");
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "解释失败");
+      setAiMessage(e instanceof Error ? e.message : "评语生成失败");
     } finally {
       setAiTask(null);
     }
@@ -705,7 +719,7 @@ export default function StudioPage() {
               onFillBom={handleFillBom}
               onFillSize={handleGenerateSize}
               onEnhanceAll={handleEnhanceAll}
-              onExplain={handleExplain}
+              onExplain={handleStyleReview}
               viewportScale={scale}
               onViewportScaleChange={(nextScale) =>
                 saveLayout({ ...layout, viewport: { ...layout.viewport, scale: nextScale } })

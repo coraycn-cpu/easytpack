@@ -1187,24 +1187,25 @@ export default function AnnotationCanvas({
             />
           )}
           {!multiMode && normalizedAnnotations.map((ann) => renderAnnotation(ann))}
-          {sequenceBadges.map((b) => (
-            <Group key={`badge_${b.processId}_${b.annotationId}_${b.x}`} listening={false}>
-              <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
-              <Text
-                x={b.x + 14}
-                y={b.y + 14}
-                text={b.label}
-                fontSize={14}
-                fill="#fff"
-                width={28}
-                height={28}
-                align="center"
-                verticalAlign="middle"
-                offsetX={14}
-                offsetY={14}
-              />
-            </Group>
-          ))}
+          {!multiMode &&
+            sequenceBadges.map((b) => (
+              <Group key={`badge_${b.processId}_${b.annotationId}_${b.x}`} listening={false}>
+                <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
+                <Text
+                  x={b.x + 14}
+                  y={b.y + 14}
+                  text={b.label}
+                  fontSize={14}
+                  fill="#fff"
+                  width={28}
+                  height={28}
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={14}
+                  offsetY={14}
+                />
+              </Group>
+            ))}
           {!multiMode && draftRect && (
             <Rect
               x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}

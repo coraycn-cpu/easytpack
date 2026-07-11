@@ -276,8 +276,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onExplain}
                   className={aiBtn()}
+                  title="生成工艺与面料的款式评语（≤300字）"
                 >
-                  通俗解释
+                  款式评语
                 </button>
               )}
               <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />

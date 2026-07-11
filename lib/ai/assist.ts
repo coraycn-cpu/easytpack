@@ -7,6 +7,7 @@ import {
   EnhanceTechPackSchema,
   RegionAnnotateSchema,
   SizeChartAssistSchema,
+  StyleReviewSchema,
   type AiProvider,
 } from "@/types/process";
 import type { BomItem } from "@/types/process";
@@ -232,5 +233,51 @@ summary 用友好语气告诉用户补了什么、还需要他们确认什么。
     imageDataUrl: project.intake.imageDataUrl,
     schema: EnhanceTechPackSchema,
     schemaName: "enhance_techpack",
+  });
+}
+
+export async function generateStyleReview(input: {
+  title?: string;
+  category?: string;
+  description?: string;
+  imageDataUrl?: string;
+  processItems?: Array<{ part: string; process: string; stitch?: string }>;
+  bomItems?: Array<{ name: string; category?: string; spec?: string }>;
+  existingReview?: string;
+}) {
+  const processText =
+    input.processItems
+      ?.map((p) => `- ${p.part}：${p.process}${p.stitch ? `（${p.stitch}）` : ""}`)
+      .join("\n") || "（尚无工艺）";
+
+  const bomText =
+    input.bomItems
+      ?.map((b) => `- ${b.name}${b.spec ? ` ${b.spec}` : ""}（${b.category ?? "物料"}）`)
+      .join("\n") || "（尚无物料）";
+
+  const context = `
+款式：${input.title ?? "未命名"}
+品类：${input.category ?? "未指定"}
+描述：${input.description ?? "无"}
+工艺条目：
+${processText}
+物料清单：
+${bomText}
+${input.existingReview ? `已有评语（可改写优化）：${input.existingReview}` : ""}
+`.trim();
+
+  return callStructured({
+    instructions: `你是资深版房专家，为 Tech Pack 撰写「款式评语」。
+
+要求：
+1. 用通俗语言简要说明这款式的工艺做法要点（结构、关键工序、品质感）。
+2. 说明主要面料/辅料特点及它们如何支撑这款式。
+3. 帮助非服装专业人士快速理解「这件是什么、怎么做、用什么料」。
+4. 总字数严格控制在 300 字以内（含标点）。
+5. 不要列清单式堆砌，写成 2–4 段连贯短文。`,
+    userText: context,
+    imageDataUrl: input.imageDataUrl,
+    schema: StyleReviewSchema,
+    schemaName: "style_review",
   });
 }

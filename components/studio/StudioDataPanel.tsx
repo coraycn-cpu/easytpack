@@ -12,7 +12,9 @@ import { generateProcessId } from "@/lib/process/ids";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, TechPackProject } from "@/types/project";
 
-type Tab = "process" | "bom" | "size";
+type Tab = "process" | "bom" | "size" | "review";
+
+const REVIEW_MAX = 300;
 
 type StudioDataPanelProps = {
   project: TechPackProject;
@@ -126,7 +128,7 @@ export default function StudioDataPanel({
       }`}
     >
       <div className="flex shrink-0 items-center gap-0.5 border-b border-slate-100 px-2 py-1.5">
-        {(["process", "bom", "size"] as Tab[]).map((tab) => (
+        {(["process", "bom", "size", "review"] as Tab[]).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -139,7 +141,13 @@ export default function StudioDataPanel({
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            {tab === "process" ? "工艺" : tab === "bom" ? "物料" : "尺寸"}
+            {tab === "process"
+              ? "工艺"
+              : tab === "bom"
+                ? "物料"
+                : tab === "size"
+                  ? "尺寸"
+                  : "评语"}
           </button>
         ))}
         <button
@@ -373,6 +381,30 @@ export default function StudioDataPanel({
               compact
               flat
             />
+          )}
+
+          {activeTab === "review" && (
+            <div className="space-y-2">
+              <p className="text-[10px] leading-relaxed text-slate-500">
+                简要说明工艺做法与面料特点，帮助快速了解款式（≤300字）。可点工具栏「款式评语」由 AI 生成。
+              </p>
+              <textarea
+                value={project.style_review ?? ""}
+                onChange={(e) =>
+                  onPersist({
+                    ...project,
+                    style_review: e.target.value.slice(0, REVIEW_MAX),
+                  })
+                }
+                rows={8}
+                maxLength={REVIEW_MAX}
+                placeholder="例如：这款为休闲针织开衫，采用全幅平缝结合罗纹收口…"
+                className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-blue-400"
+              />
+              <p className="text-right text-[10px] text-slate-400">
+                {(project.style_review ?? "").length}/{REVIEW_MAX} 字
+              </p>
+            </div>
           )}
         </div>
       )}

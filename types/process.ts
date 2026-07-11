@@ -94,6 +94,13 @@ export const StudioDraftSchema = z.object({
   aiSummary: z.string().optional().describe("版房专家初稿说明"),
 });
 
+export const StyleReviewSchema = z.object({
+  review: z
+    .string()
+    .max(300)
+    .describe("款式评语，300字以内，涵盖工艺做法与面料特点，让用户快速了解款式"),
+});
+
 export const SizeChartAssistSchema = z.object({
   sizes: z
     .array(z.string())

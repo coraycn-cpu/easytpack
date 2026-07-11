@@ -25,7 +25,7 @@ export default function AiAssistantPanel({
       <div className="grid grid-cols-1 gap-1">
         <AiActionButton loading={loading} onClick={onGenerateSize} title="生成尺码" primary />
         <AiActionButton loading={loading} onClick={onEnhanceAll} title="一键补全" />
-        <AiActionButton loading={loading} onClick={onExplain} title="通俗解释" />
+        <AiActionButton loading={loading} onClick={onExplain} title="款式评语" />
       </div>
 
       {tip && (
