@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
+import SizeStandardFields, {
+  defaultSizeStandard,
+  type SizeStandardInput,
+} from "@/components/studio/SizeStandardFields";
+import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
+import { buildInitialSizeChart } from "@/lib/project/create-style";
 import { getProject, saveProject } from "@/lib/project/storage";
 import { createDefaultCanvasData, mergeSuggestedPartAnnotations } from "@/lib/project/hotspots";
 import { generateProcessId } from "@/lib/process/ids";
@@ -17,6 +23,7 @@ export default function CollectPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extraNote, setExtraNote] = useState("");
+  const [sizeStandard, setSizeStandard] = useState<SizeStandardInput>(defaultSizeStandard());
 
   useEffect(() => {
     async function init() {
@@ -24,6 +31,32 @@ export default function CollectPage() {
       if (!p) {
         router.replace("/");
         return;
+      }
+
+      if (!p.intake.aiIntentAnalysis && p.intake.imageDataUrl) {
+        try {
+          const res = await fetch("/api/ai/intake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              description: p.intake.description,
+              imageDataUrl: p.intake.imageDataUrl,
+            }),
+          });
+          const intent = await res.json();
+          if (res.ok) {
+            p.intake = {
+              ...p.intake,
+              aiIntentAnalysis: intent.summary,
+              detectedCategory: intent.detectedCategory ?? p.intake.detectedCategory,
+              detectedFeatures: intent.detectedFeatures,
+              suggestedTitle: intent.suggestedTitle ?? p.intake.suggestedTitle,
+            };
+            saveProject(p);
+          }
+        } catch {
+          /* 非阻断 */
+        }
       }
 
       if (p.questionnaire.questions.length === 0) {
@@ -54,6 +87,10 @@ export default function CollectPage() {
         }
       }
 
+      setSizeStandard({
+        regionStandard: p.size_chart.regionStandard ?? "cn",
+        sampleSize: p.size_chart.sampleSize ?? defaultSizeStandard().sampleSize,
+      });
       setProject(p);
       setLoading(false);
     }
@@ -86,6 +123,11 @@ export default function CollectPage() {
   const handleSubmit = async () => {
     if (!project) return;
 
+    if (!sizeStandard.sampleSize.trim()) {
+      setError("请填写样衣基准码");
+      return;
+    }
+
     const missing = project.questionnaire.questions.filter((q) => {
       if (!q.required) return false;
       const ans = project.questionnaire.answers[q.id];
@@ -101,11 +143,16 @@ export default function CollectPage() {
     setSubmitting(true);
     setError(null);
 
+    const sampleSize = sizeStandard.sampleSize.trim();
+    const regionStandard = sizeStandard.regionStandard;
+
     try {
       const answers = { ...project.questionnaire.answers };
       if (extraNote.trim()) {
         answers.extra_note = extraNote.trim();
       }
+      answers.size_region = regionStandard;
+      answers.sample_size = sampleSize;
 
       const res = await fetch("/api/ai/draft", {
         method: "POST",
@@ -118,10 +165,14 @@ export default function CollectPage() {
           answers,
           questions: [
             ...project.questionnaire.questions,
+            { id: "size_region", question: "区域标准" },
+            { id: "sample_size", question: "样衣基准码" },
             ...(extraNote.trim()
               ? [{ id: "extra_note", question: "补充说明" }]
               : []),
           ],
+          regionStandard,
+          sampleSize,
         }),
       });
 
@@ -162,13 +213,41 @@ export default function CollectPage() {
         canvas_data.artboards[0].annotations = partAnnotations;
       }
 
+      let size_chart = buildInitialSizeChart(regionStandard, sampleSize);
+
+      try {
+        const sizeRes = await fetch("/api/ai/size-chart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: project.intake.detectedCategory,
+            description: project.intake.description,
+            imageDataUrl: project.intake.imageDataUrl,
+            answers,
+            existingChart: size_chart,
+            regionStandard,
+            sampleSize,
+          }),
+        });
+        const sizeData = await sizeRes.json();
+        if (sizeRes.ok) {
+          size_chart = applySizeChartAssist(
+            { sizes: sizeData.sizes, rows: sizeData.rows },
+            { regionStandard, sampleSize },
+            size_chart,
+          );
+        }
+      } catch {
+        /* 尺寸 AI 失败时保留空表结构 */
+      }
+
       const updated: TechPackProject = {
         ...project,
         status: "studio",
         title: project.intake.suggestedTitle ?? project.title,
         process_items: processItems,
         bom_items: draft.bom_items ?? [],
-        size_chart: draft.size_chart ?? { sizes: [], rows: [] },
+        size_chart,
         canvas_data,
         questionnaire: {
           ...project.questionnaire,
@@ -178,7 +257,7 @@ export default function CollectPage() {
         intake: {
           ...project.intake,
           aiIntentAnalysis: draft.aiSummary
-            ? `${project.intake.aiIntentAnalysis}\n\n初稿说明：${draft.aiSummary}`
+            ? `${project.intake.aiIntentAnalysis ?? ""}\n\n初稿说明：${draft.aiSummary}`.trim()
             : project.intake.aiIntentAnalysis,
         },
       };
@@ -202,9 +281,7 @@ export default function CollectPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      {loading && (
-        <AiAnalysisOverlay title="AI 正在准备补充问题" />
-      )}
+      {loading && <AiAnalysisOverlay title="AI 正在准备补充问题" />}
       {submitting && (
         <AiAnalysisOverlay
           imagePreview={project.intake.imageDataUrl}
@@ -214,7 +291,7 @@ export default function CollectPage() {
       <AppHeader />
       <main className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-6">
-          <p className="text-xs font-medium text-blue-600">第 2 步 · 确认几个简单问题</p>
+          <p className="text-xs font-medium text-blue-600">全功能 AI 标注 · 补充信息</p>
           <h1 className="mt-1 text-2xl font-bold text-slate-900">{project.title}</h1>
           {project.intake.aiIntentAnalysis && (
             <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
@@ -227,6 +304,16 @@ export default function CollectPage() {
         </div>
 
         <div className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6">
+          <fieldset className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+            <legend className="px-1 text-sm font-medium text-zinc-800">
+              尺码标准 <span className="text-red-500">*</span>
+            </legend>
+            <p className="mb-3 text-[11px] text-slate-500">
+              用于 AI 解析测量点并按基准码估算尺寸，跳码功能后续完善
+            </p>
+            <SizeStandardFields value={sizeStandard} onChange={setSizeStandard} />
+          </fieldset>
+
           {project.questionnaire.intro && (
             <p className="text-sm text-zinc-600">{project.questionnaire.intro}</p>
           )}
@@ -261,13 +348,11 @@ export default function CollectPage() {
             onClick={handleSubmit}
             className="w-full rounded-lg bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            {submitting ? "AI 正在准备工艺包初稿..." : "确认，进入画板 →"}
+            {submitting ? "AI 正在生成工艺包初稿..." : "确认，进入画板 →"}
           </button>
         </div>
 
-        {error && (
-          <p className="mt-4 text-center text-sm text-red-600">{error}</p>
-        )}
+        {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
       </main>
     </div>
   );

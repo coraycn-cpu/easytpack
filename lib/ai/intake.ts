@@ -121,6 +121,8 @@ export async function generateStudioDraft(input: {
   detectedCategory: string;
   answers: Record<string, string | string[]>;
   questions: Array<{ id: string; question: string }>;
+  regionStandard?: string;
+  sampleSize?: string;
 }) {
   const answersText = input.questions
     .map((q) => {
@@ -134,6 +136,8 @@ export async function generateStudioDraft(input: {
 款式描述：${input.description || "（无）"}
 AI 理解：${input.intentSummary}
 品类：${input.detectedCategory}
+区域标准：${input.regionStandard ?? "未指定"}
+样衣基准码：${input.sampleSize ?? "未指定"}
 用户补充信息：
 ${answersText}
 `.trim();
@@ -145,7 +149,8 @@ ${answersText}
 - bom_items 列出主要面辅料
 - suggestedHotspots 给出主要部位在画板上的建议热区（坐标基于 800x600 画布，只标注服装结构部位，不要标注人脸/背景，最多 6 个）
 - bom_items 列出主要面辅料，套装需区分上装/下装（garmentPart 字段）
-- size_chart 如信息足够则给出基础尺码表（S/M/L/XL），否则留空 rows
+- size_chart 仅输出 sizes 列与 rows 的 part/method（method 简写≤12字），values 留空（尺寸数值由后续专用流程填入）
+- 测量点命名须符合用户指定的区域标准习惯
 - aiSummary 用 2-3 句话说明初稿要点和后续建议用户确认的地方`,
     userText: context,
     imageDataUrl: input.imageDataUrl,

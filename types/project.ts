@@ -38,10 +38,19 @@ export type QuestionnaireData = {
   isComplete: boolean;
 };
 
+import type { SizeRegionStandard } from "@/lib/size-chart/standards";
+
+export type { SizeRegionStandard };
+
 export type SizeChart = {
+  /** 区域尺码标准（国标/欧码/美码等） */
+  regionStandard?: SizeRegionStandard;
+  /** 样衣基准码，AI 估算仅填此列 */
+  sampleSize?: string;
   sizes: string[];
   rows: Array<{
     part: string;
+    /** 简写量法，为跳码列留空间 */
     method: string;
     values: Record<string, string>;
   }>;

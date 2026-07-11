@@ -8,6 +8,7 @@ import {
   SizeChartAssistSchema,
   type AiProvider,
 } from "@/types/process";
+import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { SizeChart, TechPackProject } from "@/types/project";
 
 export function getModel(): string {
@@ -70,22 +71,30 @@ export async function generateSizeChartAssist(input: {
   answers?: Record<string, string | string[]>;
   existingChart?: SizeChart;
   sampleSize: string;
+  regionStandard: SizeRegionStandard;
 }) {
+  const region = getRegionOption(input.regionStandard);
   const context = `
 品类：${input.category ?? "未指定"}
 用户描述：${input.description ?? "无"}
+区域标准：${region.label}（${region.hint}）
 图片中样衣基准码：${input.sampleSize}
-已有尺码表：${JSON.stringify(input.existingChart ?? {})}
+建议尺码列：${region.defaultSizes.join(" / ")}
+已有尺码表（可参考部位，数值可重写）：${JSON.stringify(input.existingChart ?? {})}
 补充信息：${JSON.stringify(input.answers ?? {})}
 `.trim();
 
   return callStructured({
-    instructions: `你是资深版师，正在为「非服装专业人士」生成尺码表（POM）。
-要求：
-- 以用户提供的样衣基准码「${input.sampleSize}」为参考，估算各部位数值（cm，一位小数）
-- 同时生成该品类常用尺码列（如 S/M/L/XL），按行业标准比例推算各码数值
-- method 字段用通俗语言说明怎么量
-- plainExplanation 用小白能懂的话总结`,
+    instructions: `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
+
+业务规则：
+1. 结合款式结构（品类、廓形、袖型、是否有帽/拉链等）与「${region.label}」习惯，选出该款式应有的常用测量点（一般 5–10 个），不要机械照搬模板。
+2. 测量点命名、尺码列标签须符合「${region.label}」行业习惯。
+3. sizes 数组输出该区域常用尺码列（含基准码「${input.sampleSize}」），其他码列数值留空，供后续跳码功能使用。
+4. 仅对基准码「${input.sampleSize}」估算各测量点数值（cm，一位小数），须结合款式图视觉比例与品类经验；看不清的部位给出合理估算并注明不确定性。
+5. values 的 key 必须与 sizes 中字符串完全一致；非基准码一律填空字符串 ""。
+6. method 简写即可（≤12 字），如「夹下1cm平量」「后中直量」，不要长句。
+7. plainExplanation 说明选了哪些测量点、基准码估算依据。`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: SizeChartAssistSchema,

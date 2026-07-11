@@ -25,6 +25,8 @@ type StudioDataPanelProps = {
   selectedAnn?: Annotation | null;
   linkedProcessIdsForSelection?: string[];
   onToggleProcessLink?: (processId: string, linked: boolean) => void;
+  onNewStyle?: () => void;
+  onFullCollect?: () => void;
 };
 
 const BOM_CATEGORIES: Array<{ value: BomItem["category"]; label: string }> = [
@@ -63,6 +65,8 @@ export default function StudioDataPanel({
   selectedAnn,
   linkedProcessIdsForSelection = [],
   onToggleProcessLink,
+  onNewStyle,
+  onFullCollect,
 }: StudioDataPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const shapeLinkable = selectedAnn ? isLinkableShape(selectedAnn.type) : false;
@@ -116,6 +120,28 @@ export default function StudioDataPanel({
 
   return (
     <div className="flex max-h-[calc(100vh-6rem)] flex-col">
+      {(onNewStyle || onFullCollect) && (
+        <div className="flex shrink-0 gap-1 border-b border-slate-100 px-2 py-1.5">
+          {onNewStyle && (
+            <button
+              type="button"
+              onClick={onNewStyle}
+              className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+            >
+              + 新建款式
+            </button>
+          )}
+          {onFullCollect && (
+            <button
+              type="button"
+              onClick={onFullCollect}
+              className="rounded border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+            >
+              全功能标注
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex shrink-0 items-center gap-0.5 border-b border-slate-100 px-2 py-1.5">
         {(["process", "bom", "size"] as Tab[]).map((tab) => (
           <button

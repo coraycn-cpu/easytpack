@@ -88,17 +88,21 @@ export const StudioDraftSchema = z.object({
 });
 
 export const SizeChartAssistSchema = z.object({
-  sizes: z.array(z.string()),
+  sizes: z
+    .array(z.string())
+    .describe("该区域标准常用尺码列，必须包含基准码，其他码列预留给跳码"),
   rows: z.array(
     z.object({
-      part: z.string().describe("部位名称，如胸宽、衣长"),
-      method: z.string().describe("测量方法，通俗说明"),
-      values: z.record(z.string(), z.string()).describe("各尺码数值，单位cm"),
+      part: z.string().describe("测量点名称，符合区域标准习惯"),
+      method: z.string().max(12).describe("简写量法，≤12字，如「夹下1cm平量」"),
+      values: z
+        .record(z.string(), z.string())
+        .describe("仅填基准码列数值（cm，一位小数），其他码留空字符串"),
     }),
   ),
   plainExplanation: z
     .string()
-    .describe("用非专业人士能理解的语言解释这份尺码表"),
+    .describe("用非专业人士能理解的语言解释测量点选择与基准码估算依据"),
 });
 
 export const BatchAnnotateRegionSchema = z.object({

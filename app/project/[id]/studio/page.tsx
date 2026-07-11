@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import AiChatFab from "@/components/studio/AiChatFab";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
+import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
+import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import {
   annotationToLogicalRect,
@@ -34,6 +36,8 @@ import {
   STUDIO_TOOLBAR_ANCHOR_ID,
   type StudioLayout,
 } from "@/lib/studio/layout";
+import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
+import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 import { createViewPlaceholderImage } from "@/lib/studio/view-image-client";
 import type { BomItem, ProcessItem } from "@/types/process";
@@ -61,6 +65,7 @@ export default function StudioPage() {
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
+  const [sizeAiDialogOpen, setSizeAiDialogOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(id);
@@ -100,6 +105,27 @@ export default function StudioPage() {
     setProject(updated);
     saveProject(updated);
   }, []);
+
+  const handleNewStyle = () => router.push("/");
+
+  const handleFullCollect = () => {
+    if (!project) return;
+    if (!project.intake.imageDataUrl) {
+      setAiMessage("请先上传款式图");
+      return;
+    }
+    const updated = { ...project, status: "collecting" as const };
+    persist(updated);
+    router.push(`/project/${id}/collect`);
+  };
+
+  const showNewStyleOverlay = useMemo(() => {
+    if (!project) return false;
+    const hasImage =
+      Boolean(project.intake.imageDataUrl) ||
+      project.canvas_data.artboards.some((a) => a.imageDataUrl);
+    return !hasImage;
+  }, [project]);
 
   const saveLayout = useCallback(
     (next: StudioLayout) => {
@@ -432,10 +458,17 @@ export default function StudioPage() {
     }
   };
 
-  const handleGenerateSize = async () => {
+  const handleGenerateSize = () => {
     if (!project) return;
-    const sampleSize = window.prompt("请问图片中这件样衣是（ ）码？", "M");
-    if (!sampleSize?.trim()) return;
+    setSizeAiDialogOpen(true);
+  };
+
+  const runSizeChartAi = async (input: {
+    regionStandard: SizeRegionStandard;
+    sampleSize: string;
+  }) => {
+    if (!project) return;
+    setSizeAiDialogOpen(false);
     setAiLoading(true);
     setAiMessage(null);
     try {
@@ -448,15 +481,21 @@ export default function StudioPage() {
           imageDataUrl: project.intake.imageDataUrl,
           answers: project.questionnaire.answers,
           existingChart: project.size_chart,
-          sampleSize: sampleSize.trim(),
+          regionStandard: input.regionStandard,
+          sampleSize: input.sampleSize,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      persist({ ...project, size_chart: { sizes: data.sizes, rows: data.rows } });
+      const size_chart = applySizeChartAssist(
+        { sizes: data.sizes, rows: data.rows },
+        input,
+        project.size_chart,
+      );
+      persist({ ...project, size_chart });
       setActiveTab("size");
       setAiTip(data.plainExplanation ?? "尺码表已生成");
-      setAiMessage("尺码表已填入");
+      setAiMessage(`已填入 ${input.sampleSize} 码估算值`);
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {
@@ -631,13 +670,40 @@ export default function StudioPage() {
                 selectedAnn={selectedAnn}
                 linkedProcessIdsForSelection={linkedProcessIdsForSelection}
                 onToggleProcessLink={handleToggleProcessLink}
+                onNewStyle={handleNewStyle}
+                onFullCollect={handleFullCollect}
               />
             </div>
           </div>
 
           <AiChatFab project={project} onProjectUpdate={persist} disabled={aiLoading} flat />
+
+          {showNewStyleOverlay && (
+            <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[1px]">
+              <div className="pointer-events-auto">
+                <NewStyleEntryCard
+                  variant="overlay"
+                  onCreated={(projectId, mode) => {
+                    router.push(
+                      mode === "full"
+                        ? `/project/${projectId}/collect`
+                        : `/project/${projectId}/studio`,
+                    );
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <SizeChartAiDialog
+        open={sizeAiDialogOpen}
+        initialRegion={project.size_chart.regionStandard ?? "cn"}
+        initialSampleSize={project.size_chart.sampleSize}
+        onConfirm={runSizeChartAi}
+        onCancel={() => setSizeAiDialogOpen(false)}
+      />
     </div>
   );
 }
