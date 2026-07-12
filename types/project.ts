@@ -11,10 +11,15 @@ export type WorkflowStatus = "draft" | "in_review" | "finalized";
 
 export type PhotoType = "flat_lay" | "model" | "collage" | "sketch";
 
+export type GarmentKind = "single" | "set";
+
 export type TargetGarment = {
   id: string;
   label: string;
   category: string;
+  kind?: GarmentKind;
+  /** 套装时包含的单件 id */
+  componentIds?: string[];
 };
 
 export type VisibleGarment = TargetGarment & {

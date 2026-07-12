@@ -50,7 +50,12 @@ function buildContent(text: string, imageDataUrl?: string): UserContent {
 
 export type GarmentScopeInput = Pick<
   IntakeData,
-  "targetGarment" | "detectedCategory" | "photoType" | "description" | "garmentConfirmed"
+  | "targetGarment"
+  | "detectedCategory"
+  | "photoType"
+  | "description"
+  | "garmentConfirmed"
+  | "visibleGarments"
 >;
 
 function prependScope(context: string, intake?: GarmentScopeInput): string {

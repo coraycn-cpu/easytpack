@@ -8,13 +8,14 @@ import {
 } from "@/lib/ai/image-providers";
 import {
   getViewPresetHint,
+  FLAT_FRONT_SET_VIEW_HINT,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
 import {
   VIEW_IMAGE_FIDELITY_RULES,
   appendCorrectionToPrompt,
 } from "@/lib/studio/view-image-constraints";
-import { buildGarmentScopeContext } from "@/lib/ai/garment-scope";
+import { buildGarmentScopeContext, isSetTarget } from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
 
 export type { SynthesizeViewImageResult } from "@/lib/ai/image-providers";
@@ -45,7 +46,10 @@ export async function generateViewImagePrompt(input: {
   sourceHeight?: number;
   intake?: GarmentScopeInput;
 }) {
-  const viewDesc = getViewPresetHint(input.kind, input.customPrompt);
+  const viewDesc =
+    input.kind === "flat_front" && input.intake && isSetTarget(input.intake)
+      ? FLAT_FRONT_SET_VIEW_HINT
+      : getViewPresetHint(input.kind, input.customPrompt);
   const scope = input.intake
     ? buildGarmentScopeContext(input.intake)
     : buildGarmentScopeContext({
@@ -54,7 +58,9 @@ export async function generateViewImagePrompt(input: {
       });
   const modelNote =
     input.intake?.photoType === "model"
-      ? "参考图为模特穿着图：从穿着状态提取目标单款生成平铺/线稿，不得改变目标款本身，不得混入其他可见服装。"
+      ? isSetTarget(input.intake)
+        ? "参考图为模特穿着图：提取整套上下装（或多件套装）一起生成平铺，不得只保留上装或下装，不得混入其他可见服装。"
+        : "参考图为模特穿着图：从穿着状态提取目标单款生成平铺/线稿，不得改变目标款本身，不得混入其他可见服装。"
       : "";
   const sizeNote =
     input.sourceWidth && input.sourceHeight

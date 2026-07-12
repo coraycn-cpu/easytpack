@@ -10,6 +10,10 @@ export type ViewImageKind =
 export const FLAT_FRONT_VIEW_HINT =
   "从参考图中提取目标单款，生成完整正面平铺图，无模特、白底或中性背景，版型颜色面料与目标款一致，专业服装摄影平铺风格";
 
+/** 套装选款时的平铺正面 */
+export const FLAT_FRONT_SET_VIEW_HINT =
+  "从参考图中提取目标套装（上装与下装一起），生成完整正面平铺图，上下装比例与穿着关系与参考一致，无模特、白底或中性背景，专业服装摄影平铺风格";
+
 export type ViewImagePreset = {
   kind: Exclude<ViewImageKind, "custom" | "flat_front">;
   label: string;

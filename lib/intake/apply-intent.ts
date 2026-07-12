@@ -14,6 +14,8 @@ export function applyIntentToIntake(
     label: g.label,
     category: g.category,
     confidence: g.confidence,
+    kind: g.kind,
+    componentIds: g.componentIds,
   }));
 
   const recommended = visibleGarments.find(
@@ -25,6 +27,8 @@ export function applyIntentToIntake(
           id: recommended.id,
           label: recommended.label,
           category: recommended.category,
+          kind: recommended.kind,
+          componentIds: recommended.componentIds,
         }
       : undefined;
 
@@ -58,7 +62,13 @@ export function confirmTargetGarment(
 ): IntakeData {
   return {
     ...intake,
-    targetGarment: garment,
+    targetGarment: {
+      id: garment.id,
+      label: garment.label,
+      category: garment.category,
+      kind: garment.kind,
+      componentIds: garment.componentIds,
+    },
     garmentConfirmed: true,
     detectedCategory: garment.category,
     suggestedTitle: garment.label,

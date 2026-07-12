@@ -79,13 +79,15 @@ export async function analyzeIntent(input: {
     : "用户仅上传了款式参考图，请分析图片中的款式信息。";
 
   return callStructured({
-    system: `你是服装版房专家。一个 Tech Pack 项目只对应一件目标服装，请分析用户参考图。
+    system: `你是服装版房专家。一个 Tech Pack 项目只对应一个目标款式（可为单件或成套套装），请分析用户参考图。
 
 规则：
 - 判断 photoType：flat_lay（平铺/挂拍）、model（模特穿着）、collage（拼贴多图）、sketch（线稿手绘）
-- visibleGarments：列出画面中独立可识别的服装件（上装、下装、外套等分别列出，不要合并为一套），最多 6 项，每项有唯一 id（g1、g2…）
-- 模特图或多件可见服装时 requiresGarmentPick=true；单款平铺且高置信时 requiresGarmentPick=false
-- detectedCategory、suggestedTitle、recommendedGarmentId 须对齐 AI 推荐的主款
+- visibleGarments：列出画面中可识别的各单件（上装、下装、外套等分别列出，id 用 g1、g2…），最多 6 项单件
+- 若模特成套穿着且上装+下装（或多件）明显为同一套/同系列（颜色、面料、风格协调），除各单件外必须额外增加一项套装：id=g_set，kind=set，category=套装，label 为整套名称，componentIds 为各单件 id 数组
+- 若各件为独立搭配、非成套，则不必生成 g_set
+- 模特图、拼贴或多于 1 件可见服装时 requiresGarmentPick=true；单款平铺且高置信时 requiresGarmentPick=false
+- detectedCategory、suggestedTitle、recommendedGarmentId 须对齐 AI 推荐的主款（单件或 g_set 均可）
 - summary 用通俗易懂中文；detectedFeatures 为结构/工艺特征`,
     userText,
     imageDataUrl: input.imageDataUrl,

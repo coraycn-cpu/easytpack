@@ -42,10 +42,18 @@ export const BomAssistSchema = z.object({
 });
 
 export const VisibleGarmentSchema = z.object({
-  id: z.string().describe("款式唯一 id，如 g1、g2"),
+  id: z.string().describe("款式唯一 id，如 g1、g2、g_set"),
   label: z.string().describe("简短款式名称，如：蓝白条纹衬衫"),
-  category: z.string().describe("品类，如：衬衫、长裤"),
+  category: z.string().describe("品类，如：衬衫、长裤、套装"),
   confidence: z.enum(["high", "medium", "low"]).describe("识别置信度"),
+  kind: z
+    .enum(["single", "set"])
+    .optional()
+    .describe("single=单件，set=套装（含 componentIds）"),
+  componentIds: z
+    .array(z.string())
+    .optional()
+    .describe("套装时包含的单件 id 列表，如 [g1,g2]"),
 });
 
 export const IntentAnalysisSchema = z.object({
@@ -59,8 +67,8 @@ export const IntentAnalysisSchema = z.object({
     .describe("图片类型：平铺/模特/拼贴/线稿"),
   visibleGarments: z
     .array(VisibleGarmentSchema)
-    .max(6)
-    .describe("画面中独立可识别的服装件，每件单独列出"),
+    .max(7)
+    .describe("可见服装：单件分别列出；成套时额外增加 g_set 套装项"),
   recommendedGarmentId: z
     .string()
     .describe("AI 推荐作为 Tech Pack 主款的目标 id，须为 visibleGarments 中某项"),

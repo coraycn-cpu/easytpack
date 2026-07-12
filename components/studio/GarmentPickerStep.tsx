@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { photoTypeLabel, needsFlatFrontAfterGarmentPick } from "@/lib/intake/apply-intent";
-import type { IntakeData, TargetGarment, VisibleGarment } from "@/types/project";
+import {
+  buildGarmentPickerOptions,
+  garmentOptionSubtitle,
+  isSetGarment,
+} from "@/lib/intake/garment-picker-options";
+import type { IntakeData, TargetGarment } from "@/types/project";
 
 type GarmentPickerStepProps = {
   intake: IntakeData;
@@ -17,18 +22,7 @@ export default function GarmentPickerStep({
   onConfirm,
   compact = false,
 }: GarmentPickerStepProps) {
-  const garments: VisibleGarment[] =
-    intake.visibleGarments && intake.visibleGarments.length > 0
-      ? intake.visibleGarments
-      : intake.detectedCategory
-        ? [
-            {
-              id: "g1",
-              label: intake.suggestedTitle ?? intake.detectedCategory,
-              category: intake.detectedCategory,
-            },
-          ]
-        : [];
+  const garments = useMemo(() => buildGarmentPickerOptions(intake), [intake]);
 
   const defaultId =
     intake.recommendedGarmentId &&
@@ -46,6 +40,8 @@ export default function GarmentPickerStep({
       id: selected.id,
       label: selected.label,
       category: selected.category,
+      kind: selected.kind,
+      componentIds: selected.componentIds,
     });
   };
 
@@ -63,9 +59,9 @@ export default function GarmentPickerStep({
         compact ? "p-3" : "p-4"
       }`}
     >
-      <p className="text-sm font-semibold text-slate-800">确认目标单款</p>
+      <p className="text-sm font-semibold text-slate-800">确认目标款式</p>
       <p className="mt-1 text-[11px] leading-snug text-slate-600">
-        一个项目只处理一件服装。当前为{photoTypeLabel(intake.photoType)}
+        一个项目对应一个目标款式（单件或套装）。当前为{photoTypeLabel(intake.photoType)}
         ，请选择本次 Tech Pack 要做的款式：
         {needsFlatFrontAfterGarmentPick({
           ...intake,
@@ -91,6 +87,7 @@ export default function GarmentPickerStep({
       <div className="mt-3 space-y-1.5">
         {garments.map((g) => {
           const active = g.id === selectedId;
+          const isSet = isSetGarment(g);
           return (
             <button
               key={g.id}
@@ -99,7 +96,9 @@ export default function GarmentPickerStep({
               className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
                 active
                   ? "border-violet-400 bg-white ring-1 ring-violet-200"
-                  : "border-slate-200 bg-white/80 hover:border-violet-200"
+                  : isSet
+                    ? "border-violet-200 bg-violet-50/80 hover:border-violet-300"
+                    : "border-slate-200 bg-white/80 hover:border-violet-200"
               }`}
             >
               <span
@@ -111,7 +110,9 @@ export default function GarmentPickerStep({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-slate-800">{g.label}</span>
-                <span className="text-[10px] text-slate-500">{g.category}</span>
+                <span className="text-[10px] text-slate-500">
+                  {garmentOptionSubtitle(g, garments)}
+                </span>
               </span>
             </button>
           );
