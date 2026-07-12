@@ -99,6 +99,16 @@ export default function StudioPage() {
   const [sizeAiDialogOpen, setSizeAiDialogOpen] = useState(false);
   const [aiHighlightTab, setAiHighlightTab] = useState<Tab | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectRef = useRef<TechPackProject | null>(null);
+  const layoutRef = useRef<StudioLayout>(layout);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
   useEffect(() => {
     const p = getProject(id);
@@ -135,6 +145,7 @@ export default function StudioPage() {
   );
 
   const persist = useCallback((updated: TechPackProject): boolean => {
+    projectRef.current = updated;
     setProject(updated);
     try {
       saveProject(updated);
@@ -145,6 +156,16 @@ export default function StudioPage() {
       return false;
     }
   }, []);
+
+  /** 基于最新 project 合并保存，避免异步 AI 流程中 stale closure 覆盖 size_chart 等字段 */
+  const mergePersist = useCallback(
+    (patch: (prev: TechPackProject) => TechPackProject): boolean => {
+      const prev = projectRef.current;
+      if (!prev) return false;
+      return persist(patch(prev));
+    },
+    [persist],
+  );
 
   const handleNewStyle = () => router.push("/");
 
@@ -170,13 +191,13 @@ export default function StudioPage() {
   const saveLayout = useCallback(
     (next: StudioLayout) => {
       setLayout(next);
-      if (!project) return;
-      persist({
-        ...project,
-        canvas_data: { ...project.canvas_data, studioLayout: next },
-      });
+      layoutRef.current = next;
+      return mergePersist((prev) => ({
+        ...prev,
+        canvas_data: { ...prev.canvas_data, studioLayout: next },
+      }));
     },
-    [project, persist],
+    [mergePersist],
   );
 
   const focusTab = useCallback(
@@ -184,11 +205,11 @@ export default function StudioPage() {
       setActiveTab(tab);
       setAiHighlightTab(tab);
       const preset = TAB_LAYER_PRESETS[tab];
-      saveLayout({ ...layout, annotationLayers: preset });
+      saveLayout({ ...layoutRef.current, annotationLayers: preset });
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
       highlightTimerRef.current = setTimeout(() => setAiHighlightTab(null), 2000);
     },
-    [layout, saveLayout],
+    [saveLayout],
   );
 
   const handleTabChange = useCallback(
@@ -203,9 +224,9 @@ export default function StudioPage() {
 
   const handleLayerVisibilityChange = useCallback(
     (annotationLayers: LayerVisibility) => {
-      saveLayout({ ...layout, annotationLayers });
+      saveLayout({ ...layoutRef.current, annotationLayers });
     },
-    [layout, saveLayout],
+    [saveLayout],
   );
 
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
@@ -790,13 +811,15 @@ export default function StudioPage() {
       let dimensionTips: string | undefined;
       let dimensionBatchFailed = false;
 
-      const saveSizeChart = (artboards = project.canvas_data.artboards) => {
-        return persist({
-          ...project,
+      const saveSizeChart = (artboards?: TechPackProject["canvas_data"]["artboards"]) =>
+        mergePersist((prev) => ({
+          ...prev,
           size_chart,
-          canvas_data: { ...project.canvas_data, artboards },
-        });
-      };
+          canvas_data: {
+            ...prev.canvas_data,
+            artboards: artboards ?? prev.canvas_data.artboards,
+          },
+        }));
 
       const savedChart = saveSizeChart();
       if (!savedChart) {
@@ -805,13 +828,14 @@ export default function StudioPage() {
 
       if (targetArtboard) {
         try {
-          const skipParts = collectLinkedSizePartsFromProject(project.canvas_data.artboards);
+          const current = projectRef.current ?? project;
+          const skipParts = collectLinkedSizePartsFromProject(current.canvas_data.artboards);
           const dimRes = await fetch("/api/ai/size-dimension-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              category: project.intake.detectedCategory,
-              description: project.intake.description,
+              category: current.intake.detectedCategory,
+              description: current.intake.description,
               imageDataUrl,
               sizeChart: size_chart,
               sampleSize: input.sampleSize,
@@ -835,7 +859,7 @@ export default function StudioPage() {
             const imageFit = fitSource
               ? await loadImagePlacement(fitSource)
               : { x: 0, y: 0, width: 1000, height: 750 };
-            const artboards = project.canvas_data.artboards.map((ab) => {
+            const artboards = (projectRef.current ?? project).canvas_data.artboards.map((ab) => {
               if (ab.id !== targetArtboard.id) return ab;
               const result = applyBatchSizeDimensions(
                 ab.annotations,
