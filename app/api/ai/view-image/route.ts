@@ -3,8 +3,8 @@ import {
   generateViewImagePrompt,
   getViewImageConfig,
   synthesizeViewImage,
-  type ViewImageKind,
 } from "@/lib/ai/view-image";
+import { isViewImageKind } from "@/lib/studio/view-types";
 
 export async function GET() {
   return NextResponse.json(getViewImageConfig());
@@ -13,8 +13,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const kind = body.kind as ViewImageKind;
-    if (!kind || !["back", "side", "collar_cuff", "custom"].includes(kind)) {
+    const kind = body.kind as string;
+    if (!kind || !isViewImageKind(kind)) {
       return NextResponse.json({ error: "无效的视角类型" }, { status: 400 });
     }
 

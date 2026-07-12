@@ -83,6 +83,9 @@ type AnnotationCanvasProps = {
   artboardSlots?: ArtboardSlot[];
   activeArtboardId?: string;
   onActiveArtboardChange?: (id: string) => void;
+  /** 主款画板 ID，不可删除 */
+  primaryArtboardId?: string;
+  onDeleteArtboard?: (artboardId: string) => void;
   viewportScale?: number;
   onViewportScaleChange?: (scale: number) => void;
   onResetViewport?: () => void;
@@ -145,6 +148,8 @@ export default function AnnotationCanvas({
   artboardSlots,
   activeArtboardId,
   onActiveArtboardChange,
+  primaryArtboardId,
+  onDeleteArtboard,
   viewportScale,
   onViewportScaleChange,
   onResetViewport,
@@ -699,8 +704,35 @@ export default function AnnotationCanvas({
       onAnnotationsChange(annotations.filter((a) => a.id !== selectedAnnId));
       setSelectedAnnId(null);
       syncHistoryButtons();
+      return true;
     }
-  }, [selectedAnnId, annotations, pushHistory, onAnnotationsChange]);
+    return false;
+  }, [selectedAnnId, annotations, pushHistory, onAnnotationsChange, setSelectedAnnId]);
+
+  const tryDeleteActiveArtboard = useCallback(() => {
+    if (
+      !onDeleteArtboard ||
+      !activeArtboardId ||
+      !primaryArtboardId ||
+      activeArtboardId === primaryArtboardId ||
+      tool !== "select" ||
+      selectedAnnId
+    ) {
+      return false;
+    }
+    const ab = multiArtboards?.find((a) => a.id === activeArtboardId);
+    if (!ab) return false;
+    if (!window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) return true;
+    onDeleteArtboard(activeArtboardId);
+    return true;
+  }, [
+    onDeleteArtboard,
+    activeArtboardId,
+    primaryArtboardId,
+    tool,
+    selectedAnnId,
+    multiArtboards,
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -709,7 +741,9 @@ export default function AnnotationCanvas({
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        deleteSelected();
+        if (!deleteSelected()) {
+          tryDeleteActiveArtboard();
+        }
       }
       if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
@@ -722,7 +756,7 @@ export default function AnnotationCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelected, undo, redo]);
+  }, [deleteSelected, tryDeleteActiveArtboard, undo, redo]);
 
   useEffect(() => {
     const tr = transformerRef.current;
@@ -1188,18 +1222,64 @@ export default function AnnotationCanvas({
                 const isActive = ab.id === activeArtboardId;
                 const abOffset = ab.imageOffset ?? { x: 0, y: 0 };
                 const abAnns = normalizeAnnotations(ab.annotations);
+                const nameWidth = ab.name.length * 13;
+                const deletable =
+                  Boolean(onDeleteArtboard && primaryArtboardId) &&
+                  ab.id !== primaryArtboardId &&
+                  tool === "select" &&
+                  !interactionLocked;
+
+                const confirmDeleteArtboard = () => {
+                  if (!onDeleteArtboard || !deletable) return;
+                  if (window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) {
+                    onDeleteArtboard(ab.id);
+                  }
+                };
 
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
-                    <Text
-                      text={ab.name}
-                      x={0}
-                      y={-22}
-                      fontSize={13}
-                      fontStyle="600"
-                      fill={isActive ? "#2563eb" : "#64748b"}
-                      listening={false}
-                    />
+                    <Group y={-22}>
+                      <Text
+                        text={ab.name}
+                        x={0}
+                        y={0}
+                        fontSize={13}
+                        fontStyle="600"
+                        fill={isActive ? "#2563eb" : "#64748b"}
+                        listening={false}
+                      />
+                      {deletable && (
+                        <Group
+                          x={nameWidth + 6}
+                          y={-1}
+                          onClick={(e) => {
+                            e.cancelBubble = true;
+                            confirmDeleteArtboard();
+                          }}
+                          onTap={(e) => {
+                            e.cancelBubble = true;
+                            confirmDeleteArtboard();
+                          }}
+                        >
+                          <Rect
+                            width={20}
+                            height={18}
+                            fill="#fee2e2"
+                            cornerRadius={4}
+                            stroke="#fecaca"
+                            strokeWidth={1}
+                          />
+                          <Text
+                            text="×"
+                            x={5}
+                            y={2}
+                            fontSize={14}
+                            fill="#dc2626"
+                            listening={false}
+                          />
+                        </Group>
+                      )}
+                    </Group>
                     <KonvaImage
                       id={isActive ? "garment_image" : undefined}
                       image={entry.img}

@@ -7,7 +7,7 @@ import {
   type SynthesizeViewImageResult,
 } from "@/lib/ai/image-providers";
 import {
-  VIEW_IMAGE_PRESETS,
+  getViewPresetHint,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
 
@@ -35,12 +35,7 @@ export async function generateViewImagePrompt(input: {
   description?: string;
   sourceImageUrl?: string;
 }) {
-  const preset =
-    input.kind !== "custom" ? VIEW_IMAGE_PRESETS[input.kind] : null;
-  const viewDesc =
-    input.kind === "custom"
-      ? (input.customPrompt?.trim() ?? "自定义视角")
-      : preset!.promptHint;
+  const viewDesc = getViewPresetHint(input.kind, input.customPrompt);
 
   const { object } = await generateObject({
     model: getModel(),

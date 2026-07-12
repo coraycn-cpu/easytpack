@@ -38,6 +38,7 @@ import {
 import {
   findPrimarySizingArtboard,
   findSlotForArtboard,
+  getPrimaryArtboardId,
 } from "@/lib/canvas/sizing-artboard";
 import {
   findAnnotationsForProcessInProject,
@@ -503,6 +504,34 @@ export default function StudioPage() {
       canvas_data: { ...project.canvas_data, activeArtboardId: artboardId },
     });
   };
+
+  const primaryArtboardId = useMemo(
+    () => (project ? getPrimaryArtboardId(project.canvas_data.artboards) : undefined),
+    [project],
+  );
+
+  const handleDeleteArtboard = useCallback(
+    (artboardId: string) => {
+      if (!project || !primaryArtboardId || artboardId === primaryArtboardId) return;
+      const target = project.canvas_data.artboards.find((a) => a.id === artboardId);
+      if (!target) return;
+      const artboards = project.canvas_data.artboards.filter((a) => a.id !== artboardId);
+      const nextActiveId =
+        activeArtboardId === artboardId ? primaryArtboardId : activeArtboardId;
+      setActiveArtboardId(nextActiveId);
+      setSelectedAnnId(null);
+      persist({
+        ...project,
+        canvas_data: {
+          ...project.canvas_data,
+          artboards,
+          activeArtboardId: nextActiveId,
+        },
+      });
+      setAiMessage(`已删除「${target.name}」`);
+    },
+    [project, primaryArtboardId, activeArtboardId, persist, setSelectedAnnId],
+  );
 
   const sourceImageUrl = useMemo(() => {
     if (!project) return undefined;
@@ -1124,6 +1153,8 @@ export default function StudioPage() {
               artboardSlots={artboardSlots}
               activeArtboardId={activeArtboardId}
               onActiveArtboardChange={setActiveArtboard}
+              primaryArtboardId={primaryArtboardId}
+              onDeleteArtboard={handleDeleteArtboard}
               imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
               annotations={normalizeAnnotations(activeArtboard.annotations)}
               onAnnotationsChange={(annotations) =>

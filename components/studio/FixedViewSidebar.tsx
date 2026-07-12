@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
@@ -23,18 +24,6 @@ type FixedViewSidebarProps = {
   exportHref: string;
 };
 
-const VIEW_BUTTONS: Array<{
-  kind: ViewImageKind;
-  label: string;
-  icon: string;
-  custom?: boolean;
-}> = [
-  { kind: "back", label: VIEW_IMAGE_PRESETS.back.label, icon: "↩" },
-  { kind: "side", label: VIEW_IMAGE_PRESETS.side.label, icon: "↔" },
-  { kind: "collar_cuff", label: VIEW_IMAGE_PRESETS.collar_cuff.label, icon: "◎" },
-  { kind: "custom", label: "自定义视角", icon: "✦", custom: true },
-];
-
 export default function FixedViewSidebar({
   onNewStyle,
   onReplaceImage,
@@ -50,17 +39,15 @@ export default function FixedViewSidebar({
   onWorkflowChange,
   exportHref,
 }: FixedViewSidebarProps) {
-  const handleViewClick = (kind: ViewImageKind, custom?: boolean) => {
-    if (custom) {
-      const prompt = window.prompt("描述您需要的视角（如：45°斜侧、下摆细节）");
-      if (!prompt?.trim()) return;
-      onGenerateView(kind, prompt.trim());
-      return;
-    }
-    onGenerateView(kind);
-  };
+  const [customPrompt, setCustomPrompt] = useState("");
 
   const locked = aiBusy || viewGenerating;
+
+  const handleCustomGenerate = () => {
+    const prompt = customPrompt.trim();
+    if (!prompt) return;
+    onGenerateView("custom", prompt);
+  };
 
   return (
     <aside
@@ -84,23 +71,46 @@ export default function FixedViewSidebar({
       <div className="border-b border-slate-100 px-3 py-2.5">
         <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
         <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
-          生成后自动排列在画布上
+          4 个部位预设 + 自定义提示词
         </p>
       </div>
 
       <div className="space-y-1.5 p-2.5">
-        {VIEW_BUTTONS.map((btn) => (
+        {VIEW_IMAGE_PRESETS.map((preset) => (
           <button
-            key={btn.kind}
+            key={preset.kind}
             type="button"
             disabled={viewGenerating}
-            onClick={() => handleViewClick(btn.kind, btn.custom)}
+            onClick={() => onGenerateView(preset.kind)}
             className="flex w-full items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-left text-xs font-medium text-violet-800 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="text-sm">{btn.icon}</span>
-            {viewGenerating ? "生成中…" : btn.label}
+            <span className="text-sm">{preset.icon}</span>
+            {viewGenerating ? "生成中…" : preset.label}
           </button>
         ))}
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+          <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-slate-600">
+            <span className="text-sm leading-none text-violet-600">✦</span>
+            自定义视角（提示词）
+          </label>
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder="如：45°斜侧、口袋细节、内里"
+            rows={2}
+            disabled={viewGenerating}
+            className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"
+          />
+          <button
+            type="button"
+            disabled={viewGenerating || !customPrompt.trim()}
+            onClick={handleCustomGenerate}
+            className="mt-1.5 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[11px] font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {viewGenerating ? "生成中…" : "生成自定义视角"}
+          </button>
+        </div>
       </div>
 
       <div className="border-t border-slate-100 p-2.5">
