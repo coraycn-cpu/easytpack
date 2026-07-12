@@ -247,11 +247,27 @@ export default function AnnotationCanvas({
   const freehandRef = useRef(freehandPoints);
   const isDrawingRef = useRef(isDrawing);
   const toolRef = useRef(tool);
+  const annotationsRef = useRef(annotations);
   draftRectRef.current = draftRect;
   draftLineRef.current = draftLine;
   freehandRef.current = freehandPoints;
   isDrawingRef.current = isDrawing;
   toolRef.current = tool;
+  annotationsRef.current = annotations;
+
+  const clearDrafts = useCallback(() => {
+    draftRectRef.current = null;
+    setDraftRect(null);
+    draftLineRef.current = null;
+    setDraftLine(null);
+  }, []);
+
+  const ensureProcessLayerVisible = useCallback(() => {
+    if (!layerVisibility || !onLayerVisibilityChange) return;
+    if (!layerVisibility.process) {
+      onLayerVisibilityChange({ ...layerVisibility, process: true });
+    }
+  }, [layerVisibility, onLayerVisibilityChange]);
 
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
@@ -414,7 +430,7 @@ export default function AnnotationCanvas({
 
   const getPointer = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
-    const pos = stage?.getPointerPosition();
+    const pos = stage?.getRelativePointerPosition();
     if (!pos) return null;
     let x = pos.x - contentOffsetX;
     let y = pos.y - contentOffsetY;
@@ -510,6 +526,7 @@ export default function AnnotationCanvas({
     setImageSelected(false);
 
     if (currentTool === "rect" || currentTool === "circle") {
+      ensureProcessLayerVisible();
       const next = { x: pos.x, y: pos.y, width: 0, height: 0 };
       draftRectRef.current = next;
       setDraftRect(next);
@@ -594,8 +611,9 @@ export default function AnnotationCanvas({
       };
       if (n.width > 8 && n.height > 8) {
         const id = createId("ann");
+        const currentAnnotations = annotationsRef.current;
         commitAnnotations([
-          ...annotations,
+          ...currentAnnotations,
           {
             id,
             type: currentTool,
@@ -605,10 +623,10 @@ export default function AnnotationCanvas({
           },
         ]);
         selectAnnotation(id);
+        setTool("select");
       }
       draftRectRef.current = null;
       setDraftRect(null);
-      setTool("select");
     }
 
     if (line && (currentTool === "arrow" || currentTool === "dimension")) {
@@ -619,8 +637,9 @@ export default function AnnotationCanvas({
           text = window.prompt("尺寸数值（如 52cm）", "") ?? undefined;
         }
         const id = createId("ann");
+        const currentAnnotations = annotationsRef.current;
         commitAnnotations([
-          ...annotations,
+          ...currentAnnotations,
           {
             id,
             type: currentTool,
@@ -634,16 +653,16 @@ export default function AnnotationCanvas({
           },
         ]);
         selectAnnotation(id);
+        setTool("select");
       }
       draftLineRef.current = null;
       setDraftLine(null);
-      setTool("select");
     }
 
     if (isDrawingRef.current && currentTool === "freehand" && points.length > 4) {
       const id = createId("ann");
       commitAnnotations([
-        ...annotations,
+        ...annotationsRef.current,
         {
           id,
           type: "freehand",
@@ -661,10 +680,10 @@ export default function AnnotationCanvas({
     setIsDrawing(false);
     freehandRef.current = [];
     setFreehandPoints([]);
-  }, [annotations, color, commitAnnotations]);
+  }, [color, commitAnnotations, selectAnnotation]);
 
   useEffect(() => {
-    if (tool === "select") return;
+    if (tool === "select" || tool === "pan") return;
     const onUp = () => finishDrawing();
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchend", onUp);
@@ -1027,7 +1046,11 @@ export default function AnnotationCanvas({
       : spaceDown
         ? "按住空格 — 拖动画布视口"
         : tool !== "select"
-          ? "绘制完成后自动切回选择"
+          ? tool === "rect" || tool === "circle"
+            ? !layerVisibility.process
+              ? "工艺层已关闭 — 正在自动开启；拖拽框选区域"
+              : "拖拽框选工艺区域，松开后自动切回选择"
+            : "绘制完成后自动切回选择"
           : imageSelected
             ? "款式图已选中 — 可拖动位置"
             : selectedLinkable && !selectedHasProcessLink
@@ -1042,10 +1065,14 @@ export default function AnnotationCanvas({
     <CanvasToolbar
       tool={tool}
       onToolChange={(t) => {
+        clearDrafts();
         setTool(t);
         if (t !== "select") {
           setImageSelected(false);
           setSelectedAnnId(null);
+        }
+        if (t === "rect" || t === "circle") {
+          ensureProcessLayerVisible();
         }
       }}
       color={color}
@@ -1180,7 +1207,7 @@ export default function AnnotationCanvas({
                       y={entry.fit.y + abOffset.y}
                       width={entry.fit.width}
                       height={entry.fit.height}
-                      listening={!isPanActive && (!isDrawingMode || !isActive)}
+                      listening={!isPanActive && !isDrawingMode}
                       draggable={isActive && tool === "select" && imageSelected && !isPanActive}
                       stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
                       strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
