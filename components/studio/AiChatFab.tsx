@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
+import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
 
 type ChatMessage = {
   id: string;
@@ -83,7 +84,17 @@ export default function AiChatFab({ project, onProjectUpdate, disabled, flat }: 
       }
 
       if (data.size_chart?.rows?.length) {
-        updated.size_chart = data.size_chart as SizeChart;
+        updated.size_chart = applySizeChartAssist(
+          {
+            sizes: (data.size_chart as SizeChart).sizes ?? updated.size_chart.sizes,
+            rows: (data.size_chart as SizeChart).rows,
+          },
+          {
+            regionStandard: updated.size_chart.regionStandard ?? "cn",
+            sampleSize: updated.size_chart.sampleSize ?? "M",
+          },
+          updated.size_chart,
+        );
       }
 
       onProjectUpdate(updated);

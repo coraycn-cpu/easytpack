@@ -1,12 +1,15 @@
 import { generateObject } from "ai";
 import { AiChatResponseSchema } from "@/types/process";
 import type { TechPackProject } from "@/types/project";
+import { buildGarmentScopeContext } from "@/lib/ai/garment-scope";
 import { getModel } from "./assist";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 function summarizeProject(project: TechPackProject) {
   return `
+${buildGarmentScopeContext(project.intake)}
+
 款式：${project.title}
 品类：${project.intake.detectedCategory ?? "未指定"}
 描述：${project.intake.description || "无"}

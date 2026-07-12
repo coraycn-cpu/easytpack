@@ -15,7 +15,7 @@ import {
 } from "@/types/process";
 import type { BomItem } from "@/types/process";
 import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
-import { buildGarmentScopeContext, isModelPhoto } from "@/lib/ai/garment-scope";
+import { buildGarmentScopeContext, isModelPhoto, isSetTarget } from "@/lib/ai/garment-scope";
 import type { IntakeData, SizeChart, TechPackProject } from "@/types/project";
 
 export function getModel(): string {
@@ -237,11 +237,16 @@ ${existingText}
     input.intake,
   );
 
+  const setBomRule =
+    input.intake && isSetTarget(input.intake)
+      ? "套装 Tech Pack 时每条物料必须填写 garmentPart（如上装、下装、共用辅料）。"
+      : "同一套上下装才用 garmentPart 区分。";
+
   return callStructured({
     instructions: `你是版房面辅料专员，根据款式图与工艺为 Tech Pack 生成 BOM 物料清单。
 要求：
 1. 仅列出目标单款的面辅料；非目标款、配饰、鞋包物料不得加入。
-2. 列出主要面辅料（面料、里料、衬、拉链、纽扣、线、标等），同一套上下装才用 garmentPart 区分。
+2. 列出主要面辅料（面料、里料、衬、拉链、纽扣、线、标等），${setBomRule}
 3. category 必须是 fabric/trim/accessory/packaging 之一。
 4. 不要删除用户已有物料；新条目不与已有 name 重复。
 5. plainExplanation 用小白能懂的话说明物料选择依据。`,

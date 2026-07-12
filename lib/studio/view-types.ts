@@ -74,3 +74,7 @@ export function isViewImageKind(value: string): value is ViewImageKind {
 /** 侧栏 AI 使用说明（单行紧凑） */
 export const VIEW_IMAGE_AI_GUIDE =
   "基于正面主图生成 · 版型/面料/颜色与主图一致 · 偏差可展开修正后重生成";
+
+/** 侧栏补充：各 AI 生图的数据来源 */
+export const SIDEBAR_AI_SOURCE_HINT =
+  "侧栏视角图基于主款平铺图；主款平铺重生成基于原参考图（模特/拼贴）";

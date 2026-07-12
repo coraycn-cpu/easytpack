@@ -32,6 +32,11 @@ export function applyIntentToIntake(
         }
       : undefined;
 
+  const shouldAutoConfirm =
+    Boolean(autoTarget) &&
+    !intent.requiresGarmentPick &&
+    visibleGarments.length <= 1;
+
   return {
     ...intake,
     aiIntentAnalysis: intent.summary,
@@ -43,8 +48,8 @@ export function applyIntentToIntake(
     recommendedGarmentId: intent.recommendedGarmentId,
     requiresGarmentPick: intent.requiresGarmentPick,
     intentConfidence: intent.confidence,
-    targetGarment: autoTarget ?? intake.targetGarment,
-    garmentConfirmed: autoTarget ? true : intake.garmentConfirmed,
+    targetGarment: shouldAutoConfirm ? autoTarget : intake.targetGarment,
+    garmentConfirmed: shouldAutoConfirm ? true : intake.garmentConfirmed,
   };
 }
 

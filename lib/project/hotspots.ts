@@ -10,6 +10,7 @@ import {
   type TechPackProject,
 } from "@/types/project";
 
+import { migrateCanvasData } from "@/lib/project/migrate-canvas";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 
 import { AI_ANNOTATION_COLOR } from "@/lib/canvas/annotation-colors";
@@ -90,14 +91,16 @@ export function migrateProject(project: TechPackProject): TechPackProject {
     );
   }
 
-  return migrateAnnotationLinks({
-    ...project,
-    workflowStatus: project.workflowStatus ?? "draft",
-    canvas_data,
-    process_items: ensureProcessItemIds(
-      project.process_items.map(({ hotspotId: _id, ...item }) => item),
-    ),
-  });
+  return migrateAnnotationLinks(
+    migrateCanvasData({
+      ...project,
+      workflowStatus: project.workflowStatus ?? "draft",
+      canvas_data,
+      process_items: ensureProcessItemIds(
+        project.process_items.map(({ hotspotId: _id, ...item }) => item),
+      ),
+    }),
+  );
 }
 
 function overlapRatio(a: Hotspot, b: Hotspot): number {

@@ -64,8 +64,21 @@ export function saveProject(project: TechPackProject) {
 }
 
 export function getProject(id: string): TechPackProject | null {
-  const p = readAll()[id];
-  return p ? migrateProject(p) : null;
+  const all = readAll();
+  const p = all[id];
+  if (!p) return null;
+  const migrated = migrateProject(p);
+  const canvasMigrated =
+    migrated.canvas_data.artboards.length !== p.canvas_data.artboards.length ||
+    migrated.canvas_data.artboards.some((ab) => {
+      const prev = p.canvas_data.artboards.find((x) => x.id === ab.id);
+      return Boolean(ab.viewImageMeta) && !prev?.viewImageMeta;
+    });
+  if (canvasMigrated) {
+    all[id] = { ...migrated, updatedAt: p.updatedAt };
+    writeAll(all);
+  }
+  return migrated;
 }
 
 export function listProjects(): TechPackProject[] {

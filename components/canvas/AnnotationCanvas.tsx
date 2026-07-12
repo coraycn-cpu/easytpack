@@ -30,6 +30,7 @@ import {
   computeStudioStageBounds,
   computeMultiStudioStageBounds,
   computeImagePlacement,
+  offsetAnnotations,
 } from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
@@ -1256,10 +1257,14 @@ export default function AnnotationCanvas({
                       draggable={imageDraggable}
                       onDragEnd={(e) => {
                         if (!isActive) return;
-                        onImageOffsetChange?.({
-                          x: e.target.x() - entry.fit.x,
-                          y: e.target.y() - entry.fit.y,
-                        });
+                        const newX = e.target.x() - entry.fit.x;
+                        const newY = e.target.y() - entry.fit.y;
+                        const dx = newX - abOffset.x;
+                        const dy = newY - abOffset.y;
+                        onImageOffsetChange?.({ x: newX, y: newY });
+                        if ((dx !== 0 || dy !== 0) && isActive) {
+                          onAnnotationsChange?.(offsetAnnotations(abAnns, dx, dy));
+                        }
                       }}
                     >
                       <Group y={-labelAbove} listening={false}>
@@ -1426,10 +1431,14 @@ export default function AnnotationCanvas({
                 selectImage();
               }}
               onDragEnd={(e) => {
-                onImageOffsetChange?.({
-                  x: e.target.x() - imageFit.x,
-                  y: e.target.y() - imageFit.y,
-                });
+                const newX = e.target.x() - imageFit.x;
+                const newY = e.target.y() - imageFit.y;
+                const dx = newX - imageOffset.x;
+                const dy = newY - imageOffset.y;
+                onImageOffsetChange?.({ x: newX, y: newY });
+                if (dx !== 0 || dy !== 0) {
+                  onAnnotationsChange?.(offsetAnnotations(normalizedAnnotations, dx, dy));
+                }
               }}
             />
           )}

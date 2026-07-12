@@ -7,8 +7,9 @@ import {
 } from "@/lib/canvas/annotation-layers";
 import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
-import { computeImageFit } from "@/lib/canvas/fit";
+import { loadImagePlacement } from "@/lib/canvas/bounds";
 import { migrateArtboardHotspots } from "@/lib/project/hotspots";
+import { sortArtboardsForExport } from "@/lib/export/artboard-order";
 
 export type AnnotatedImageMode = "merged" | "split";
 
@@ -137,10 +138,13 @@ export async function renderArtboardToDataUrl(
   if (!ctx) return null;
 
   const img = await loadImage(src);
-  const fit = computeImageFit(img.naturalWidth, img.naturalHeight);
+  const fit = await loadImagePlacement(src);
+  const offset = artboard.imageOffset ?? { x: 0, y: 0 };
+  const drawX = fit.x + offset.x;
+  const drawY = fit.y + offset.y;
   ctx.fillStyle = "#0f0f14";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.drawImage(img, fit.x, fit.y, fit.width, fit.height);
+  ctx.drawImage(img, drawX, drawY, fit.width, fit.height);
 
   const ab = migrateArtboardHotspots(artboard);
   const anns = filterAnnotationsForExport(normalizeAnnotations(ab.annotations), layerFilter);
@@ -161,7 +165,7 @@ export async function renderAllArtboards(
   const results: Array<{ name: string; dataUrl: string; group?: "process" | "size" | "merged" }> =
     [];
 
-  for (const ab of artboards) {
+  for (const ab of sortArtboardsForExport(artboards)) {
     if (mode === "merged") {
       const dataUrl = await renderArtboardToDataUrl(ab, imageFallback, {
         layerFilter: "all",

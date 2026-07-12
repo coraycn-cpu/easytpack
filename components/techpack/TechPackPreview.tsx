@@ -1,4 +1,5 @@
 import type { TechPackProject } from "@/types/project";
+import { isSetTarget } from "@/lib/ai/garment-scope";
 import { formatDate, WORKFLOW_LABELS } from "@/lib/project/progress";
 
 type TechPackPreviewProps = {
@@ -27,6 +28,12 @@ export default function TechPackPreview({
         <h1 className="mt-2 text-2xl font-bold">{project.title}</h1>
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-zinc-500">
           <span>品类：{project.intake.detectedCategory ?? "—"}</span>
+          {project.intake.targetGarment?.label && (
+            <span>
+              目标款：{project.intake.targetGarment.label}
+              {isSetTarget(project.intake) ? "（套装）" : ""}
+            </span>
+          )}
           <span>款号：{styleNo}</span>
           <span>状态：{WORKFLOW_LABELS[project.workflowStatus] ?? "草稿"}</span>
           <span>日期：{formatDate(project.updatedAt)}</span>

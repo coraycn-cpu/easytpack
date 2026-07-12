@@ -240,6 +240,24 @@ export function annotationToLogicalLine(
   };
 }
 
+/** 拖动款式图时同步平移标注坐标 */
+export function offsetAnnotations(
+  annotations: Annotation[],
+  dx: number,
+  dy: number,
+): Annotation[] {
+  if (dx === 0 && dy === 0) return annotations;
+  return annotations.map((ann) => {
+    const next: Annotation = { ...ann, x: ann.x + dx, y: ann.y + dy };
+    if (ann.x2 != null) next.x2 = ann.x2 + dx;
+    if (ann.y2 != null) next.y2 = ann.y2 + dy;
+    if (ann.points?.length) {
+      next.points = ann.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy));
+    }
+    return next;
+  });
+}
+
 export function loadImagePlacement(dataUrl: string, maxDim = 900) {
   return new Promise<ReturnType<typeof computeImagePlacement>>((resolve, reject) => {
     const img = new window.Image();

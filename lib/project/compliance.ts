@@ -4,6 +4,7 @@ import {
   getAllLinkedProcessIds,
   hasCanvasAnnotations,
 } from "@/lib/canvas/part-annotations";
+import { isSetTarget } from "@/lib/ai/garment-scope";
 
 export type ComplianceIssue = {
   level: "error" | "warning";
@@ -92,6 +93,23 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
       level: "warning",
       message: "当前为模特图，尺寸/工艺建议核对后定稿",
     });
+  }
+
+  if (isSetTarget(project.intake)) {
+    issues.push({
+      level: "warning",
+      message: "当前为套装 Tech Pack，建议工艺与尺寸分别标注上装、下装部位",
+    });
+    const bomWithoutPart = project.bom_items.filter((b) => !b.garmentPart?.trim()).length;
+    if (project.bom_items.length > 0 && bomWithoutPart > 0) {
+      issues.push({
+        level: "warning",
+        message:
+          bomWithoutPart === 1
+            ? "BOM 有 1 条未标明上装/下装"
+            : `BOM 有 ${bomWithoutPart} 条未标明上装/下装`,
+      });
+    }
   }
 
   return issues;

@@ -18,11 +18,7 @@ import {
   needsFlatFrontAfterGarmentPick,
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
-import {
-  appendPhotoReferenceArtboard,
-  findPhotoReferenceArtboard,
-  shouldKeepPhotoReference,
-} from "@/lib/studio/reference-artboard";
+import { shouldKeepPhotoReference } from "@/lib/studio/reference-artboard";
 import { isModelPhoto } from "@/lib/ai/garment-scope";
 import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
@@ -116,7 +112,8 @@ export default function StudioPage() {
     viewGenerating ||
     regeneratingArtboardId !== null ||
     garmentBlocked;
-  const activeAiPreset: AiLoadingPresetId | null = viewGenerating ? "view-image" : aiTask;
+  const activeAiPreset: AiLoadingPresetId | null =
+    viewGenerating || regeneratingArtboardId ? "view-image" : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
@@ -196,9 +193,13 @@ export default function StudioPage() {
     [persist],
   );
 
+  const intakeImageDataUrl = project?.intake.imageDataUrl;
+  const intakeAlreadyAnalyzed = Boolean(
+    project?.intake.visibleGarments?.length || project?.intake.garmentConfirmed,
+  );
+
   useEffect(() => {
-    if (!project?.intake.imageDataUrl) return;
-    if (project.intake.visibleGarments?.length || project.intake.garmentConfirmed) return;
+    if (!intakeImageDataUrl || intakeAlreadyAnalyzed) return;
     let cancelled = false;
     (async () => {
       try {
@@ -206,16 +207,18 @@ export default function StudioPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            description: project.intake.description,
-            imageDataUrl: project.intake.imageDataUrl,
+            description: projectRef.current?.intake.description,
+            imageDataUrl: intakeImageDataUrl,
           }),
         });
         const intent = await res.json();
         if (!res.ok || cancelled) return;
+        const base = projectRef.current;
+        if (!base) return;
         const updated = {
-          ...project,
-          intake: applyIntentToIntake(project.intake, intent),
-          title: project.title || intent.suggestedTitle || project.title,
+          ...base,
+          intake: applyIntentToIntake(base.intake, intent),
+          title: base.title || intent.suggestedTitle || base.title,
         };
         persist(updated);
       } catch {
@@ -225,7 +228,7 @@ export default function StudioPage() {
     return () => {
       cancelled = true;
     };
-  }, [project, persist]);
+  }, [project?.id, intakeImageDataUrl, intakeAlreadyAnalyzed, persist]);
 
   const flatFrontRunningRef = useRef(false);
 
@@ -270,57 +273,6 @@ export default function StudioPage() {
     garmentBlocked,
     viewGenerating,
     runFlatFrontGeneration,
-  ]);
-
-  /** 已有平铺主款但缺少参考画板 / 主款 regen 元数据时补全（兼容旧项目） */
-  useEffect(() => {
-    if (!project?.intake.flatFrontGenerated) return;
-    let cancelled = false;
-
-    (async () => {
-      let next = project;
-      let changed = false;
-
-      const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
-      const primary = project.canvas_data.artboards.find((a) => a.id === primaryId);
-      if (primary && !primary.viewImageMeta) {
-        const artboards = project.canvas_data.artboards.map((ab) =>
-          ab.id === primaryId
-            ? { ...ab, viewImageMeta: { kind: "flat_front" as const } }
-            : ab,
-        );
-        next = { ...next, canvas_data: { ...next.canvas_data, artboards } };
-        changed = true;
-      }
-
-      if (
-        shouldKeepPhotoReference(project.intake.photoType) &&
-        project.intake.imageDataUrl &&
-        !findPhotoReferenceArtboard(next.canvas_data.artboards)
-      ) {
-        const artboards = await appendPhotoReferenceArtboard(
-          next.canvas_data.artboards,
-          project.intake.imageDataUrl,
-          project.intake.photoType,
-        );
-        if (artboards.length > next.canvas_data.artboards.length) {
-          next = { ...next, canvas_data: { ...next.canvas_data, artboards } };
-          changed = true;
-        }
-      }
-
-      if (!cancelled && changed) persist(next);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    project?.id,
-    project?.intake.flatFrontGenerated,
-    project?.intake.photoType,
-    project?.intake.imageDataUrl,
-    persist,
   ]);
 
   const handleGarmentConfirm = useCallback(
@@ -1152,8 +1104,12 @@ export default function StudioPage() {
 
       const targetArtboard =
         activeArtboard ??
-        project.canvas_data.artboards.find((a) => a.imageDataUrl) ??
-        project.canvas_data.artboards[0];
+        (() => {
+          const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+          return primaryId
+            ? project.canvas_data.artboards.find((a) => a.id === primaryId)
+            : project.canvas_data.artboards.find((a) => a.imageDataUrl);
+        })();
       let addedDimensions = 0;
       let skippedDimensions = 0;
       let dimensionTips: string | undefined;
@@ -1297,8 +1253,28 @@ export default function StudioPage() {
             .map((p: ProcessItem) => ({ ...p, id: p.id ?? generateProcessId() })),
         ];
       }
-      if (data.bom_items?.length) updated.bom_items = [...updated.bom_items, ...data.bom_items];
-      if (data.size_chart?.rows?.length) updated.size_chart = data.size_chart;
+      if (data.bom_items?.length) {
+        const existingNames = new Set(updated.bom_items.map((b) => b.name.trim()));
+        updated.bom_items = [
+          ...updated.bom_items,
+          ...data.bom_items.filter(
+            (b: BomItem) => b.name?.trim() && !existingNames.has(b.name.trim()),
+          ),
+        ];
+      }
+      if (data.size_chart?.rows?.length) {
+        updated.size_chart = applySizeChartAssist(
+          {
+            sizes: data.size_chart.sizes ?? updated.size_chart.sizes,
+            rows: data.size_chart.rows,
+          },
+          {
+            regionStandard: updated.size_chart.regionStandard ?? "cn",
+            sampleSize: updated.size_chart.sampleSize ?? "M",
+          },
+          updated.size_chart,
+        );
+      }
       persist(updated);
       setAiTip(data.summary);
       setAiMessage("工艺包已补全");
@@ -1315,7 +1291,7 @@ export default function StudioPage() {
     setAiMessage(null);
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
-        activeArtboardId: activeArtboard?.id,
+        activeArtboardId: primaryArtboardId ?? activeArtboard?.id,
       });
 
       const res = await fetch("/api/ai/style-review", {
@@ -1383,19 +1359,16 @@ export default function StudioPage() {
           </div>
         </div>
       )}
-      {viewGenerating && !garmentBlocked && (
-        <AiAnalysisOverlay
-          preset="view-image"
-          imagePreview={project.intake.imageDataUrl}
-        />
-      )}
       <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
       <div className="flex min-h-0 flex-1">
         <FixedViewSidebar
           onNewStyle={handleNewStyle}
           onReplaceImage={(url) => {
-            const main = project.canvas_data.artboards[0];
+            const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+            const main = primaryId
+              ? project.canvas_data.artboards.find((a) => a.id === primaryId)
+              : project.canvas_data.artboards.find((a) => a.imageDataUrl);
             if (main) updateArtboard(main.id, { imageDataUrl: url });
             else {
               const ab = createArtboard("正面", url);
@@ -1416,6 +1389,8 @@ export default function StudioPage() {
           projectTitle={project.title}
           category={project.intake.targetGarment?.category ?? project.intake.detectedCategory}
           targetGarmentLabel={project.intake.targetGarment?.label}
+          photoType={project.intake.photoType}
+          flatFrontGenerated={project.intake.flatFrontGenerated}
           workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
           progress={progress}
           workflowStatus={project.workflowStatus}
@@ -1521,7 +1496,7 @@ export default function StudioPage() {
 
           <AiChatFab project={project} onProjectUpdate={persist} disabled={aiBusy} flat />
 
-          {aiBusy && activeAiPreset && (
+          {aiBusy && activeAiPreset && !garmentBlocked && (
             <AiAnalysisOverlay
               preset={activeAiPreset}
               imagePreview={project.intake.imageDataUrl}

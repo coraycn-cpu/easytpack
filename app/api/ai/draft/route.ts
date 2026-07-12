@@ -1,3 +1,7 @@
+/**
+ * @deprecated 生产流程已改用 runFullTechPackAnnotation 与各分项 API（annotate/bom/size-chart 等）。
+ * 保留此路由仅供调试；新功能请勿依赖。
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { generateStudioDraft } from "@/lib/ai/intake";
 

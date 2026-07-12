@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
-import { VIEW_IMAGE_PRESETS, VIEW_IMAGE_AI_GUIDE, type ViewImageKind } from "@/lib/studio/view-types";
+import { VIEW_IMAGE_PRESETS, VIEW_IMAGE_AI_GUIDE, SIDEBAR_AI_SOURCE_HINT, type ViewImageKind } from "@/lib/studio/view-types";
+import type { PhotoType } from "@/types/project";
 import type { WorkflowStatus } from "@/types/project";
 
 type FixedViewSidebarProps = {
@@ -18,6 +19,8 @@ type FixedViewSidebarProps = {
   projectTitle: string;
   category?: string;
   targetGarmentLabel?: string;
+  photoType?: PhotoType;
+  flatFrontGenerated?: boolean;
   workflowLabel: string;
   progress: number;
   workflowStatus: WorkflowStatus;
@@ -35,6 +38,8 @@ export default function FixedViewSidebar({
   projectTitle,
   category,
   targetGarmentLabel,
+  photoType,
+  flatFrontGenerated,
   workflowLabel,
   progress,
   workflowStatus,
@@ -79,6 +84,11 @@ export default function FixedViewSidebar({
           <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
             线稿 / 背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
           </p>
+          {(flatFrontGenerated || photoType === "model" || photoType === "collage") && (
+            <p className="mt-1 text-[9px] leading-snug text-slate-500">
+              {SIDEBAR_AI_SOURCE_HINT}
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5 p-2.5">
