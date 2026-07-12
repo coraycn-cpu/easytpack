@@ -74,7 +74,8 @@ export default function GarmentPickerStep({
           flatFrontGenerated: false,
         }) && (
           <span className="mt-1 block text-violet-700">
-            确认后将自动从{photoTypeLabel(intake.photoType)}生成平铺正面主款图
+            确认后将自动生成平铺正面主款图；{photoTypeLabel(intake.photoType)}
+            原图会保留在画布参考画板，可修正后重新生成
           </span>
         )}
       </p>

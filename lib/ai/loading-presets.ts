@@ -28,12 +28,12 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
     subtitle: "通常需要 15–40 秒，请勿关闭或重复提交",
     steps: [
       { icon: "📷", title: "读取图片", desc: "识别款式轮廓与主要结构" },
-      { icon: "🔍", title: "分析品类", desc: "判断品类与廓形特征" },
+      { icon: "🔍", title: "分析品类", desc: "判断平铺/模特/拼贴，识别可见款式" },
       { icon: "✨", title: "提取要点", desc: "归纳工艺与款式亮点" },
       { icon: "📝", title: "准备下一步", desc: "生成后续引导内容" },
     ],
     tips: [
-      "图片越清晰，分析越准确",
+      "会识别照片类型；模特图或多件服装时需后续确认目标单款",
       "你可以用大白话描述，不需要专业术语",
       "AI 处理中请稍候，避免重复点击",
     ],

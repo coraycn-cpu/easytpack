@@ -42,8 +42,11 @@ export default function FixedViewSidebar({
   exportHref,
 }: FixedViewSidebarProps) {
   const [customPrompt, setCustomPrompt] = useState("");
+  const [complianceExpanded, setComplianceExpanded] = useState(false);
 
   const locked = aiBusy || viewGenerating;
+  const issueCount = compliance.length;
+  const showComplianceToggle = issueCount > 2;
 
   const handleCustomGenerate = () => {
     const prompt = customPrompt.trim();
@@ -53,93 +56,117 @@ export default function FixedViewSidebar({
 
   return (
     <aside
-      className={`flex w-44 shrink-0 flex-col border-r border-slate-200 bg-white ${
+      className={`flex h-full min-h-0 w-44 shrink-0 flex-col border-r border-slate-200 bg-white ${
         locked ? "pointer-events-none opacity-60" : ""
       }`}
     >
-      {onNewStyle && (
-        <div className="border-b border-slate-100 p-2.5">
-          <button
-            type="button"
-            onClick={onNewStyle}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-          >
-            <span className="text-sm leading-none">+</span>
-            新建款式
-          </button>
-        </div>
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {onNewStyle && (
+          <div className="border-b border-slate-100 p-2.5">
+            <button
+              type="button"
+              onClick={onNewStyle}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+            >
+              <span className="text-sm leading-none">+</span>
+              新建款式
+            </button>
+          </div>
+        )}
 
-      <div className="border-b border-violet-50 bg-violet-50/40 px-3 py-2">
-        <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
-        <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
-          线稿 / 背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
-        </p>
-      </div>
-
-      <div className="space-y-1.5 p-2.5">
-        {VIEW_IMAGE_PRESETS.map((preset) => (
-          <button
-            key={preset.kind}
-            type="button"
-            disabled={viewGenerating}
-            onClick={() => onGenerateView(preset.kind)}
-            className="flex w-full items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-left text-xs font-medium text-violet-800 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span className="text-sm">{preset.icon}</span>
-            {viewGenerating ? "生成中…" : preset.label}
-          </button>
-        ))}
-
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-          <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-slate-600">
-            <span className="text-sm leading-none text-violet-600">✦</span>
-            自定义视角（提示词）
-          </label>
-          <textarea
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder="如：45°斜侧、口袋细节、内里"
-            rows={2}
-            disabled={viewGenerating}
-            className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"
-          />
-          <button
-            type="button"
-            disabled={viewGenerating || !customPrompt.trim()}
-            onClick={handleCustomGenerate}
-            className="mt-1.5 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[11px] font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {viewGenerating ? "生成中…" : "生成自定义视角"}
-          </button>
-        </div>
-      </div>
-
-      <div className="border-t border-slate-100 p-2.5">
-        <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">
-          <span>🖼</span>
-          更换主图
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => onReplaceImage(reader.result as string);
-              reader.readAsDataURL(file);
-            }}
-          />
-        </label>
-      </div>
-
-      <div className="mt-auto border-t border-slate-200">
-        <div className="border-b border-slate-100 bg-slate-50 p-2.5">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            质量检验
+        <div className="border-b border-violet-50 bg-violet-50/40 px-3 py-2">
+          <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
+          <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
+            线稿 / 背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
           </p>
-          <CompliancePanel issues={compliance} flat />
+        </div>
+
+        <div className="space-y-1.5 p-2.5">
+          {VIEW_IMAGE_PRESETS.map((preset) => (
+            <button
+              key={preset.kind}
+              type="button"
+              disabled={viewGenerating}
+              onClick={() => onGenerateView(preset.kind)}
+              className="flex w-full items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-left text-xs font-medium text-violet-800 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="text-sm">{preset.icon}</span>
+              {viewGenerating ? "生成中…" : preset.label}
+            </button>
+          ))}
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-slate-600">
+              <span className="text-sm leading-none text-violet-600">✦</span>
+              自定义视角（提示词）
+            </label>
+            <textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="如：45°斜侧、口袋细节、内里"
+              rows={2}
+              disabled={viewGenerating}
+              className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"
+            />
+            <button
+              type="button"
+              disabled={viewGenerating || !customPrompt.trim()}
+              onClick={handleCustomGenerate}
+              className="mt-1.5 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[11px] font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {viewGenerating ? "生成中…" : "生成自定义视角"}
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 p-2.5">
+          <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">
+            <span>🖼</span>
+            更换主图
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => onReplaceImage(reader.result as string);
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-slate-200 bg-white">
+        <div className="border-b border-slate-100 bg-slate-50 px-2.5 py-2">
+          <div className="mb-1 flex items-center gap-1">
+            <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              质量检验
+            </p>
+            {issueCount > 0 && (
+              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
+                {issueCount} 项
+              </span>
+            )}
+            {showComplianceToggle && (
+              <button
+                type="button"
+                onClick={() => setComplianceExpanded((v) => !v)}
+                className="shrink-0 text-[9px] text-slate-500 hover:text-slate-700"
+              >
+                {complianceExpanded ? "收起" : "展开"}
+              </button>
+            )}
+          </div>
+          <div
+            className={`overflow-y-auto overscroll-contain ${
+              complianceExpanded ? "max-h-40" : "max-h-[4.5rem]"
+            }`}
+          >
+            <CompliancePanel issues={compliance} flat compact />
+          </div>
         </div>
 
         <div className="p-2.5">
@@ -152,9 +179,10 @@ export default function FixedViewSidebar({
           <h1 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
             {projectTitle}
           </h1>
-          <p className="mt-1 text-[10px] text-slate-500">
+          <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-slate-500">
             {category ?? "未分类"}
-            {targetGarmentLabel ? ` · 目标款：${targetGarmentLabel}` : ""} · {workflowLabel} · {progress}%
+            {targetGarmentLabel ? ` · 目标款：${targetGarmentLabel}` : ""} · {workflowLabel} ·{" "}
+            {progress}%
           </p>
 
           <div className="mt-2 space-y-1.5">

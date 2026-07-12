@@ -193,7 +193,7 @@ export default function NewStyleEntryCard({
               全功能 AI 标注
             </button>
             <p className="text-center text-[10px] leading-relaxed text-slate-400">
-              进入画布：手动 + 按需 AI · 全功能标注：问卷 + 工艺/BOM/标注/尺寸一键生成
+              进入画布：AI 识别款式类型后手动编辑 · 全功能标注：问卷 + 工艺/BOM/标注/尺寸一键生成
             </p>
           </div>
 

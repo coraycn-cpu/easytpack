@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
 import type { Artboard } from "@/types/project";
 
@@ -31,12 +31,16 @@ export default function ViewRegenerateOverlays({
 }: ViewRegenerateOverlaysProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     setDrafts((prev) => {
       const next = { ...prev };
       for (const ab of artboards) {
-        if (!ab.viewImageMeta || ab.id === primaryArtboardId) continue;
+        if (!ab.viewImageMeta) continue;
+        const isPrimaryFlatFront =
+          ab.id === primaryArtboardId && ab.viewImageMeta.kind === "flat_front";
+        if (ab.id === primaryArtboardId && !isPrimaryFlatFront) continue;
         const saved = ab.viewImageMeta.correctionPrompt;
         if (saved && next[ab.id] === undefined) {
           next[ab.id] = saved;
@@ -54,13 +58,22 @@ export default function ViewRegenerateOverlays({
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const focusDraftInput = useCallback((id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: true }));
+    requestAnimationFrame(() => textareaRefs.current[id]?.focus());
+  }, []);
+
   if (!onRegenerateView || !primaryArtboardId) return null;
 
   return (
     <>
       {slots.map((slot) => {
         const ab = artboards.find((a) => a.id === slot.id);
-        if (!ab || ab.id === primaryArtboardId || !ab.viewImageMeta) return null;
+        if (!ab || !ab.viewImageMeta) return null;
+
+        const isPrimaryFlatFront =
+          ab.id === primaryArtboardId && ab.viewImageMeta.kind === "flat_front";
+        if (ab.id === primaryArtboardId && !isPrimaryFlatFront) return null;
 
         const offset = ab.imageOffset ?? { x: 0, y: 0 };
         const left =
@@ -76,6 +89,7 @@ export default function ViewRegenerateOverlays({
         const width = slot.imageFit.width * fitScale;
         const busy = regeneratingArtboardId === ab.id;
         const draft = drafts[ab.id] ?? "";
+        const hasDraft = draft.trim().length > 0;
         const isExpanded = expanded[ab.id] ?? false;
         const locked = interactionLocked || busy;
 
@@ -84,6 +98,15 @@ export default function ViewRegenerateOverlays({
           if (window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) {
             onDeleteArtboard(ab.id);
           }
+        };
+
+        const handleRegenerate = () => {
+          if (locked) return;
+          if (!hasDraft) {
+            focusDraftInput(ab.id);
+            return;
+          }
+          onRegenerateView(ab.id, draft.trim());
         };
 
         return (
@@ -97,22 +120,39 @@ export default function ViewRegenerateOverlays({
             <div className="rounded border border-violet-200/80 bg-white/95 px-1 py-0.5 shadow-sm backdrop-blur-sm">
               {isExpanded && (
                 <textarea
+                  ref={(el) => {
+                    textareaRefs.current[ab.id] = el;
+                  }}
                   value={draft}
                   onChange={(e) => setDraft(ab.id, e.target.value)}
-                  placeholder="修正提示词，如：领口罗纹再清晰"
+                  placeholder="必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
                   rows={2}
                   disabled={locked}
                   className="mb-1 w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
                 />
               )}
+              {!isExpanded && !hasDraft && (
+                <p className="mb-1 px-0.5 text-[9px] leading-snug text-slate-500">
+                  重新生成前请先填写修正词
+                </p>
+              )}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   disabled={locked}
-                  onClick={() => onRegenerateView(ab.id, draft.trim())}
-                  className="min-w-0 flex-1 rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleRegenerate}
+                  title={
+                    hasDraft
+                      ? "按修正词重新生成"
+                      : "请先展开并填写修正提示词"
+                  }
+                  className={`min-w-0 flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    hasDraft
+                      ? "bg-violet-600 text-white hover:bg-violet-700"
+                      : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                  }`}
                 >
-                  {busy ? "生成中…" : "重新生成"}
+                  {busy ? "生成中…" : hasDraft ? "重新生成" : "填写修正词"}
                 </button>
                 {onDeleteArtboard && (
                   <button

@@ -135,7 +135,7 @@ export type Artboard = {
   imageOffset?: { x: number; y: number };
   /** 画板在无限画布上的锚点（多图并排） */
   canvasOrigin?: { x: number; y: number };
-  /** AI 生成款式图元数据（非主款画板） */
+  /** AI 生成款式图元数据（含主款平铺正面重新生成） */
   viewImageMeta?: ArtboardViewImageMeta;
   /** @deprecated 已合并至 annotations，加载时自动迁移 */
   hotspots?: import("./process").Hotspot[];

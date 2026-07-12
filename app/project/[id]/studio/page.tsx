@@ -18,6 +18,11 @@ import {
   needsFlatFrontAfterGarmentPick,
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
+import {
+  appendPhotoReferenceArtboard,
+  findPhotoReferenceArtboard,
+  shouldKeepPhotoReference,
+} from "@/lib/studio/reference-artboard";
 import { isModelPhoto } from "@/lib/ai/garment-scope";
 import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
@@ -235,7 +240,11 @@ export default function StudioPage() {
         persist(result.project);
         setAiMessage(`已锁定目标单款 · ${result.message}`);
         if (result.success) {
-          setAiTip("主款画板已替换为 AI 平铺正面，可进行工艺/尺寸标注");
+          setAiTip(
+            shouldKeepPhotoReference(result.project.intake.photoType)
+              ? "主款画板为 AI 平铺正面，原图在参考画板；可在主款下方修正后重新生成"
+              : "主款画板已替换为 AI 平铺正面，可进行工艺/尺寸标注",
+          );
         }
         return result.project;
       } catch (e) {
@@ -261,6 +270,57 @@ export default function StudioPage() {
     garmentBlocked,
     viewGenerating,
     runFlatFrontGeneration,
+  ]);
+
+  /** 已有平铺主款但缺少参考画板 / 主款 regen 元数据时补全（兼容旧项目） */
+  useEffect(() => {
+    if (!project?.intake.flatFrontGenerated) return;
+    let cancelled = false;
+
+    (async () => {
+      let next = project;
+      let changed = false;
+
+      const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+      const primary = project.canvas_data.artboards.find((a) => a.id === primaryId);
+      if (primary && !primary.viewImageMeta) {
+        const artboards = project.canvas_data.artboards.map((ab) =>
+          ab.id === primaryId
+            ? { ...ab, viewImageMeta: { kind: "flat_front" as const } }
+            : ab,
+        );
+        next = { ...next, canvas_data: { ...next.canvas_data, artboards } };
+        changed = true;
+      }
+
+      if (
+        shouldKeepPhotoReference(project.intake.photoType) &&
+        project.intake.imageDataUrl &&
+        !findPhotoReferenceArtboard(next.canvas_data.artboards)
+      ) {
+        const artboards = await appendPhotoReferenceArtboard(
+          next.canvas_data.artboards,
+          project.intake.imageDataUrl,
+          project.intake.photoType,
+        );
+        if (artboards.length > next.canvas_data.artboards.length) {
+          next = { ...next, canvas_data: { ...next.canvas_data, artboards } };
+          changed = true;
+        }
+      }
+
+      if (!cancelled && changed) persist(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    project?.id,
+    project?.intake.flatFrontGenerated,
+    project?.intake.photoType,
+    project?.intake.imageDataUrl,
+    persist,
   ]);
 
   const handleGarmentConfirm = useCallback(
@@ -809,6 +869,28 @@ export default function StudioPage() {
       setAiMessage("该画板无 AI 生成记录，请从左侧重新生成");
       return;
     }
+
+    if (meta.kind === "flat_front") {
+      setRegeneratingArtboardId(artboardId);
+      setAiMessage(null);
+      try {
+        const result = await generateFlatFrontForPrimary(project, {
+          correctionPrompt: correctionPrompt || undefined,
+          regenerate: true,
+        });
+        persist(result.project);
+        setAiMessage(result.success ? "平铺正面已重新生成" : result.message);
+        if (result.success) {
+          setAiTip("主款平铺图已更新，原图仍在参考画板");
+        }
+      } catch (e) {
+        setAiMessage(e instanceof Error ? e.message : "平铺正面重新生成失败");
+      } finally {
+        setRegeneratingArtboardId(null);
+      }
+      return;
+    }
+
     await runViewImageGeneration({
       kind: meta.kind,
       customPrompt: meta.customPrompt,
