@@ -13,11 +13,14 @@ type AiStatus = {
 };
 
 type ViewImageStatus = {
-  gateway: boolean;
-  dashscope: boolean;
-  imageModel: string;
-  textModel: string;
-  multimodalImage: boolean;
+  mode?: string;
+  fallbackOrder?: string[];
+  providers?: {
+    siliconflow?: { configured: boolean; model: string };
+    gateway?: { configured: boolean; model: string; multimodalImage: boolean };
+    dashscope?: { configured: boolean; model: string };
+  };
+  textModel?: string;
 };
 
 const DEFAULT_PROMPT =
@@ -293,22 +296,47 @@ export default function AiDebugPage() {
 
         <div className="mt-10 space-y-4 rounded-xl border border-violet-200 bg-white p-6">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-900">Gateway 生图测试</h2>
+            <h2 className="text-lg font-semibold text-zinc-900">视角图生图测试</h2>
             <p className="mt-1 text-sm text-zinc-500">
-              验证 AI_MODEL_GATEWAY_IMAGE 是否能真实出图（工作室「背面图」同款链路）
+              验证 B 区同款链路（硅基流动 / Gateway / 通义 fallback）
             </p>
           </div>
 
           {viewStatus && (
             <div className="flex flex-wrap gap-2 text-xs">
-              <StatusBadge label="Gateway" ok={viewStatus.gateway} />
-              <StatusBadge label="Dashscope 备选" ok={viewStatus.dashscope} />
-              <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700">
-                生图模型: {viewStatus.imageModel}
-              </span>
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-600">
-                {viewStatus.multimodalImage ? "多模态(可带参考图)" : "纯文生图"}
-              </span>
+              {viewStatus.mode && (
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-600">
+                  模式: {viewStatus.mode}
+                  {viewStatus.fallbackOrder?.length
+                    ? ` (${viewStatus.fallbackOrder.join(" → ")})`
+                    : ""}
+                </span>
+              )}
+              <StatusBadge
+                label="硅基流动"
+                ok={viewStatus.providers?.siliconflow?.configured ?? false}
+              />
+              <StatusBadge
+                label="Gateway"
+                ok={viewStatus.providers?.gateway?.configured ?? false}
+              />
+              <StatusBadge
+                label="Dashscope"
+                ok={viewStatus.providers?.dashscope?.configured ?? false}
+              />
+              {viewStatus.providers?.siliconflow?.model && (
+                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700">
+                  SF: {viewStatus.providers.siliconflow.model}
+                </span>
+              )}
+              {viewStatus.providers?.gateway?.model && (
+                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700">
+                  GW: {viewStatus.providers.gateway.model}
+                  {viewStatus.providers.gateway.multimodalImage
+                    ? " (多模态)"
+                    : ""}
+                </span>
+              )}
             </div>
           )}
 

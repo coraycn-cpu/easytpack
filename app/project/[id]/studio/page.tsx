@@ -68,6 +68,10 @@ import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 import { createViewPlaceholderImage } from "@/lib/studio/view-image-client";
+import {
+  appendViewGenRecord,
+  buildViewGenTrainingPayload,
+} from "@/lib/training/view-gen-log";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, Artboard, TechPackProject, WorkflowStatus } from "@/types/project";
 
@@ -511,6 +515,12 @@ export default function StudioPage() {
     setViewGenerating(true);
     setAiMessage(null);
     try {
+      const imageForAi = await resolveImageDataUrlForAi(sourceImageUrl);
+      if (!imageForAi) {
+        setAiMessage("正面图过大，请换一张较小的图片后重试");
+        return;
+      }
+
       const res = await fetch("/api/ai/view-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -519,14 +529,16 @@ export default function StudioPage() {
           customPrompt,
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          sourceImageUrl,
+          sourceImageUrl: imageForAi,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
       let imageDataUrl = data.imageDataUrl as string | null;
+      let outcome: "success" | "placeholder" | "error" = "success";
       if (!imageDataUrl) {
+        outcome = "placeholder";
         imageDataUrl = await createViewPlaceholderImage(
           sourceImageUrl,
           data.artboardName ?? "视角图",
@@ -534,7 +546,7 @@ export default function StudioPage() {
         const err = data.synthesisError as string | undefined;
         setAiTip(
           err
-            ? `生图失败：${err}。已用占位图，请检查 AI Gateway 配置。`
+            ? `生图失败：${err}。已用占位图，请检查 SILICONFLOW_API_KEY 或 AI Gateway 配置。`
             : "生图 API 未返回图片，已生成占位图",
         );
       } else {
@@ -542,6 +554,24 @@ export default function StudioPage() {
           `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图`,
         );
       }
+
+      appendViewGenRecord(
+        buildViewGenTrainingPayload({
+          projectId: project.id,
+          viewKind: kind,
+          customPrompt,
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          sourceImageUrl: imageForAi,
+          generatedPrompt: data.imagePrompt,
+          artboardName: data.artboardName,
+          outputImageUrl: imageDataUrl,
+          provider: data.provider,
+          model: data.model,
+          outcome,
+          synthesisError: data.synthesisError,
+        }),
+      );
 
       const slots = await computeArtboardSlots(project.canvas_data.artboards);
       const origin = nextArtboardOrigin(slots);
@@ -560,6 +590,18 @@ export default function StudioPage() {
       setActiveArtboardId(newBoard.id);
       setAiMessage(`已添加「${newBoard.name}」到画布`);
     } catch (e) {
+      appendViewGenRecord(
+        buildViewGenTrainingPayload({
+          projectId: project.id,
+          viewKind: kind,
+          customPrompt,
+          category: project.intake.detectedCategory,
+          description: project.intake.description,
+          sourceImageUrl,
+          outcome: "error",
+          synthesisError: e instanceof Error ? e.message : "视角图生成失败",
+        }),
+      );
       setAiMessage(e instanceof Error ? e.message : "视角图生成失败");
     } finally {
       setViewGenerating(false);

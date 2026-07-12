@@ -405,16 +405,6 @@ ${input.existingPart ? `已有部位名参考：${input.existingPart}` : ""}
   });
 }
 
-/** @deprecated 使用 generateBatchAnnotations */
-export async function generateSmartAnnotations(input: {
-  category?: string;
-  description?: string;
-  imageDataUrl?: string;
-  processItems: Array<{ part: string; process: string }>;
-}) {
-  return generateBatchAnnotations({ ...input, processItems: input.processItems });
-}
-
 export async function enhanceTechPack(project: TechPackProject) {
   const context = `
 款式：${project.title}
