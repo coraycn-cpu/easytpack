@@ -43,6 +43,7 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
+import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
 
 type Snapshot = { annotations: Annotation[] };
 
@@ -86,6 +87,9 @@ type AnnotationCanvasProps = {
   /** 主款画板 ID，不可删除 */
   primaryArtboardId?: string;
   onDeleteArtboard?: (artboardId: string) => void;
+  /** AI 生成图：修正提示词后重新生成 */
+  onRegenerateView?: (artboardId: string, correctionPrompt: string) => void;
+  regeneratingArtboardId?: string | null;
   viewportScale?: number;
   onViewportScaleChange?: (scale: number) => void;
   onResetViewport?: () => void;
@@ -150,6 +154,8 @@ export default function AnnotationCanvas({
   onActiveArtboardChange,
   primaryArtboardId,
   onDeleteArtboard,
+  onRegenerateView,
+  regeneratingArtboardId,
   viewportScale,
   onViewportScaleChange,
   onResetViewport,
@@ -1533,6 +1539,19 @@ export default function AnnotationCanvas({
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
           点击左侧生成款式图或更换主图
         </p>
+      )}
+      {multiMode && artboardSlots && multiArtboards && (
+        <ViewRegenerateOverlays
+          slots={artboardSlots}
+          artboards={multiArtboards}
+          primaryArtboardId={primaryArtboardId}
+          contentOffsetX={contentOffsetX}
+          contentOffsetY={contentOffsetY}
+          fitScale={fitScale}
+          regeneratingArtboardId={regeneratingArtboardId}
+          interactionLocked={interactionLocked}
+          onRegenerateView={onRegenerateView}
+        />
       )}
     </div>
   );

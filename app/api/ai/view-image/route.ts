@@ -21,13 +21,17 @@ export async function POST(req: NextRequest) {
     const { imagePrompt, artboardName } = await generateViewImagePrompt({
       kind,
       customPrompt: body.customPrompt,
+      correctionPrompt: body.correctionPrompt,
       category: body.category,
       description: body.description,
       sourceImageUrl: body.sourceImageUrl,
+      sourceWidth: body.sourceWidth,
+      sourceHeight: body.sourceHeight,
     });
 
     const synthesis = await synthesizeViewImage(imagePrompt, {
       sourceImageUrl: body.sourceImageUrl,
+      correctionPrompt: body.correctionPrompt,
     });
 
     return NextResponse.json({

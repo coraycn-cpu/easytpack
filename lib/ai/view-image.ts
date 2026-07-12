@@ -10,6 +10,10 @@ import {
   getViewPresetHint,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
+import {
+  VIEW_IMAGE_FIDELITY_RULES,
+  appendCorrectionToPrompt,
+} from "@/lib/studio/view-image-constraints";
 
 export type { SynthesizeViewImageResult } from "@/lib/ai/image-providers";
 export type { ViewImageKind } from "@/lib/studio/view-types";
@@ -31,25 +35,43 @@ function buildUserContent(text: string, imageDataUrl?: string) {
 export async function generateViewImagePrompt(input: {
   kind: ViewImageKind;
   customPrompt?: string;
+  correctionPrompt?: string;
   category?: string;
   description?: string;
   sourceImageUrl?: string;
+  sourceWidth?: number;
+  sourceHeight?: number;
 }) {
   const viewDesc = getViewPresetHint(input.kind, input.customPrompt);
+  const sizeNote =
+    input.sourceWidth && input.sourceHeight
+      ? `参考主图像素尺寸：${input.sourceWidth}×${input.sourceHeight}，输出须同比例同尺度。`
+      : "输出须与参考主图同比例、同平铺尺度。";
+  const correctionNote = input.correctionPrompt?.trim()
+    ? `\n用户修正要求（生成 prompt 时必须体现）：${input.correctionPrompt.trim()}`
+    : "";
 
   const { object } = await generateObject({
     model: getModel(),
     schema: ViewPromptSchema,
     schemaName: "ViewImagePrompt",
-    instructions: `你是服装款式图助手。根据正面款式图与描述，为指定视角生成图像生成 prompt 与画板名称。
-要求：保持款式一致；prompt 用英文；artboardName 用简短中文。`,
+    instructions: `你是服装款式图助手。根据正面款式参考图，为指定视角生成图像生成 prompt 与画板名称。
+
+${VIEW_IMAGE_FIDELITY_RULES}
+
+prompt 要求：
+- 英文，50 词以内，描述视角与必须保留的款式细节
+- 明确写出与参考图一致的版型、面料、颜色、工艺
+- ${sizeNote}
+- artboardName 用简短中文（2-8 字）`,
     messages: [
       {
         role: "user",
         content: buildUserContent(
           `品类：${input.category ?? "服装"}
 描述：${input.description ?? "无"}
-目标视角：${viewDesc}`,
+目标视角：${viewDesc}
+${sizeNote}${correctionNote}`,
           input.sourceImageUrl,
         ),
       },
@@ -61,10 +83,11 @@ export async function generateViewImagePrompt(input: {
 
 export async function synthesizeViewImage(
   prompt: string,
-  options?: { sourceImageUrl?: string },
+  options?: { sourceImageUrl?: string; correctionPrompt?: string },
 ): Promise<SynthesizeViewImageResult> {
+  const fullPrompt = appendCorrectionToPrompt(prompt, options?.correctionPrompt);
   return synthesizeViewImageWithProviders({
-    prompt,
+    prompt: fullPrompt,
     sourceImageUrl: options?.sourceImageUrl,
   });
 }

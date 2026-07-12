@@ -91,6 +91,14 @@ export type Annotation = {
 /** @deprecated 旧类型别名 */
 export type LegacyAnnotationType = "arrow" | "label";
 
+export type ArtboardViewImageMeta = {
+  kind: import("@/lib/studio/view-types").ViewImageKind;
+  customPrompt?: string;
+  lastImagePrompt?: string;
+  /** 最近一次修正提示词（重新生成用） */
+  correctionPrompt?: string;
+};
+
 export type Artboard = {
   id: string;
   name: string;
@@ -100,6 +108,8 @@ export type Artboard = {
   imageOffset?: { x: number; y: number };
   /** 画板在无限画布上的锚点（多图并排） */
   canvasOrigin?: { x: number; y: number };
+  /** AI 生成款式图元数据（非主款画板） */
+  viewImageMeta?: ArtboardViewImageMeta;
   /** @deprecated 已合并至 annotations，加载时自动迁移 */
   hotspots?: import("./process").Hotspot[];
 };

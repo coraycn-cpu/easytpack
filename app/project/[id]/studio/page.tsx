@@ -72,7 +72,7 @@ import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-char
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
-import { createViewPlaceholderImage } from "@/lib/studio/view-image-client";
+import { createViewPlaceholderImage, getImageDimensions, matchImageToSourceSize } from "@/lib/studio/view-image-client";
 import {
   appendViewGenRecord,
   buildViewGenTrainingPayload,
@@ -95,7 +95,8 @@ export default function StudioPage() {
   const [activeTab, setActiveTab] = useState<Tab>("process");
   const [aiTask, setAiTask] = useState<AiLoadingPresetId | null>(null);
   const [viewGenerating, setViewGenerating] = useState(false);
-  const aiBusy = aiTask !== null || viewGenerating;
+  const [regeneratingArtboardId, setRegeneratingArtboardId] = useState<string | null>(null);
+  const aiBusy = aiTask !== null || viewGenerating || regeneratingArtboardId !== null;
   const activeAiPreset: AiLoadingPresetId | null = viewGenerating ? "view-image" : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
@@ -539,13 +540,23 @@ export default function StudioPage() {
     return withImage?.imageDataUrl ?? project.intake.imageDataUrl;
   }, [project]);
 
-  const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
+  const runViewImageGeneration = async (params: {
+    kind: ViewImageKind;
+    customPrompt?: string;
+    correctionPrompt?: string;
+    targetArtboardId?: string;
+  }) => {
     if (aiBusy) return;
     if (!project || !sourceImageUrl) {
       setAiMessage("请先上传正面款式图");
       return;
     }
-    setViewGenerating(true);
+    const isRegen = Boolean(params.targetArtboardId);
+    if (isRegen) {
+      setRegeneratingArtboardId(params.targetArtboardId!);
+    } else {
+      setViewGenerating(true);
+    }
     setAiMessage(null);
     try {
       const imageForAi = await resolveImageDataUrlForAi(sourceImageUrl);
@@ -553,16 +564,21 @@ export default function StudioPage() {
         setAiMessage("正面图过大，请换一张较小的图片后重试");
         return;
       }
+      const { width: sourceWidth, height: sourceHeight } =
+        await getImageDimensions(sourceImageUrl);
 
       const res = await fetch("/api/ai/view-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          kind,
-          customPrompt,
+          kind: params.kind,
+          customPrompt: params.customPrompt,
+          correctionPrompt: params.correctionPrompt,
           category: project.intake.detectedCategory,
           description: project.intake.description,
           sourceImageUrl: imageForAi,
+          sourceWidth,
+          sourceHeight,
         }),
       });
       const data = await res.json();
@@ -583,16 +599,17 @@ export default function StudioPage() {
             : "生图 API 未返回图片，已生成占位图",
         );
       } else {
+        imageDataUrl = await matchImageToSourceSize(imageDataUrl, sourceImageUrl);
         setAiTip(
-          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图`,
+          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图（尺寸已与主图对齐）`,
         );
       }
 
       appendViewGenRecord(
         buildViewGenTrainingPayload({
           projectId: project.id,
-          viewKind: kind,
-          customPrompt,
+          viewKind: params.kind,
+          customPrompt: params.customPrompt,
           category: project.intake.detectedCategory,
           description: project.intake.description,
           sourceImageUrl: imageForAi,
@@ -606,28 +623,54 @@ export default function StudioPage() {
         }),
       );
 
-      const slots = await computeArtboardSlots(project.canvas_data.artboards);
-      const origin = nextArtboardOrigin(slots);
-      const newBoard = createArtboard(data.artboardName ?? "视角图", imageDataUrl);
-      newBoard.canvasOrigin = origin;
+      const viewMeta = {
+        kind: params.kind,
+        customPrompt: params.customPrompt,
+        lastImagePrompt: data.imagePrompt as string | undefined,
+        correctionPrompt: params.correctionPrompt,
+      };
 
-      const artboards = [...project.canvas_data.artboards, newBoard];
-      persist({
-        ...project,
-        canvas_data: {
-          ...project.canvas_data,
-          artboards,
-          activeArtboardId: newBoard.id,
-        },
-      });
-      setActiveArtboardId(newBoard.id);
-      setAiMessage(`已添加「${newBoard.name}」到画布`);
+      if (params.targetArtboardId) {
+        const artboards = project.canvas_data.artboards.map((ab) =>
+          ab.id === params.targetArtboardId
+            ? {
+                ...ab,
+                imageDataUrl,
+                name: data.artboardName ?? ab.name,
+                viewImageMeta: viewMeta,
+              }
+            : ab,
+        );
+        persist({
+          ...project,
+          canvas_data: { ...project.canvas_data, artboards },
+        });
+        setAiMessage(`已重新生成「${data.artboardName ?? "视角图"}」`);
+      } else {
+        const slots = await computeArtboardSlots(project.canvas_data.artboards);
+        const origin = nextArtboardOrigin(slots);
+        const newBoard = createArtboard(data.artboardName ?? "视角图", imageDataUrl);
+        newBoard.canvasOrigin = origin;
+        newBoard.viewImageMeta = viewMeta;
+
+        const artboards = [...project.canvas_data.artboards, newBoard];
+        persist({
+          ...project,
+          canvas_data: {
+            ...project.canvas_data,
+            artboards,
+            activeArtboardId: newBoard.id,
+          },
+        });
+        setActiveArtboardId(newBoard.id);
+        setAiMessage(`已添加「${newBoard.name}」到画布`);
+      }
     } catch (e) {
       appendViewGenRecord(
         buildViewGenTrainingPayload({
           projectId: project.id,
-          viewKind: kind,
-          customPrompt,
+          viewKind: params.kind,
+          customPrompt: params.customPrompt,
           category: project.intake.detectedCategory,
           description: project.intake.description,
           sourceImageUrl,
@@ -638,7 +681,28 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "视角图生成失败");
     } finally {
       setViewGenerating(false);
+      setRegeneratingArtboardId(null);
     }
+  };
+
+  const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
+    await runViewImageGeneration({ kind, customPrompt });
+  };
+
+  const handleRegenerateView = async (artboardId: string, correctionPrompt: string) => {
+    if (!project) return;
+    const target = project.canvas_data.artboards.find((a) => a.id === artboardId);
+    const meta = target?.viewImageMeta;
+    if (!target || !meta) {
+      setAiMessage("该画板无 AI 生成记录，请从左侧重新生成");
+      return;
+    }
+    await runViewImageGeneration({
+      kind: meta.kind,
+      customPrompt: meta.customPrompt,
+      correctionPrompt: correctionPrompt || undefined,
+      targetArtboardId: artboardId,
+    });
   };
 
   const handleBatchAnnotate = async () => {
@@ -1122,7 +1186,7 @@ export default function StudioPage() {
             }
           }}
           onGenerateView={handleGenerateView}
-          viewGenerating={viewGenerating}
+          viewGenerating={viewGenerating || regeneratingArtboardId !== null}
           aiBusy={aiBusy}
           compliance={compliance}
           projectTitle={project.title}
@@ -1155,6 +1219,8 @@ export default function StudioPage() {
               onActiveArtboardChange={setActiveArtboard}
               primaryArtboardId={primaryArtboardId}
               onDeleteArtboard={handleDeleteArtboard}
+              onRegenerateView={handleRegenerateView}
+              regeneratingArtboardId={regeneratingArtboardId}
               imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
               annotations={normalizeAnnotations(activeArtboard.annotations)}
               onAnnotationsChange={(annotations) =>

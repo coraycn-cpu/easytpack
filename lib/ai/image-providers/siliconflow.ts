@@ -6,7 +6,7 @@ const DEFAULT_MODEL = "Qwen/Qwen-Image-Edit-2509";
 const FALLBACK_MODEL = "Kwai-Kolors/Kolors";
 
 const VIEW_NEGATIVE_PROMPT =
-  "model, mannequin, watermark, text, logo, blurry, distorted, wrong color, different garment, low quality";
+  "model, mannequin, watermark, text, logo, blurry, distorted, wrong color, different garment, low quality, wrong silhouette, fabric change, style drift, size mismatch";
 
 export function getSiliconflowImageModel(): string {
   return process.env.AI_MODEL_SILICONFLOW_IMAGE || DEFAULT_MODEL;
@@ -22,9 +22,9 @@ function isQwenImageEdit(model: string): boolean {
 
 function buildFashionPrompt(prompt: string, hasReference: boolean): string {
   if (hasReference) {
-    return `Professional fashion tech pack flat lay photo. ${prompt}. Same garment style, color, fabric texture and construction as the reference image. Clean white or neutral background, no model, studio lighting, high detail.`;
+    return `Professional fashion tech pack flat lay photo. ${prompt}. CRITICAL fidelity: identical garment silhouette, pattern, fabric texture, color, and construction details as the reference image — zero deviation. Same scale, proportions and framing as reference. Clean white or neutral background, no model, studio lighting, high detail.`;
   }
-  return `Professional fashion tech pack flat lay photo. ${prompt}. Clean white or neutral background, no model, studio lighting.`;
+  return `Professional fashion tech pack flat lay photo. ${prompt}. Clean white or neutral background, no model, studio lighting, high detail.`;
 }
 
 async function urlToDataUrl(url: string): Promise<string | null> {

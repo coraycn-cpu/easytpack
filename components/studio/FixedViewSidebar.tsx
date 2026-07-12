@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
-import { VIEW_IMAGE_PRESETS, type ViewImageKind } from "@/lib/studio/view-types";
+import { VIEW_IMAGE_PRESETS, VIEW_IMAGE_AI_GUIDE, type ViewImageKind } from "@/lib/studio/view-types";
 import type { WorkflowStatus } from "@/types/project";
 
 type FixedViewSidebarProps = {
@@ -71,8 +71,19 @@ export default function FixedViewSidebar({
       <div className="border-b border-slate-100 px-3 py-2.5">
         <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
         <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
-          4 个部位预设 + 自定义提示词
+          线稿 / 背面 / 领口 / 袖口 + 自定义视角
         </p>
+      </div>
+
+      <div className="border-b border-violet-100 bg-violet-50/60 px-3 py-2">
+        <p className="text-[10px] font-semibold text-violet-800">AI 说明</p>
+        <ul className="mt-1 space-y-0.5">
+          {VIEW_IMAGE_AI_GUIDE.map((line) => (
+            <li key={line} className="text-[9px] leading-snug text-violet-700/90">
+              · {line}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="space-y-1.5 p-2.5">
