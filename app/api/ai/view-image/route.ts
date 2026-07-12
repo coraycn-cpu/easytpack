@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       sourceImageUrl: body.sourceImageUrl,
       sourceWidth: body.sourceWidth,
       sourceHeight: body.sourceHeight,
+      intake: body.intake,
     });
 
     const synthesis = await synthesizeViewImage(imagePrompt, {

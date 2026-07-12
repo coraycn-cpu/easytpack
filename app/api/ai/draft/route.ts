@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       questions,
       regionStandard,
       sampleSize,
+      intake,
     } = body;
 
     if (!intentSummary || !detectedCategory) {
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       questions: questions ?? [],
       regionStandard,
       sampleSize,
+      intake,
     });
 
     return NextResponse.json(result);

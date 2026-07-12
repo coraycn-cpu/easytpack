@@ -10,9 +10,17 @@ import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
+import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import {
-  resolveImageDataUrlForAi,
-} from "@/lib/ai/image-for-request";
+  applyIntentToIntake,
+  confirmTargetGarment,
+  needsGarmentConfirmation,
+  needsFlatFrontAfterGarmentPick,
+} from "@/lib/intake/apply-intent";
+import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
+import { isModelPhoto } from "@/lib/ai/garment-scope";
+import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
   annotationToLogicalRect,
@@ -95,7 +103,14 @@ export default function StudioPage() {
   const [aiTask, setAiTask] = useState<AiLoadingPresetId | null>(null);
   const [viewGenerating, setViewGenerating] = useState(false);
   const [regeneratingArtboardId, setRegeneratingArtboardId] = useState<string | null>(null);
-  const aiBusy = aiTask !== null || viewGenerating || regeneratingArtboardId !== null;
+  const garmentBlocked = Boolean(
+    project && needsGarmentConfirmation(project.intake),
+  );
+  const aiBusy =
+    aiTask !== null ||
+    viewGenerating ||
+    regeneratingArtboardId !== null ||
+    garmentBlocked;
   const activeAiPreset: AiLoadingPresetId | null = viewGenerating ? "view-image" : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
@@ -174,6 +189,96 @@ export default function StudioPage() {
       return persist(patch(prev));
     },
     [persist],
+  );
+
+  useEffect(() => {
+    if (!project?.intake.imageDataUrl) return;
+    if (project.intake.visibleGarments?.length || project.intake.garmentConfirmed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/intake", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: project.intake.description,
+            imageDataUrl: project.intake.imageDataUrl,
+          }),
+        });
+        const intent = await res.json();
+        if (!res.ok || cancelled) return;
+        const updated = {
+          ...project,
+          intake: applyIntentToIntake(project.intake, intent),
+          title: project.title || intent.suggestedTitle || project.title,
+        };
+        persist(updated);
+      } catch {
+        /* 非阻断 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [project, persist]);
+
+  const flatFrontRunningRef = useRef(false);
+
+  const runFlatFrontGeneration = useCallback(
+    async (baseProject: TechPackProject) => {
+      if (!needsFlatFrontAfterGarmentPick(baseProject.intake)) return baseProject;
+      if (flatFrontRunningRef.current) return baseProject;
+      flatFrontRunningRef.current = true;
+      setViewGenerating(true);
+      try {
+        const result = await generateFlatFrontForPrimary(baseProject);
+        persist(result.project);
+        setAiMessage(`已锁定目标单款 · ${result.message}`);
+        if (result.success) {
+          setAiTip("主款画板已替换为 AI 平铺正面，可进行工艺/尺寸标注");
+        }
+        return result.project;
+      } catch (e) {
+        setAiMessage(e instanceof Error ? e.message : "平铺正面生成失败");
+        return baseProject;
+      } finally {
+        setViewGenerating(false);
+        flatFrontRunningRef.current = false;
+      }
+    },
+    [persist],
+  );
+
+  useEffect(() => {
+    if (!project || garmentBlocked || viewGenerating) return;
+    if (!needsFlatFrontAfterGarmentPick(project.intake)) return;
+    void runFlatFrontGeneration(project);
+  }, [
+    project?.id,
+    project?.intake.garmentConfirmed,
+    project?.intake.flatFrontGenerated,
+    project?.intake.photoType,
+    garmentBlocked,
+    viewGenerating,
+    runFlatFrontGeneration,
+  ]);
+
+  const handleGarmentConfirm = useCallback(
+    async (garment: Parameters<typeof confirmTargetGarment>[1]) => {
+      if (!project) return;
+      let updated: TechPackProject = {
+        ...project,
+        title: garment.label,
+        intake: confirmTargetGarment(project.intake, garment),
+      };
+      persist(updated);
+      if (needsFlatFrontAfterGarmentPick(updated.intake)) {
+        updated = await runFlatFrontGeneration(updated);
+      } else {
+        setAiMessage(`已锁定目标单款：${garment.label}`);
+      }
+    },
+    [project, persist, runFlatFrontGeneration],
   );
 
   const handleNewStyle = () => router.push("/");
@@ -408,10 +513,9 @@ export default function StudioPage() {
     setAiTask("size-dimension");
     setAiMessage(null);
     try {
-      const imgUrl = await resolveImageDataUrlForAi(
-        activeArtboard.imageDataUrl,
-        project.intake.imageDataUrl,
-      );
+      const { dataUrl: imgUrl } = await resolveGarmentImageForAi(project, {
+        activeArtboardId: activeArtboard.id,
+      });
       const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
       const fitSource = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl ?? imgUrl;
       const imageFit = fitSource
@@ -432,6 +536,7 @@ export default function StudioPage() {
           sampleSize,
           regionStandard,
           existingPart: selectedAnn.linkedSizePart,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -535,8 +640,15 @@ export default function StudioPage() {
 
   const sourceImageUrl = useMemo(() => {
     if (!project) return undefined;
-    const withImage = project.canvas_data.artboards.find((a) => a.imageDataUrl);
-    return withImage?.imageDataUrl ?? project.intake.imageDataUrl;
+    const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+    const primary = primaryId
+      ? project.canvas_data.artboards.find((a) => a.id === primaryId)
+      : project.canvas_data.artboards[0];
+    return (
+      primary?.imageDataUrl ??
+      project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl ??
+      project.intake.imageDataUrl
+    );
   }, [project]);
 
   const runViewImageGeneration = async (params: {
@@ -578,6 +690,7 @@ export default function StudioPage() {
           sourceImageUrl: imageForAi,
           sourceWidth,
           sourceHeight,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -710,14 +823,18 @@ export default function StudioPage() {
     setAiTask("annotate-process");
     setAiMessage(null);
     try {
+      const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
+        activeArtboardId: activeArtboard.id,
+      });
       const res = await fetch("/api/ai/annotate-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          imageDataUrl: activeArtboard.imageDataUrl ?? project.intake.imageDataUrl,
+          imageDataUrl,
           processItems: project.process_items,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -777,7 +894,11 @@ export default function StudioPage() {
         process_items: processItems,
         canvas_data: { ...project.canvas_data, artboards },
       });
-      setAiTip(data.userTips ?? "已添加 AI 区域标注");
+      setAiTip(
+        isModelPhoto(project.intake.photoType)
+          ? `${data.userTips ?? "已添加 AI 区域标注"}（模特图基于选定单款，建议用 AI 生图补平铺图）`
+          : (data.userTips ?? "已添加 AI 区域标注"),
+      );
       setAiMessage("AI 标工艺完成");
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "标工艺失败");
@@ -792,16 +913,20 @@ export default function StudioPage() {
     setAiTask("fill-bom");
     setAiMessage(null);
     try {
+      const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
+        preferIntake: true,
+      });
       const res = await fetch("/api/ai/bom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          imageDataUrl: project.intake.imageDataUrl,
+          imageDataUrl,
           processItems: project.process_items,
           existingBom: project.bom_items,
           answers: project.questionnaire.answers,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -827,7 +952,9 @@ export default function StudioPage() {
     setAiTask("region-annotate");
     setAiMessage(null);
     try {
-      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const { dataUrl: imgUrl } = await resolveGarmentImageForAi(project, {
+        activeArtboardId: activeArtboard.id,
+      });
       const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
       const imageFit = imgUrl
         ? await loadImagePlacement(imgUrl)
@@ -845,6 +972,7 @@ export default function StudioPage() {
           existingPart: selectedAnn.linkedProcessIds?.length
             ? project.process_items.find((p) => p.id === selectedAnn.linkedProcessIds![0])?.part
             : undefined,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -903,10 +1031,9 @@ export default function StudioPage() {
     setAiTask("fill-size");
     setAiMessage(null);
     try {
-      const imageDataUrl = await resolveImageDataUrlForAi(
-        activeArtboard?.imageDataUrl,
-        project.intake.imageDataUrl,
-      );
+      const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
+        activeArtboardId: activeArtboard?.id,
+      });
 
       const res = await fetch("/api/ai/size-chart", {
         method: "POST",
@@ -919,6 +1046,7 @@ export default function StudioPage() {
           existingChart: project.size_chart,
           regionStandard: input.regionStandard,
           sampleSize: input.sampleSize,
+          intake: project.intake,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -980,6 +1108,7 @@ export default function StudioPage() {
               sampleSize: input.sampleSize,
               regionStandard: input.regionStandard,
               skipParts,
+              intake: current.intake,
             }),
           });
           const dimData = (await dimRes.json().catch(() => ({}))) as {
@@ -1103,11 +1232,9 @@ export default function StudioPage() {
     setAiTask("explain");
     setAiMessage(null);
     try {
-      const imageDataUrl = await resolveImageDataUrlForAi(
-        project.intake.imageDataUrl,
-        activeArtboard?.imageDataUrl,
-        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl,
-      );
+      const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
+        activeArtboardId: activeArtboard?.id,
+      });
 
       const res = await fetch("/api/ai/style-review", {
         method: "POST",
@@ -1128,6 +1255,7 @@ export default function StudioPage() {
             spec,
           })),
           existingReview: project.style_review,
+          intake: project.intake,
         }),
       });
       const data = await res.json();
@@ -1162,6 +1290,23 @@ export default function StudioPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
+      {garmentBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md">
+            <GarmentPickerStep
+              intake={project.intake}
+              imagePreview={project.intake.imageDataUrl}
+              onConfirm={(g) => void handleGarmentConfirm(g)}
+            />
+          </div>
+        </div>
+      )}
+      {viewGenerating && !garmentBlocked && (
+        <AiAnalysisOverlay
+          preset="view-image"
+          imagePreview={project.intake.imageDataUrl}
+        />
+      )}
       <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
       <div className="flex min-h-0 flex-1">
@@ -1187,7 +1332,8 @@ export default function StudioPage() {
           aiBusy={aiBusy}
           compliance={compliance}
           projectTitle={project.title}
-          category={project.intake.detectedCategory}
+          category={project.intake.targetGarment?.category ?? project.intake.detectedCategory}
+          targetGarmentLabel={project.intake.targetGarment?.label}
           workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
           progress={progress}
           workflowStatus={project.workflowStatus}

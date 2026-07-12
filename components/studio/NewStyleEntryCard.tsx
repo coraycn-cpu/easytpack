@@ -8,6 +8,7 @@ import SizeStandardFields, {
   type SizeStandardInput,
 } from "@/components/studio/SizeStandardFields";
 import { createStyleProject } from "@/lib/project/create-style";
+import { applyIntentToIntake, confirmTargetGarment, needsGarmentConfirmation } from "@/lib/intake/apply-intent";
 import { fileToDataUrl } from "@/lib/project/storage";
 import type { IntakeData } from "@/types/project";
 
@@ -55,7 +56,7 @@ export default function NewStyleEntryCard({
   const createProject = async (mode: NewStyleMode) => {
     if (!canSubmit || !imageDataUrl) return;
     setLoading(true);
-    setLoadingPreset(mode === "full" ? "intake" : "default");
+    setLoadingPreset("intake");
     setError(null);
 
     try {
@@ -66,7 +67,7 @@ export default function NewStyleEntryCard({
         detectedCategory: "未分类",
       };
 
-      if (mode === "full") {
+      if (imageDataUrl) {
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -74,14 +75,7 @@ export default function NewStyleEntryCard({
         });
         const intent = await res.json();
         if (!res.ok) throw new Error(intent.error || "分析失败");
-        intake = {
-          description,
-          imageDataUrl,
-          aiIntentAnalysis: intent.summary,
-          detectedCategory: intent.detectedCategory,
-          detectedFeatures: intent.detectedFeatures,
-          suggestedTitle: intent.suggestedTitle,
-        };
+        intake = applyIntentToIntake(intake, intent);
       }
 
       const project = createStyleProject({

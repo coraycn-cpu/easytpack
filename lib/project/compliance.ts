@@ -78,6 +78,22 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
     issues.push({ level: "warning", message: "缺少款式参考图" });
   }
 
+  if (
+    project.intake.imageDataUrl &&
+    !project.intake.garmentConfirmed &&
+    (project.intake.requiresGarmentPick ||
+      (project.intake.visibleGarments?.length ?? 0) > 1)
+  ) {
+    issues.push({ level: "warning", message: "请先确认目标单款" });
+  }
+
+  if (project.intake.photoType === "model") {
+    issues.push({
+      level: "warning",
+      message: "当前为模特图，尺寸/工艺建议核对后定稿",
+    });
+  }
+
   return issues;
 }
 

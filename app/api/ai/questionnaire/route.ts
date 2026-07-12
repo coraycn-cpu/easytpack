@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
       intentSummary,
       detectedCategory,
       detectedFeatures,
+      intake,
     } = body;
 
     if (!intentSummary || !detectedCategory) {
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
       intentSummary,
       detectedCategory,
       detectedFeatures: detectedFeatures ?? [],
+      intake,
     });
 
     return NextResponse.json(result);

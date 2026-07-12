@@ -1,7 +1,17 @@
-export type ViewImageKind = "line_art" | "back" | "collar" | "cuff" | "custom";
+export type ViewImageKind =
+  | "flat_front"
+  | "line_art"
+  | "back"
+  | "collar"
+  | "cuff"
+  | "custom";
+
+/** 选款后自动生成的平铺正面（不在侧栏展示） */
+export const FLAT_FRONT_VIEW_HINT =
+  "从参考图中提取目标单款，生成完整正面平铺图，无模特、白底或中性背景，版型颜色面料与目标款一致，专业服装摄影平铺风格";
 
 export type ViewImagePreset = {
-  kind: Exclude<ViewImageKind, "custom">;
+  kind: Exclude<ViewImageKind, "custom" | "flat_front">;
   label: string;
   icon: string;
   promptHint: string;
@@ -45,12 +55,14 @@ export const VIEW_IMAGE_PRESET_MAP = Object.fromEntries(
 
 export function getViewPresetHint(kind: ViewImageKind, customPrompt?: string): string {
   if (kind === "custom") return customPrompt?.trim() ?? "自定义视角";
-  return VIEW_IMAGE_PRESET_MAP[kind]?.promptHint ?? kind;
+  if (kind === "flat_front") return FLAT_FRONT_VIEW_HINT;
+  return VIEW_IMAGE_PRESET_MAP[kind as Exclude<ViewImageKind, "custom" | "flat_front">]?.promptHint ?? kind;
 }
 
 export function isViewImageKind(value: string): value is ViewImageKind {
   return (
     value === "custom" ||
+    value === "flat_front" ||
     VIEW_IMAGE_PRESETS.some((p) => p.kind === value)
   );
 }

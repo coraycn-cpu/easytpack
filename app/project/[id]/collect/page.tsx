@@ -11,6 +11,14 @@ import SizeStandardFields, {
 import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
 import { buildInitialSizeChart } from "@/lib/project/create-style";
 import { getProject, saveProject } from "@/lib/project/storage";
+import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
+import {
+  applyIntentToIntake,
+  confirmTargetGarment,
+  needsGarmentConfirmation,
+  needsFlatFrontAfterGarmentPick,
+} from "@/lib/intake/apply-intent";
+import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { createDefaultCanvasData, mergeSuggestedPartAnnotations } from "@/lib/project/hotspots";
 import { generateProcessId } from "@/lib/process/ids";
 import type { AiQuestion, TechPackProject } from "@/types/project";
@@ -47,13 +55,7 @@ export default function CollectPage() {
           });
           const intent = await res.json();
           if (res.ok) {
-            p.intake = {
-              ...p.intake,
-              aiIntentAnalysis: intent.summary,
-              detectedCategory: intent.detectedCategory ?? p.intake.detectedCategory,
-              detectedFeatures: intent.detectedFeatures,
-              suggestedTitle: intent.suggestedTitle ?? p.intake.suggestedTitle,
-            };
+            p.intake = applyIntentToIntake(p.intake, intent);
             saveProject(p);
           }
         } catch {
@@ -62,7 +64,10 @@ export default function CollectPage() {
         setInitPhase("questionnaire");
       }
 
-      if (p.questionnaire.questions.length === 0) {
+      if (
+        p.questionnaire.questions.length === 0 &&
+        !needsGarmentConfirmation(p.intake)
+      ) {
         setInitPhase("questionnaire");
         try {
           const res = await fetch("/api/ai/questionnaire", {
@@ -74,6 +79,7 @@ export default function CollectPage() {
               intentSummary: p.intake.aiIntentAnalysis,
               detectedCategory: p.intake.detectedCategory,
               detectedFeatures: p.intake.detectedFeatures,
+              intake: p.intake,
             }),
           });
           const data = await res.json();
@@ -123,6 +129,60 @@ export default function CollectPage() {
       ? current.filter((v) => v !== optionId)
       : [...current, optionId];
     setAnswer(questionId, next);
+  };
+
+  const handleGarmentConfirm = async (garment: Parameters<typeof confirmTargetGarment>[1]) => {
+    if (!project) return;
+    setLoading(true);
+    setError(null);
+    try {
+      let updated: TechPackProject = {
+        ...project,
+        title: garment.label,
+        intake: confirmTargetGarment(project.intake, garment),
+      };
+      saveProject(updated);
+      setProject(updated);
+
+      if (needsFlatFrontAfterGarmentPick(updated.intake)) {
+        setInitPhase("intake");
+        const flatResult = await generateFlatFrontForPrimary(updated);
+        updated = flatResult.project;
+        saveProject(updated);
+        setProject(updated);
+      }
+
+      if (updated.questionnaire.questions.length === 0) {
+        setInitPhase("questionnaire");
+        const res = await fetch("/api/ai/questionnaire", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: updated.intake.description,
+            imageDataUrl: updated.intake.imageDataUrl,
+            intentSummary: updated.intake.aiIntentAnalysis,
+            detectedCategory: updated.intake.detectedCategory,
+            detectedFeatures: updated.intake.detectedFeatures,
+            intake: updated.intake,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        updated.questionnaire = {
+          intro: data.intro,
+          questions: data.questions,
+          answers: {},
+          isComplete: false,
+        };
+        saveProject(updated);
+        setProject({ ...updated });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载问卷失败");
+    } finally {
+      setLoading(false);
+      setInitPhase(null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -178,6 +238,7 @@ export default function CollectPage() {
           ],
           regionStandard,
           sampleSize,
+          intake: project.intake,
         }),
       });
 
@@ -205,6 +266,7 @@ export default function CollectPage() {
       const partAnnotations = mergeSuggestedPartAnnotations(
         rawHotspots,
         project.intake.detectedCategory,
+        project.intake.photoType,
       ).map((ann) => {
         const label = ann.linkedPart ?? ann.text;
         const pid = processItems.find((p) => p.part?.trim() === label?.trim())?.id;
@@ -232,6 +294,7 @@ export default function CollectPage() {
             existingChart: size_chart,
             regionStandard,
             sampleSize,
+            intake: project.intake,
           }),
         });
         const sizeData = await sizeRes.json();
@@ -291,6 +354,7 @@ export default function CollectPage() {
   }
 
   const formLocked = submitting;
+  const awaitingGarment = needsGarmentConfirmation(project.intake);
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -305,7 +369,7 @@ export default function CollectPage() {
         <div className="mb-6">
           <p className="text-xs font-medium text-blue-600">全功能 AI 标注 · 补充信息</p>
           <h1 className="mt-1 text-2xl font-bold text-slate-900">{project.title}</h1>
-          {project.intake.aiIntentAnalysis && (
+          {project.intake.aiIntentAnalysis && !awaitingGarment && (
             <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
               <p className="text-xs font-medium text-blue-800">AI 理解你的创意：</p>
               <p className="mt-1 text-sm leading-relaxed text-blue-900">
@@ -315,6 +379,13 @@ export default function CollectPage() {
           )}
         </div>
 
+        {awaitingGarment ? (
+          <GarmentPickerStep
+            intake={project.intake}
+            imagePreview={project.intake.imageDataUrl}
+            onConfirm={handleGarmentConfirm}
+          />
+        ) : (
         <div
           className={`space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 ${
             formLocked ? "pointer-events-none opacity-60" : ""
@@ -367,6 +438,7 @@ export default function CollectPage() {
             {submitting ? "AI 正在生成工艺包初稿..." : "确认，进入画板 →"}
           </button>
         </div>
+        )}
 
         {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
       </main>

@@ -17,6 +17,7 @@ type FixedViewSidebarProps = {
   compliance: ComplianceIssue[];
   projectTitle: string;
   category?: string;
+  targetGarmentLabel?: string;
   workflowLabel: string;
   progress: number;
   workflowStatus: WorkflowStatus;
@@ -33,6 +34,7 @@ export default function FixedViewSidebar({
   compliance,
   projectTitle,
   category,
+  targetGarmentLabel,
   workflowLabel,
   progress,
   workflowStatus,
@@ -151,7 +153,8 @@ export default function FixedViewSidebar({
             {projectTitle}
           </h1>
           <p className="mt-1 text-[10px] text-slate-500">
-            {category ?? "未分类"} · {workflowLabel} · {progress}%
+            {category ?? "未分类"}
+            {targetGarmentLabel ? ` · 目标款：${targetGarmentLabel}` : ""} · {workflowLabel} · {progress}%
           </p>
 
           <div className="mt-2 space-y-1.5">

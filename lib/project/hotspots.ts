@@ -111,11 +111,16 @@ function overlapRatio(a: Hotspot, b: Hotspot): number {
   return areaA > 0 ? inter / areaA : 0;
 }
 
+import type { PhotoType } from "@/types/project";
+
 function filterSuggestedRegions(
   regions: Hotspot[],
-  options?: { maxCount?: number; category?: string },
+  options?: { maxCount?: number; category?: string; photoType?: PhotoType },
 ): Hotspot[] {
   const maxCount = options?.maxCount ?? 8;
+  const isModel = options?.photoType === "model";
+  const topCutoff = isModel ? 0.22 : 0.18;
+  const maxAreaRatio = isModel ? 0.25 : 0.35;
 
   let filtered = regions.filter((hs) => {
     const cx = hs.x + hs.width / 2;
@@ -123,8 +128,8 @@ function filterSuggestedRegions(
     const area = hs.width * hs.height;
     const stageArea = CANVAS_W * CANVAS_H;
 
-    if (cy < CANVAS_H * 0.18) return false;
-    if (area < 600 || area > stageArea * 0.35) return false;
+    if (cy < CANVAS_H * topCutoff) return false;
+    if (area < 600 || area > stageArea * maxAreaRatio) return false;
     const ratio = hs.width / (hs.height || 1);
     if (ratio > 8 || ratio < 0.12) return false;
     if (cy < CANVAS_H * 0.28 && hs.width < CANVAS_W * 0.25) return false;
@@ -220,9 +225,10 @@ function regionsToAnnotations(regions: TemplateRegion[], prefix: string): Annota
 export function mergeSuggestedPartAnnotations(
   aiRegions: Hotspot[],
   category?: string,
+  photoType?: PhotoType,
 ): Annotation[] {
   const scaled = aiRegions.map(scaleRegionFromLegacy);
-  const filtered = filterSuggestedRegions(scaled, { category });
+  const filtered = filterSuggestedRegions(scaled, { category, photoType });
   const regions =
     filtered.length >= 3
       ? filtered

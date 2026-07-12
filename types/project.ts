@@ -9,6 +9,18 @@ export type ProjectStatus =
 
 export type WorkflowStatus = "draft" | "in_review" | "finalized";
 
+export type PhotoType = "flat_lay" | "model" | "collage" | "sketch";
+
+export type TargetGarment = {
+  id: string;
+  label: string;
+  category: string;
+};
+
+export type VisibleGarment = TargetGarment & {
+  confidence?: "high" | "medium" | "low";
+};
+
 export type IntakeData = {
   description: string;
   imageDataUrl?: string;
@@ -16,6 +28,21 @@ export type IntakeData = {
   detectedCategory?: string;
   detectedFeatures?: string[];
   suggestedTitle?: string;
+  /** 图片类型 */
+  photoType?: PhotoType;
+  /** AI 识别到的可见款式列表 */
+  visibleGarments?: VisibleGarment[];
+  /** AI 推荐的主款 id */
+  recommendedGarmentId?: string;
+  /** 用户锁定的目标单款 */
+  targetGarment?: TargetGarment;
+  intentConfidence?: "high" | "medium" | "low";
+  /** 用户已确认目标单款 */
+  garmentConfirmed?: boolean;
+  /** intake 分析：是否必须用户选款 */
+  requiresGarmentPick?: boolean;
+  /** 已从模特/拼贴图生成平铺正面主款 */
+  flatFrontGenerated?: boolean;
 };
 
 export type QuestionOption = {

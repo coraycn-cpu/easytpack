@@ -14,6 +14,8 @@ import {
   VIEW_IMAGE_FIDELITY_RULES,
   appendCorrectionToPrompt,
 } from "@/lib/studio/view-image-constraints";
+import { buildGarmentScopeContext } from "@/lib/ai/garment-scope";
+import type { GarmentScopeInput } from "@/lib/ai/assist";
 
 export type { SynthesizeViewImageResult } from "@/lib/ai/image-providers";
 export type { ViewImageKind } from "@/lib/studio/view-types";
@@ -41,8 +43,19 @@ export async function generateViewImagePrompt(input: {
   sourceImageUrl?: string;
   sourceWidth?: number;
   sourceHeight?: number;
+  intake?: GarmentScopeInput;
 }) {
   const viewDesc = getViewPresetHint(input.kind, input.customPrompt);
+  const scope = input.intake
+    ? buildGarmentScopeContext(input.intake)
+    : buildGarmentScopeContext({
+        detectedCategory: input.category,
+        description: input.description ?? "",
+      });
+  const modelNote =
+    input.intake?.photoType === "model"
+      ? "参考图为模特穿着图：从穿着状态提取目标单款生成平铺/线稿，不得改变目标款本身，不得混入其他可见服装。"
+      : "";
   const sizeNote =
     input.sourceWidth && input.sourceHeight
       ? `参考主图像素尺寸：${input.sourceWidth}×${input.sourceHeight}，输出须同比例同尺度。`
@@ -56,6 +69,9 @@ export async function generateViewImagePrompt(input: {
     schema: ViewPromptSchema,
     schemaName: "ViewImagePrompt",
     instructions: `你是服装款式图助手。根据正面款式参考图，为指定视角生成图像生成 prompt 与画板名称。
+
+${scope}
+${modelNote}
 
 ${VIEW_IMAGE_FIDELITY_RULES}
 

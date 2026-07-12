@@ -41,12 +41,32 @@ export const BomAssistSchema = z.object({
     .describe("用非专业人士能理解的语言说明物料选择依据"),
 });
 
+export const VisibleGarmentSchema = z.object({
+  id: z.string().describe("款式唯一 id，如 g1、g2"),
+  label: z.string().describe("简短款式名称，如：蓝白条纹衬衫"),
+  category: z.string().describe("品类，如：衬衫、长裤"),
+  confidence: z.enum(["high", "medium", "low"]).describe("识别置信度"),
+});
+
 export const IntentAnalysisSchema = z.object({
   summary: z.string().describe("对用户意图的简要理解"),
-  detectedCategory: z.string().describe("识别出的品类，如：针织T恤"),
+  detectedCategory: z.string().describe("识别出的品类，如：针织T恤，应对齐推荐主款"),
   detectedFeatures: z.array(z.string()).describe("识别出的结构或工艺特征"),
-  suggestedTitle: z.string().describe("建议的款式名称"),
+  suggestedTitle: z.string().describe("建议的款式名称，应对齐推荐主款"),
   confidence: z.enum(["high", "medium", "low"]),
+  photoType: z
+    .enum(["flat_lay", "model", "collage", "sketch"])
+    .describe("图片类型：平铺/模特/拼贴/线稿"),
+  visibleGarments: z
+    .array(VisibleGarmentSchema)
+    .max(6)
+    .describe("画面中独立可识别的服装件，每件单独列出"),
+  recommendedGarmentId: z
+    .string()
+    .describe("AI 推荐作为 Tech Pack 主款的目标 id，须为 visibleGarments 中某项"),
+  requiresGarmentPick: z
+    .boolean()
+    .describe("是否必须用户确认单款：模特图、拼贴或多于 1 件可见服装时为 true"),
 });
 
 export const QuestionOptionSchema = z.object({
