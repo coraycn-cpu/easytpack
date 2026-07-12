@@ -356,13 +356,14 @@ export default function StudioPage() {
   );
 
   const updateArtboard = (artboardId: string, patch: Partial<Artboard>) => {
-    if (!project) return;
-    const artboards = project.canvas_data.artboards.map((a) =>
+    const prev = projectRef.current;
+    if (!prev) return;
+    const artboards = prev.canvas_data.artboards.map((a) =>
       a.id === artboardId ? { ...a, ...patch } : a,
     );
     persist({
-      ...project,
-      canvas_data: { ...project.canvas_data, artboards, activeArtboardId },
+      ...prev,
+      canvas_data: { ...prev.canvas_data, artboards, activeArtboardId },
     });
   };
 

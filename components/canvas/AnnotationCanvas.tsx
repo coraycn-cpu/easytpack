@@ -30,7 +30,7 @@ import {
   computeStudioStageBounds,
   computeMultiStudioStageBounds,
   computeImagePlacement,
-  offsetAnnotations,
+  annotationToLocalCoords,
 } from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
@@ -260,6 +260,8 @@ export default function AnnotationCanvas({
   const isDrawingRef = useRef(isDrawing);
   const toolRef = useRef(tool);
   const annotationsRef = useRef(annotations);
+  /** 当前款式图在画板内的锚点，标注拖拽时需还原为绝对坐标 */
+  const imageCoordOriginRef = useRef({ x: 0, y: 0 });
   draftRectRef.current = draftRect;
   draftLineRef.current = draftLine;
   freehandRef.current = freehandPoints;
@@ -807,20 +809,26 @@ export default function AnnotationCanvas({
     const node = e.target;
     const ann = annotations.find((a) => a.id === id);
     if (!ann) return;
+    const ox = imageCoordOriginRef.current.x;
+    const oy = imageCoordOriginRef.current.y;
 
     if (ann.type === "marker") {
-      updateAnnotation(id, { x: node.x(), y: node.y() });
+      updateAnnotation(id, { x: node.x() + ox, y: node.y() + oy });
     } else if (ann.type === "rect" || ann.type === "circle") {
-      updateAnnotation(id, { x: node.x(), y: node.y(), color: MANUAL_ANNOTATION_COLOR });
+      updateAnnotation(id, {
+        x: node.x() + ox,
+        y: node.y() + oy,
+        color: MANUAL_ANNOTATION_COLOR,
+      });
     } else if (ann.type === "text") {
-      updateAnnotation(id, { x: node.x(), y: node.y() });
+      updateAnnotation(id, { x: node.x() + ox, y: node.y() + oy });
     } else if (ann.type === "arrow" || ann.type === "dimension") {
-      const ox = ann.x ?? 0;
-      const oy = ann.y ?? 0;
-      const dx = (ann.x2 ?? ox) - ox;
-      const dy = (ann.y2 ?? oy) - oy;
-      const newX = node.x();
-      const newY = node.y();
+      const baseX = ann.x ?? 0;
+      const baseY = ann.y ?? 0;
+      const dx = (ann.x2 ?? baseX) - baseX;
+      const dy = (ann.y2 ?? baseY) - baseY;
+      const newX = node.x() + ox;
+      const newY = node.y() + oy;
       updateAnnotation(id, {
         x: newX,
         y: newY,
@@ -842,16 +850,18 @@ export default function AnnotationCanvas({
     node.scaleX(1);
     node.scaleY(1);
 
-    const ox = ann.x ?? 0;
-    const oy = ann.y ?? 0;
-    const dx = (ann.x2 ?? ox) - ox;
-    const dy = (ann.y2 ?? oy) - oy;
+    const baseX = ann.x ?? 0;
+    const baseY = ann.y ?? 0;
+    const dx = (ann.x2 ?? baseX) - baseX;
+    const dy = (ann.y2 ?? baseY) - baseY;
+    const ox = imageCoordOriginRef.current.x;
+    const oy = imageCoordOriginRef.current.y;
 
     updateAnnotation(id, {
-      x: node.x(),
-      y: node.y(),
-      x2: node.x() + dx * scaleX,
-      y2: node.y() + dy * scaleY,
+      x: node.x() + ox,
+      y: node.y() + oy,
+      x2: node.x() + ox + dx * scaleX,
+      y2: node.y() + oy + dy * scaleY,
       ...(ann.type === "dimension" ? { color: MANUAL_ANNOTATION_COLOR } : {}),
     });
   };
@@ -866,19 +876,21 @@ export default function AnnotationCanvas({
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+    const ox = imageCoordOriginRef.current.x;
+    const oy = imageCoordOriginRef.current.y;
 
     if (ann.type === "rect") {
       updateAnnotation(id, {
-        x: node.x(),
-        y: node.y(),
+        x: node.x() + ox,
+        y: node.y() + oy,
         width: Math.max(8, (ann.width ?? 0) * scaleX),
         height: Math.max(8, (ann.height ?? 0) * scaleY),
         color: MANUAL_ANNOTATION_COLOR,
       });
     } else if (ann.type === "circle") {
       updateAnnotation(id, {
-        x: node.x(),
-        y: node.y(),
+        x: node.x() + ox,
+        y: node.y() + oy,
         width: Math.max(8, (ann.width ?? 0) * scaleX),
         height: Math.max(8, (ann.height ?? 0) * scaleY),
         color: MANUAL_ANNOTATION_COLOR,
@@ -890,9 +902,11 @@ export default function AnnotationCanvas({
     ann: Annotation,
     interactive = true,
     layerVisible = true,
+    coordOrigin?: { x: number; y: number },
   ) => {
-    const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
-    const sw = ann.strokeWidth ?? 3;
+    const displayAnn = coordOrigin ? annotationToLocalCoords(ann, coordOrigin) : ann;
+    const c = displayAnn.color ?? DEFAULT_ANNOTATION_COLOR;
+    const sw = displayAnn.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
     const isLinkedHighlight = linkedHighlightAnnIds.includes(ann.id);
     const hasProcessLink = (ann.linkedProcessIds?.length ?? 0) > 0;
@@ -910,10 +924,10 @@ export default function AnnotationCanvas({
           <Group key={ann.id} visible={layerVisible}>
             <Rect
               id={`ann_${ann.id}`}
-              x={ann.x}
-              y={ann.y}
-              width={ann.width ?? 0}
-              height={ann.height ?? 0}
+              x={displayAnn.x}
+              y={displayAnn.y}
+              width={displayAnn.width ?? 0}
+              height={displayAnn.height ?? 0}
               stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
               dash={hasProcessLink ? [6, 3] : undefined}
@@ -927,8 +941,8 @@ export default function AnnotationCanvas({
             />
             {partLabel && (
               <Text
-                x={ann.x + 4}
-                y={ann.y > 16 ? ann.y - 6 : ann.y + 16}
+                x={displayAnn.x + 4}
+                y={displayAnn.y > 16 ? displayAnn.y - 6 : displayAnn.y + 16}
                 text={partLabel}
                 fontSize={13}
                 fontStyle="600"
@@ -945,10 +959,10 @@ export default function AnnotationCanvas({
             key={ann.id}
             id={`ann_${ann.id}`}
             visible={layerVisible}
-            x={ann.x}
-            y={ann.y}
-            width={ann.width ?? 0}
-            height={ann.height ?? 0}
+            x={displayAnn.x}
+            y={displayAnn.y}
+            width={displayAnn.width ?? 0}
+            height={displayAnn.height ?? 0}
             cornerRadius={9999}
             stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
             strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
@@ -963,10 +977,10 @@ export default function AnnotationCanvas({
         );
       case "arrow":
       case "dimension": {
-        const x1 = ann.x;
-        const y1 = ann.y;
-        const x2 = ann.x2 ?? ann.x;
-        const y2 = ann.y2 ?? ann.y;
+        const x1 = displayAnn.x;
+        const y1 = displayAnn.y;
+        const x2 = displayAnn.x2 ?? displayAnn.x;
+        const y2 = displayAnn.y2 ?? displayAnn.y;
         const rdx = x2 - x1;
         const rdy = y2 - y1;
         return (
@@ -1017,9 +1031,9 @@ export default function AnnotationCanvas({
             key={ann.id}
             id={`ann_${ann.id}`}
             visible={layerVisible}
-            x={ann.x}
-            y={ann.y}
-            text={ann.text ?? ""}
+            x={displayAnn.x}
+            y={displayAnn.y}
+            text={displayAnn.text ?? ""}
             fontSize={16}
             fill={c}
             fontStyle="bold"
@@ -1039,7 +1053,7 @@ export default function AnnotationCanvas({
             key={ann.id}
             id={`ann_${ann.id}`}
             visible={layerVisible}
-            points={ann.points ?? []}
+            points={displayAnn.points ?? []}
             stroke={c}
             strokeWidth={isSelected ? sw + 1 : sw}
             lineCap="round"
@@ -1249,6 +1263,11 @@ export default function AnnotationCanvas({
                   }
                 };
 
+                const imageAnchor = { x: imgX, y: imgY };
+                if (isActive) {
+                  imageCoordOriginRef.current = imageAnchor;
+                }
+
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
                     <Group
@@ -1257,14 +1276,10 @@ export default function AnnotationCanvas({
                       draggable={imageDraggable}
                       onDragEnd={(e) => {
                         if (!isActive) return;
-                        const newX = e.target.x() - entry.fit.x;
-                        const newY = e.target.y() - entry.fit.y;
-                        const dx = newX - abOffset.x;
-                        const dy = newY - abOffset.y;
-                        onImageOffsetChange?.({ x: newX, y: newY });
-                        if ((dx !== 0 || dy !== 0) && isActive) {
-                          onAnnotationsChange?.(offsetAnnotations(abAnns, dx, dy));
-                        }
+                        onImageOffsetChange?.({
+                          x: e.target.x() - entry.fit.x,
+                          y: e.target.y() - entry.fit.y,
+                        });
                       }}
                     >
                       <Group y={-labelAbove} listening={false}>
@@ -1340,163 +1355,222 @@ export default function AnnotationCanvas({
                           selectImage();
                         }}
                       />
-                    </Group>
-                    {abAnns.map((ann) =>
-                      renderAnnotation(
-                        ann,
-                        isActive,
-                        isLayerVisible(ann, layerVisibility),
-                      ),
-                    )}
-                    {layerVisibility.process &&
-                      computeSequenceBadges(
-                        processItems ?? [],
-                        filterAnnotationsByLayers(abAnns, {
-                          process: true,
-                          size: false,
-                        }),
-                      ).map((b) => (
-                      <Group key={`badge_${ab.id}_${b.processId}_${b.annotationId}`} listening={false}>
-                        <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
-                        <Text
-                          x={b.x + 14}
-                          y={b.y + 14}
-                          text={b.label}
-                          fontSize={14}
-                          fill="#fff"
-                          width={28}
-                          height={28}
-                          align="center"
-                          verticalAlign="middle"
-                          offsetX={14}
-                          offsetY={14}
+                      {abAnns.map((ann) =>
+                        renderAnnotation(
+                          ann,
+                          isActive,
+                          isLayerVisible(ann, layerVisibility),
+                          imageAnchor,
+                        ),
+                      )}
+                      {layerVisibility.process &&
+                        computeSequenceBadges(
+                          processItems ?? [],
+                          filterAnnotationsByLayers(abAnns, {
+                            process: true,
+                            size: false,
+                          }),
+                        ).map((b) => (
+                          <Group
+                            key={`badge_${ab.id}_${b.processId}_${b.annotationId}`}
+                            listening={false}
+                          >
+                            <Circle
+                              x={b.x - imageAnchor.x + 14}
+                              y={b.y - imageAnchor.y + 14}
+                              radius={14}
+                              fill="#2563eb"
+                            />
+                            <Text
+                              x={b.x - imageAnchor.x + 14}
+                              y={b.y - imageAnchor.y + 14}
+                              text={b.label}
+                              fontSize={14}
+                              fill="#fff"
+                              width={28}
+                              height={28}
+                              align="center"
+                              verticalAlign="middle"
+                              offsetX={14}
+                              offsetY={14}
+                            />
+                          </Group>
+                        ))}
+                      {isActive && draftRect && (
+                        <Rect
+                          x={
+                            draftRect.width < 0
+                              ? draftRect.x + draftRect.width - imageAnchor.x
+                              : draftRect.x - imageAnchor.x
+                          }
+                          y={
+                            draftRect.height < 0
+                              ? draftRect.y + draftRect.height - imageAnchor.y
+                              : draftRect.y - imageAnchor.y
+                          }
+                          width={Math.abs(draftRect.width)}
+                          height={Math.abs(draftRect.height)}
+                          stroke="#22c55e"
+                          dash={[6, 4]}
+                          strokeWidth={2}
+                          listening={false}
                         />
-                      </Group>
-                    ))}
-                    {isActive && draftRect && (
-                      <Rect
-                        x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
-                        y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
-                        width={Math.abs(draftRect.width)}
-                        height={Math.abs(draftRect.height)}
-                        stroke="#22c55e"
-                        dash={[6, 4]}
-                        strokeWidth={2}
-                        listening={false}
-                      />
-                    )}
-                    {isActive && draftLine && (
-                      <Arrow
-                        points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
-                        stroke="#22c55e"
-                        fill="#22c55e"
-                        dash={[4, 4]}
-                        listening={false}
-                      />
-                    )}
-                    {isActive && freehandPoints.length > 1 && (
-                      <Line
-                        points={freehandPoints}
-                        stroke={color}
-                        strokeWidth={3}
-                        lineCap="round"
-                        tension={0.4}
-                        listening={false}
-                      />
-                    )}
+                      )}
+                      {isActive && draftLine && (
+                        <Arrow
+                          points={[
+                            draftLine.x - imageAnchor.x,
+                            draftLine.y - imageAnchor.y,
+                            draftLine.x2 - imageAnchor.x,
+                            draftLine.y2 - imageAnchor.y,
+                          ]}
+                          stroke="#22c55e"
+                          fill="#22c55e"
+                          dash={[4, 4]}
+                          listening={false}
+                        />
+                      )}
+                      {isActive && freehandPoints.length > 1 && (
+                        <Line
+                          points={freehandPoints.map((v, i) =>
+                            i % 2 === 0 ? v - imageAnchor.x : v - imageAnchor.y,
+                          )}
+                          stroke={color}
+                          strokeWidth={3}
+                          lineCap="round"
+                          tension={0.4}
+                          listening={false}
+                        />
+                      )}
+                    </Group>
                   </Group>
                 );
               })
             : null}
-          {!multiMode && image && (
-            <KonvaImage
-              id="garment_image"
-              image={image}
-              x={imageFit.x + imageOffset.x}
-              y={imageFit.y + imageOffset.y}
-              width={imageFit.width}
-              height={imageFit.height}
-              listening={!isDrawingMode && !isPanActive}
-              draggable={tool === "select" && imageSelected && !isPanActive}
-              stroke={imageSelected ? "#2563eb" : undefined}
-              strokeWidth={imageSelected ? 2 : 0}
-              onClick={(e) => {
-                if (tool !== "select") return;
-                e.cancelBubble = true;
-                selectImage();
-              }}
-              onTap={(e) => {
-                if (tool !== "select") return;
-                e.cancelBubble = true;
-                selectImage();
-              }}
-              onDragEnd={(e) => {
-                const newX = e.target.x() - imageFit.x;
-                const newY = e.target.y() - imageFit.y;
-                const dx = newX - imageOffset.x;
-                const dy = newY - imageOffset.y;
-                onImageOffsetChange?.({ x: newX, y: newY });
-                if (dx !== 0 || dy !== 0) {
-                  onAnnotationsChange?.(offsetAnnotations(normalizedAnnotations, dx, dy));
-                }
-              }}
-            />
-          )}
-          {!multiMode &&
-            normalizedAnnotations.map((ann) =>
-              renderAnnotation(ann, true, isLayerVisible(ann, layerVisibility)),
-            )}
-          {!multiMode &&
-            layerVisibility.process &&
-            sequenceBadges.map((b) => (
-              <Group key={`badge_${b.processId}_${b.annotationId}_${b.x}`} listening={false}>
-                <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
-                <Text
-                  x={b.x + 14}
-                  y={b.y + 14}
-                  text={b.label}
-                  fontSize={14}
-                  fill="#fff"
-                  width={28}
-                  height={28}
-                  align="center"
-                  verticalAlign="middle"
-                  offsetX={14}
-                  offsetY={14}
+          {!multiMode && image && (() => {
+            const singleImageAnchor = {
+              x: imageFit.x + imageOffset.x,
+              y: imageFit.y + imageOffset.y,
+            };
+            imageCoordOriginRef.current = singleImageAnchor;
+            return (
+              <Group
+                x={singleImageAnchor.x}
+                y={singleImageAnchor.y}
+                draggable={tool === "select" && imageSelected && !isPanActive}
+                onDragEnd={(e) => {
+                  onImageOffsetChange?.({
+                    x: e.target.x() - imageFit.x,
+                    y: e.target.y() - imageFit.y,
+                  });
+                }}
+              >
+                <KonvaImage
+                  id="garment_image"
+                  image={image}
+                  x={0}
+                  y={0}
+                  width={imageFit.width}
+                  height={imageFit.height}
+                  listening={!isDrawingMode && !isPanActive}
+                  draggable={false}
+                  stroke={imageSelected ? "#2563eb" : undefined}
+                  strokeWidth={imageSelected ? 2 : 0}
+                  onClick={(e) => {
+                    if (tool !== "select") return;
+                    e.cancelBubble = true;
+                    selectImage();
+                  }}
+                  onTap={(e) => {
+                    if (tool !== "select") return;
+                    e.cancelBubble = true;
+                    selectImage();
+                  }}
                 />
+                {normalizedAnnotations.map((ann) =>
+                  renderAnnotation(
+                    ann,
+                    true,
+                    isLayerVisible(ann, layerVisibility),
+                    singleImageAnchor,
+                  ),
+                )}
+                {layerVisibility.process &&
+                  sequenceBadges.map((b) => (
+                    <Group
+                      key={`badge_${b.processId}_${b.annotationId}_${b.x}`}
+                      listening={false}
+                    >
+                      <Circle
+                        x={b.x - singleImageAnchor.x + 14}
+                        y={b.y - singleImageAnchor.y + 14}
+                        radius={14}
+                        fill="#2563eb"
+                      />
+                      <Text
+                        x={b.x - singleImageAnchor.x + 14}
+                        y={b.y - singleImageAnchor.y + 14}
+                        text={b.label}
+                        fontSize={14}
+                        fill="#fff"
+                        width={28}
+                        height={28}
+                        align="center"
+                        verticalAlign="middle"
+                        offsetX={14}
+                        offsetY={14}
+                      />
+                    </Group>
+                  ))}
+                {draftRect && (
+                  <Rect
+                    x={
+                      draftRect.width < 0
+                        ? draftRect.x + draftRect.width - singleImageAnchor.x
+                        : draftRect.x - singleImageAnchor.x
+                    }
+                    y={
+                      draftRect.height < 0
+                        ? draftRect.y + draftRect.height - singleImageAnchor.y
+                        : draftRect.y - singleImageAnchor.y
+                    }
+                    width={Math.abs(draftRect.width)}
+                    height={Math.abs(draftRect.height)}
+                    stroke="#22c55e"
+                    dash={[6, 4]}
+                    strokeWidth={2}
+                    listening={false}
+                  />
+                )}
+                {draftLine && (
+                  <Arrow
+                    points={[
+                      draftLine.x - singleImageAnchor.x,
+                      draftLine.y - singleImageAnchor.y,
+                      draftLine.x2 - singleImageAnchor.x,
+                      draftLine.y2 - singleImageAnchor.y,
+                    ]}
+                    stroke="#22c55e"
+                    fill="#22c55e"
+                    dash={[4, 4]}
+                    listening={false}
+                  />
+                )}
+                {freehandPoints.length > 1 && (
+                  <Line
+                    points={freehandPoints.map((v, i) =>
+                      i % 2 === 0 ? v - singleImageAnchor.x : v - singleImageAnchor.y,
+                    )}
+                    stroke={color}
+                    strokeWidth={3}
+                    lineCap="round"
+                    tension={0.4}
+                    listening={false}
+                  />
+                )}
               </Group>
-            ))}
-          {!multiMode && draftRect && (
-            <Rect
-              x={draftRect.width < 0 ? draftRect.x + draftRect.width : draftRect.x}
-              y={draftRect.height < 0 ? draftRect.y + draftRect.height : draftRect.y}
-              width={Math.abs(draftRect.width)}
-              height={Math.abs(draftRect.height)}
-              stroke="#22c55e"
-              dash={[6, 4]}
-              strokeWidth={2}
-              listening={false}
-            />
-          )}
-          {!multiMode && draftLine && (
-            <Arrow
-              points={[draftLine.x, draftLine.y, draftLine.x2, draftLine.y2]}
-              stroke="#22c55e"
-              fill="#22c55e"
-              dash={[4, 4]}
-              listening={false}
-            />
-          )}
-          {!multiMode && freehandPoints.length > 1 && (
-            <Line
-              points={freehandPoints}
-              stroke={color}
-              strokeWidth={3}
-              lineCap="round"
-              tension={0.4}
-              listening={false}
-            />
-          )}
+            );
+          })()}
           <Transformer
             ref={transformerRef}
             rotateEnabled={false}
