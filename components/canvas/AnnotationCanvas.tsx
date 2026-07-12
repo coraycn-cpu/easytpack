@@ -22,6 +22,7 @@ import {
 import {
   DEFAULT_LAYER_VISIBILITY,
   filterAnnotationsByLayers,
+  isLayerVisible,
   type LayerVisibility,
 } from "@/lib/canvas/annotation-layers";
 import { isDimensionAnnotation } from "@/lib/canvas/size-annotations";
@@ -710,6 +711,12 @@ export default function AnnotationCanvas({
     if (!tr || !stage) return;
 
     if (selectedAnnId) {
+      const ann = normalizedAnnotations.find((a) => a.id === selectedAnnId);
+      if (ann && !isLayerVisible(ann, layerVisibility)) {
+        tr.nodes([]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
       const node = stage.findOne(`#ann_${selectedAnnId}`);
       if (node) {
         tr.nodes([node]);
@@ -719,7 +726,15 @@ export default function AnnotationCanvas({
     }
     tr.nodes([]);
     tr.getLayer()?.batchDraw();
-  }, [selectedAnnId, annotations]);
+  }, [selectedAnnId, annotations, layerVisibility, normalizedAnnotations]);
+
+  useEffect(() => {
+    if (!selectedAnnId) return;
+    const ann = normalizedAnnotations.find((a) => a.id === selectedAnnId);
+    if (ann && !isLayerVisible(ann, layerVisibility)) {
+      setSelectedAnnId(null);
+    }
+  }, [layerVisibility, selectedAnnId, normalizedAnnotations, setSelectedAnnId]);
 
   const updateAnnotation = (id: string, patch: Partial<Annotation>) => {
     onAnnotationsChange(
@@ -740,18 +755,37 @@ export default function AnnotationCanvas({
     } else if (ann.type === "text") {
       updateAnnotation(id, { x: node.x(), y: node.y() });
     } else if (ann.type === "arrow" || ann.type === "dimension") {
-      const dx = node.x();
-      const dy = node.y();
-      node.position({ x: 0, y: 0 });
-      const patch: Partial<Annotation> = {
-        x: (ann.x ?? 0) + dx,
-        y: (ann.y ?? 0) + dy,
-        x2: (ann.x2 ?? ann.x) + dx,
-        y2: (ann.y2 ?? ann.y) + dy,
-      };
-      if (ann.type === "dimension") patch.color = MANUAL_ANNOTATION_COLOR;
-      updateAnnotation(id, patch);
+      updateAnnotation(id, {
+        x: node.x(),
+        y: node.y(),
+        ...(ann.type === "dimension" ? { color: MANUAL_ANNOTATION_COLOR } : {}),
+      });
     }
+  };
+
+  const handleLineTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
+    pushHistory();
+    const node = e.target;
+    const ann = annotations.find((a) => a.id === id);
+    if (!ann || (ann.type !== "arrow" && ann.type !== "dimension")) return;
+
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+
+    const ox = ann.x ?? 0;
+    const oy = ann.y ?? 0;
+    const dx = (ann.x2 ?? ox) - ox;
+    const dy = (ann.y2 ?? oy) - oy;
+
+    updateAnnotation(id, {
+      x: node.x(),
+      y: node.y(),
+      x2: node.x() + dx * scaleX,
+      y2: node.y() + dy * scaleY,
+      ...(ann.type === "dimension" ? { color: MANUAL_ANNOTATION_COLOR } : {}),
+    });
   };
 
   const handleAnnTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
@@ -784,14 +818,19 @@ export default function AnnotationCanvas({
     }
   };
 
-  const renderAnnotation = (ann: Annotation, interactive = true) => {
+  const renderAnnotation = (
+    ann: Annotation,
+    interactive = true,
+    layerVisible = true,
+  ) => {
     const c = ann.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = ann.strokeWidth ?? 3;
     const isSelected = selectedAnnId === ann.id;
     const isLinkedHighlight = linkedHighlightAnnIds.includes(ann.id);
     const hasProcessLink = (ann.linkedProcessIds?.length ?? 0) > 0;
-    const draggable = tool === "select" && interactive && !isPanActive;
-    const listening = interactive && !isPanActive && (tool === "select" || !isDrawingMode);
+    const canInteract = interactive && layerVisible;
+    const draggable = tool === "select" && canInteract && !isPanActive;
+    const listening = canInteract && !isPanActive && (tool === "select" || !isDrawingMode);
 
     switch (ann.type) {
       case "rect": {
@@ -800,7 +839,7 @@ export default function AnnotationCanvas({
           .filter(Boolean)
           .join(" · ");
         return (
-          <Group key={ann.id}>
+          <Group key={ann.id} visible={layerVisible}>
             <Rect
               id={`ann_${ann.id}`}
               x={ann.x}
@@ -837,6 +876,7 @@ export default function AnnotationCanvas({
           <Rect
             key={ann.id}
             id={`ann_${ann.id}`}
+            visible={layerVisible}
             x={ann.x}
             y={ann.y}
             width={ann.width ?? 0}
@@ -854,19 +894,29 @@ export default function AnnotationCanvas({
           />
         );
       case "arrow":
-      case "dimension":
+      case "dimension": {
+        const x1 = ann.x;
+        const y1 = ann.y;
+        const x2 = ann.x2 ?? ann.x;
+        const y2 = ann.y2 ?? ann.y;
+        const rdx = x2 - x1;
+        const rdy = y2 - y1;
         return (
           <Group
             key={ann.id}
             id={`ann_${ann.id}`}
+            x={x1}
+            y={y1}
+            visible={layerVisible}
             listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+            onTransformEnd={(e) => handleLineTransformEnd(ann.id, e)}
           >
             <Arrow
-              points={[ann.x, ann.y, ann.x2 ?? ann.x, ann.y2 ?? ann.y]}
+              points={[0, 0, rdx, rdy]}
               stroke={c}
               fill={c}
               strokeWidth={isSelected ? sw + 1 : sw}
@@ -877,8 +927,8 @@ export default function AnnotationCanvas({
             />
             {ann.text && (
               <Text
-                x={(ann.x2 ?? ann.x) + 6}
-                y={(ann.y2 ?? ann.y) - 8}
+                x={rdx + 6}
+                y={rdy - 8}
                 text={
                   ann.type === "dimension" && ann.linkedSizePart
                     ? `${ann.linkedSizePart}${ann.text ? ` ${ann.text}` : ""}`
@@ -892,11 +942,13 @@ export default function AnnotationCanvas({
             )}
           </Group>
         );
+      }
       case "text":
         return (
           <Text
             key={ann.id}
             id={`ann_${ann.id}`}
+            visible={layerVisible}
             x={ann.x}
             y={ann.y}
             text={ann.text ?? ""}
@@ -918,6 +970,7 @@ export default function AnnotationCanvas({
           <Line
             key={ann.id}
             id={`ann_${ann.id}`}
+            visible={layerVisible}
             points={ann.points ?? []}
             stroke={c}
             strokeWidth={isSelected ? sw + 1 : sw}
@@ -1099,10 +1152,7 @@ export default function AnnotationCanvas({
                 if (!ab || !entry) return null;
                 const isActive = ab.id === activeArtboardId;
                 const abOffset = ab.imageOffset ?? { x: 0, y: 0 };
-                const abAnns = filterAnnotationsByLayers(
-                  normalizeAnnotations(ab.annotations),
-                  layerVisibility,
-                );
+                const abAnns = normalizeAnnotations(ab.annotations);
 
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
@@ -1153,9 +1203,21 @@ export default function AnnotationCanvas({
                         });
                       }}
                     />
-                    {abAnns.map((ann) => renderAnnotation(ann, isActive))}
+                    {abAnns.map((ann) =>
+                      renderAnnotation(
+                        ann,
+                        isActive,
+                        isLayerVisible(ann, layerVisibility),
+                      ),
+                    )}
                     {layerVisibility.process &&
-                      computeSequenceBadges(processItems ?? [], abAnns).map((b) => (
+                      computeSequenceBadges(
+                        processItems ?? [],
+                        filterAnnotationsByLayers(abAnns, {
+                          process: true,
+                          size: false,
+                        }),
+                      ).map((b) => (
                       <Group key={`badge_${ab.id}_${b.processId}_${b.annotationId}`} listening={false}>
                         <Circle x={b.x + 14} y={b.y + 14} radius={14} fill="#2563eb" />
                         <Text
@@ -1238,7 +1300,10 @@ export default function AnnotationCanvas({
               }}
             />
           )}
-          {!multiMode && visibleAnnotations.map((ann) => renderAnnotation(ann))}
+          {!multiMode &&
+            normalizedAnnotations.map((ann) =>
+              renderAnnotation(ann, true, isLayerVisible(ann, layerVisibility)),
+            )}
           {!multiMode &&
             layerVisibility.process &&
             sequenceBadges.map((b) => (
