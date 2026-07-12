@@ -36,6 +36,10 @@ import {
   collectLinkedSizePartsFromProject,
 } from "@/lib/canvas/apply-size-dimensions";
 import {
+  findPrimarySizingArtboard,
+  findSlotForArtboard,
+} from "@/lib/canvas/sizing-artboard";
+import {
   findAnnotationsForProcessInProject,
   findProcessIdsForAnnotation,
   isLinkableShape,
@@ -846,10 +850,12 @@ export default function StudioPage() {
       }
 
       const targetArtboard =
+        findPrimarySizingArtboard(project.canvas_data.artboards) ??
         activeArtboard ??
         project.canvas_data.artboards.find((a) => a.imageDataUrl) ??
         project.canvas_data.artboards[0];
       let addedDimensions = 0;
+      let skippedDimensions = 0;
       let dimensionTips: string | undefined;
       let dimensionBatchFailed = false;
 
@@ -860,6 +866,7 @@ export default function StudioPage() {
           canvas_data: {
             ...prev.canvas_data,
             artboards: artboards ?? prev.canvas_data.artboards,
+            activeArtboardId: targetArtboard?.id ?? prev.canvas_data.activeArtboardId,
           },
         }));
 
@@ -898,9 +905,14 @@ export default function StudioPage() {
               targetArtboard.imageDataUrl ??
               project.intake.imageDataUrl ??
               imageDataUrl;
-            const imageFit = fitSource
-              ? await loadImagePlacement(fitSource)
-              : { x: 0, y: 0, width: 1000, height: 750 };
+            const slots = await computeArtboardSlots(
+              (projectRef.current ?? project).canvas_data.artboards,
+            );
+            const slot = findSlotForArtboard(slots, targetArtboard.id);
+            const imageFit = slot?.imageFit ??
+              (fitSource
+                ? await loadImagePlacement(fitSource)
+                : { x: 0, y: 0, width: 1000, height: 750 });
             const artboards = (projectRef.current ?? project).canvas_data.artboards.map((ab) => {
               if (ab.id !== targetArtboard.id) return ab;
               const result = applyBatchSizeDimensions(
@@ -911,13 +923,21 @@ export default function StudioPage() {
                 imageOffset,
               );
               addedDimensions = result.added;
+              skippedDimensions = result.skipped;
               return { ...ab, annotations: result.annotations };
             });
             saveSizeChart(artboards);
+            if (targetArtboard.id !== activeArtboardId) {
+              setActiveArtboardId(targetArtboard.id);
+            }
             dimensionTips = dimData.userTips;
             if (addedDimensions === 0) {
               dimensionBatchFailed = true;
-              setAiTip("尺码表已生成，但尺寸线未能写入画布（请检查部位名称或手动标注）");
+              setAiTip(
+                skippedDimensions > 0
+                  ? `尺码表已生成，但 ${skippedDimensions} 条尺寸线未能匹配部位或已存在，请在正面款图上手动标注`
+                  : "尺码表已生成，但尺寸线未能写入画布（请检查部位名称或手动标注）",
+              );
             }
           } else if (!imageDataUrl) {
             setAiTip("尺码表已生成。款式图过大或未加载，无法在画布上自动标注尺寸线");

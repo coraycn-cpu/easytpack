@@ -755,9 +755,17 @@ export default function AnnotationCanvas({
     } else if (ann.type === "text") {
       updateAnnotation(id, { x: node.x(), y: node.y() });
     } else if (ann.type === "arrow" || ann.type === "dimension") {
+      const ox = ann.x ?? 0;
+      const oy = ann.y ?? 0;
+      const dx = (ann.x2 ?? ox) - ox;
+      const dy = (ann.y2 ?? oy) - oy;
+      const newX = node.x();
+      const newY = node.y();
       updateAnnotation(id, {
-        x: node.x(),
-        y: node.y(),
+        x: newX,
+        y: newY,
+        x2: newX + dx,
+        y2: newY + dy,
         ...(ann.type === "dimension" ? { color: MANUAL_ANNOTATION_COLOR } : {}),
       });
     }
@@ -1413,42 +1421,6 @@ export default function AnnotationCanvas({
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
           点击「更换主图」导入款式图
         </p>
-      )}
-      {selectedLinkable && onRegionAiFill && (
-        <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-          <span className="text-[10px] text-slate-500">
-            {selectedHasProcessLink ? "已关联 · " : "已框选区域 · "}
-            <span className="font-medium text-red-600">红=手动</span>
-            <span className="mx-0.5">·</span>
-            <span className="font-medium text-blue-600">蓝=AI</span>
-          </span>
-          <button
-            type="button"
-            disabled={aiLoading}
-            onClick={onRegionAiFill}
-            className="rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {aiLoading ? "识别中…" : "AI 识别工艺"}
-          </button>
-        </div>
-      )}
-      {selectedDimension && onDimensionAiFill && (
-        <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-emerald-200 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-          <span className="text-[10px] text-slate-500">
-            {selectedHasSizeLink ? "已关联 · " : "已选尺寸线 · "}
-            <span className="font-medium text-red-600">红=手动</span>
-            <span className="mx-0.5">·</span>
-            <span className="font-medium text-blue-600">蓝=AI</span>
-          </span>
-          <button
-            type="button"
-            disabled={dimensionAiLoading || aiLoading}
-            onClick={onDimensionAiFill}
-            className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {dimensionAiLoading ? "识别中…" : "AI 识别尺寸"}
-          </button>
-        </div>
       )}
       {multiMode && artboardImages.size === 0 && (
         <p className="absolute inset-0 flex items-center justify-center text-xs text-[#94a3b8]">
