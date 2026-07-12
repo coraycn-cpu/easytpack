@@ -47,6 +47,38 @@ function buildContent(text: string, imageDataUrl?: string): UserContent {
   ];
 }
 
+function countBaselineRows(
+  rows: Array<{ baseline_cm?: string | number; values?: Record<string, string | number> }>,
+  sampleSize: string,
+): number {
+  return rows.filter((r) => {
+    const base = String(r.baseline_cm ?? "").trim();
+    if (base && base !== "0") return true;
+    const v = r.values?.[sampleSize];
+    return v != null && String(v).trim() !== "" && String(v).trim() !== "0";
+  }).length;
+}
+
+function parseJsonBlock(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = (fenced?.[1] ?? text).trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+    throw new Error("无法解析 AI 返回的 JSON");
+  }
+}
+
+function clampLineCoord(v: number, max: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(max, Math.round(v)));
+}
+
 async function callStructured<S extends z.ZodType>({
   instructions,
   userText,
@@ -90,8 +122,7 @@ export async function generateSizeChartAssist(input: {
 补充信息：${JSON.stringify(input.answers ?? {})}
 `.trim();
 
-  return callStructured({
-    instructions: `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
+  const instructions = `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
 
 业务规则：
 1. 结合款式结构（品类、廓形、袖型等）与「${region.label}」习惯，选出该款式常用测量点（5–10 个）。
@@ -102,12 +133,50 @@ export async function generateSizeChartAssist(input: {
 6. 即使已有尺码表只有部位名，也必须为每个部位给出 baseline_cm 估算。
 
 输出示例（基准码 M）：
-{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"},{"part":"胸围","method":"夹下1cm","baseline_cm":"108.0"}]}`,
-    userText: context,
-    imageDataUrl: input.imageDataUrl,
-    schema: SizeChartAssistSchema,
-    schemaName: "size_chart_assist",
+{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"},{"part":"胸围","method":"夹下1cm","baseline_cm":"108.0"}]}`;
+
+  try {
+    const structured = await callStructured({
+      instructions,
+      userText: context,
+      imageDataUrl: input.imageDataUrl,
+      schema: SizeChartAssistSchema,
+      schemaName: "size_chart_assist",
+    });
+    const rows = structured.rows ?? [];
+    if (rows.length > 0 && countBaselineRows(rows, input.sampleSize) > 0) {
+      return {
+        sizes: structured.sizes ?? [],
+        rows,
+        plainExplanation: structured.plainExplanation ?? "",
+      };
+    }
+  } catch (err) {
+    console.warn("[size-chart] structured output failed, falling back to text", err);
+  }
+
+  const { text } = await generateText({
+    model: getModel(),
+    system: `你是资深版师。只输出 JSON，不要 markdown 说明。格式：
+{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"}],"plainExplanation":"..."}
+基准码 ${input.sampleSize}，每行 baseline_cm 必填且 > 0。`,
+    messages: [{ role: "user", content: buildContent(context, input.imageDataUrl) }],
   });
+
+  const parsed = parseJsonBlock(text) as {
+    sizes?: string[];
+    rows?: Array<{ part: string; method: string; baseline_cm?: string | number }>;
+    plainExplanation?: string;
+  };
+  const rows = parsed.rows ?? [];
+  if (rows.length === 0 || countBaselineRows(rows, input.sampleSize) === 0) {
+    throw new Error("AI 未返回有效尺码表数据，请确认款式图清晰并重试");
+  }
+  return {
+    sizes: parsed.sizes ?? [],
+    rows,
+    plainExplanation: parsed.plainExplanation ?? "",
+  };
 }
 
 export async function generateBomAssist(input: {
@@ -250,18 +319,67 @@ ${rowsText}
 每条线段用 (x,y)→(x2,y2) 表示，方向应符合该部位的标准量法（如衣长竖直、胸围水平）。
 part 必须与上方列表中的部位名完全一致。`.trim();
 
-  return callStructured({
-    instructions: `你是资深版师，在 Tech Pack 款式图上为尺码表测量点绘制尺寸标注线。
+  const instructions = `你是资深版师，在 Tech Pack 款式图上为尺码表测量点绘制尺寸标注线。
 要求：
 1. 为每个测量点输出一条线段，坐标落在服装对应测量位置，不要标注背景。
 2. 线段长度合理（>30px），方向符合量法习惯。
 3. 只输出 type=dimension 的线段数据，不要矩形或文字框。
-4. userTips 简要说明标注了哪些测量点。`,
-    userText: context,
-    imageDataUrl: input.imageDataUrl,
-    schema: BatchSizeDimensionSchema,
-    schemaName: "batch_size_dimensions",
+4. userTips 简要说明标注了哪些测量点。`;
+
+  const normalizeDimensions = (
+    raw: Array<{ part: string; x: number; y: number; x2: number; y2: number }>,
+  ) =>
+    raw
+      .map((d) => ({
+        part: d.part.trim(),
+        x: clampLineCoord(d.x, CANVAS_W),
+        y: clampLineCoord(d.y, CANVAS_H),
+        x2: clampLineCoord(d.x2, CANVAS_W),
+        y2: clampLineCoord(d.y2, CANVAS_H),
+      }))
+      .filter(
+        (d) =>
+          d.part &&
+          Math.hypot(d.x2 - d.x, d.y2 - d.y) >= 12,
+      );
+
+  try {
+    const structured = await callStructured({
+      instructions,
+      userText: context,
+      imageDataUrl: input.imageDataUrl,
+      schema: BatchSizeDimensionSchema,
+      schemaName: "batch_size_dimensions",
+    });
+    const dimensions = normalizeDimensions(structured.dimensions ?? []);
+    if (dimensions.length > 0) {
+      return {
+        dimensions,
+        userTips: structured.userTips ?? `已标注 ${dimensions.length} 条尺寸线`,
+      };
+    }
+  } catch (err) {
+    console.warn("[size-dimension-batch] structured failed, falling back to text", err);
+  }
+
+  const partList = targetRows.map((r) => r.part).join("、");
+  const { text } = await generateText({
+    model: getModel(),
+    system: `你是版师。只输出 JSON：
+{"dimensions":[{"part":"衣长","x":120,"y":80,"x2":120,"y2":420}],"userTips":"..."}
+画布 ${CANVAS_W}×${CANVAS_H}，为每个部位输出一条线段，part 必须与给定列表一致：${partList}`,
+    messages: [{ role: "user", content: buildContent(context, input.imageDataUrl) }],
   });
+
+  const parsed = parseJsonBlock(text) as {
+    dimensions?: Array<{ part: string; x: number; y: number; x2: number; y2: number }>;
+    userTips?: string;
+  };
+  const dimensions = normalizeDimensions(parsed.dimensions ?? []);
+  return {
+    dimensions,
+    userTips: parsed.userTips ?? (dimensions.length > 0 ? `已标注 ${dimensions.length} 条尺寸线` : "未能生成尺寸线"),
+  };
 }
 
 export async function generateRegionAnnotate(input: {

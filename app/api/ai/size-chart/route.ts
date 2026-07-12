@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateSizeChartAssist } from "@/lib/ai/assist";
+import { generateSizeChartAssist, isGatewayConfigured } from "@/lib/ai/assist";
 
 export async function POST(req: NextRequest) {
   try {
+    if (!isGatewayConfigured()) {
+      return NextResponse.json(
+        { error: "AI 未配置，请设置 AI_GATEWAY_API_KEY 或 VERCEL_OIDC_TOKEN" },
+        { status: 503 },
+      );
+    }
     const body = await req.json();
     const result = await generateSizeChartAssist(body);
     return NextResponse.json(result);

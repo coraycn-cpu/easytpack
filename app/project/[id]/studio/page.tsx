@@ -10,7 +10,9 @@ import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
-import { pickImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import {
+  resolveImageDataUrlForAi,
+} from "@/lib/ai/image-for-request";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
   annotationToLogicalRect,
@@ -376,10 +378,14 @@ export default function StudioPage() {
     setAiTask("size-dimension");
     setAiMessage(null);
     try {
-      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const imgUrl = await resolveImageDataUrlForAi(
+        activeArtboard.imageDataUrl,
+        project.intake.imageDataUrl,
+      );
       const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
-      const imageFit = imgUrl
-        ? await loadImagePlacement(imgUrl)
+      const fitSource = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl ?? imgUrl;
+      const imageFit = fitSource
+        ? await loadImagePlacement(fitSource)
         : { x: 0, y: 0, width: 1000, height: 750 };
       const line = annotationToLogicalLine(selectedAnn, imageFit, imageOffset);
       const sampleSize = project.size_chart.sampleSize ?? "M";
@@ -738,10 +744,11 @@ export default function StudioPage() {
     setAiTask("fill-size");
     setAiMessage(null);
     try {
-      const imageDataUrl =
-        activeArtboard?.imageDataUrl ??
-        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl ??
-        project.intake.imageDataUrl;
+      const imageDataUrl = await resolveImageDataUrlForAi(
+        activeArtboard?.imageDataUrl,
+        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl,
+        project.intake.imageDataUrl,
+      );
 
       const res = await fetch("/api/ai/size-chart", {
         method: "POST",
@@ -756,10 +763,17 @@ export default function StudioPage() {
           sampleSize: input.sampleSize,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sizes?: string[];
+        rows?: Array<{ part: string; method: string; baseline_cm?: string | number }>;
+        plainExplanation?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? `尺码表请求失败 (${res.status})`);
+      }
       const size_chart = applySizeChartAssist(
-        { sizes: data.sizes, rows: data.rows },
+        { sizes: data.sizes ?? [], rows: data.rows ?? [] },
         input,
         project.size_chart,
       );
@@ -776,7 +790,20 @@ export default function StudioPage() {
       let dimensionTips: string | undefined;
       let dimensionBatchFailed = false;
 
-      if (targetArtboard && imageDataUrl) {
+      const saveSizeChart = (artboards = project.canvas_data.artboards) => {
+        return persist({
+          ...project,
+          size_chart,
+          canvas_data: { ...project.canvas_data, artboards },
+        });
+      };
+
+      const savedChart = saveSizeChart();
+      if (!savedChart) {
+        throw new Error("尺码表已生成但保存失败，请清理浏览器存储空间后重试");
+      }
+
+      if (targetArtboard) {
         try {
           const skipParts = collectLinkedSizePartsFromProject(project.canvas_data.artboards);
           const dimRes = await fetch("/api/ai/size-dimension-batch", {
@@ -792,17 +819,27 @@ export default function StudioPage() {
               skipParts,
             }),
           });
-          const dimData = await dimRes.json();
-          if (!dimRes.ok) throw new Error(dimData.error);
+          const dimData = (await dimRes.json().catch(() => ({}))) as {
+            error?: string;
+            dimensions?: Array<{ part: string; x: number; y: number; x2: number; y2: number }>;
+            userTips?: string;
+          };
+          if (!dimRes.ok) throw new Error(dimData.error ?? `尺寸标注请求失败 (${dimRes.status})`);
 
           if (dimData.dimensions?.length) {
             const imageOffset = targetArtboard.imageOffset ?? { x: 0, y: 0 };
-            const imageFit = await loadImagePlacement(imageDataUrl);
+            const fitSource =
+              targetArtboard.imageDataUrl ??
+              project.intake.imageDataUrl ??
+              imageDataUrl;
+            const imageFit = fitSource
+              ? await loadImagePlacement(fitSource)
+              : { x: 0, y: 0, width: 1000, height: 750 };
             const artboards = project.canvas_data.artboards.map((ab) => {
               if (ab.id !== targetArtboard.id) return ab;
               const result = applyBatchSizeDimensions(
                 ab.annotations,
-                dimData.dimensions,
+                dimData.dimensions!,
                 size_chart,
                 imageFit,
                 imageOffset,
@@ -810,23 +847,20 @@ export default function StudioPage() {
               addedDimensions = result.added;
               return { ...ab, annotations: result.annotations };
             });
-            persist({
-              ...project,
-              size_chart,
-              canvas_data: { ...project.canvas_data, artboards },
-            });
+            saveSizeChart(artboards);
             dimensionTips = dimData.userTips;
-          } else {
-            persist({ ...project, size_chart });
+            if (addedDimensions === 0) {
+              dimensionBatchFailed = true;
+              setAiTip("尺码表已生成，但尺寸线未能写入画布（请检查部位名称或手动标注）");
+            }
+          } else if (!imageDataUrl) {
+            setAiTip("尺码表已生成。款式图过大或未加载，无法在画布上自动标注尺寸线");
           }
         } catch (dimErr) {
-          persist({ ...project, size_chart });
           dimensionBatchFailed = true;
           const msg = dimErr instanceof Error ? dimErr.message : "尺寸线生成失败";
           setAiTip(`尺码表已生成，但画布尺寸线未完全生成：${msg}`);
         }
-      } else {
-        persist({ ...project, size_chart });
       }
 
       focusTab("size");
@@ -893,7 +927,7 @@ export default function StudioPage() {
     setAiTask("explain");
     setAiMessage(null);
     try {
-      const imageDataUrl = pickImageDataUrlForAi(
+      const imageDataUrl = await resolveImageDataUrlForAi(
         project.intake.imageDataUrl,
         activeArtboard?.imageDataUrl,
         project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl,

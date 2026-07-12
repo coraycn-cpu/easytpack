@@ -63,11 +63,12 @@ function partKey(part: string): string {
 }
 
 function mergeRows(
-  aiRows: AiSizeChartRow[],
+  aiRows: AiSizeChartRow[] | undefined,
   existingRows: SizeChart["rows"] | undefined,
   sampleSize: string,
 ): AiSizeChartRow[] {
-  if (aiRows.length === 0) {
+  const rows = aiRows ?? [];
+  if (rows.length === 0) {
     return (existingRows ?? []).map((r) => ({
       part: r.part,
       method: r.method,
@@ -76,9 +77,9 @@ function mergeRows(
     }));
   }
 
-  if (!existingRows?.length) return aiRows;
+  if (!existingRows?.length) return rows;
 
-  const aiMap = new Map(aiRows.map((r) => [partKey(r.part), r]));
+  const aiMap = new Map(rows.map((r) => [partKey(r.part), r]));
   const merged: AiSizeChartRow[] = [];
   const seen = new Set<string>();
 
@@ -103,12 +104,12 @@ function mergeRows(
     );
   }
 
-  for (const aiRow of aiRows) {
+  for (const aiRow of rows) {
     const pk = partKey(aiRow.part);
     if (!seen.has(pk)) merged.push(aiRow);
   }
 
-  return merged.length > 0 ? merged : aiRows;
+  return merged.length > 0 ? merged : rows;
 }
 
 export function applySizeChartAssist(

@@ -165,7 +165,7 @@ export const BatchSizeDimensionLineSchema = z.object({
 
 export const BatchSizeDimensionSchema = z.object({
   dimensions: z.array(BatchSizeDimensionLineSchema).max(12),
-  userTips: z.string(),
+  userTips: z.string().optional().default(""),
 });
 
 export const SmartAnnotationItemSchema = z.object({

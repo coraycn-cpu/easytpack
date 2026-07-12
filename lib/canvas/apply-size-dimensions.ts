@@ -20,6 +20,20 @@ function partKey(part: string): string {
   return part.trim().toLowerCase();
 }
 
+function resolveSizeRow(
+  linePart: string,
+  rows: SizeChart["rows"],
+): SizeChart["rows"][number] | undefined {
+  const key = partKey(linePart);
+  const exact = rows.find((r) => partKey(r.part) === key);
+  if (exact) return exact;
+  for (const r of rows) {
+    const rk = partKey(r.part);
+    if (rk.includes(key) || key.includes(rk)) return r;
+  }
+  return undefined;
+}
+
 export function getLinkedSizeParts(annotations: Annotation[]): Set<string> {
   const parts = new Set<string>();
   for (const ann of annotations) {
@@ -62,7 +76,7 @@ export function applyBatchSizeDimensions(
       continue;
     }
 
-    const row = rowByPart.get(key);
+    const row = rowByPart.get(key) ?? resolveSizeRow(line.part, sizeChart.rows);
     const baseline = row && sampleSize ? row.values[sampleSize]?.trim() : "";
     const text = baseline ? `${baseline}cm` : undefined;
 
