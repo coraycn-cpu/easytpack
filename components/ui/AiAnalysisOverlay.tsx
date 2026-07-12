@@ -9,6 +9,8 @@ import {
 
 type AiAnalysisOverlayProps = {
   imagePreview?: string | null;
+  /** 本次 AI 使用的图片来源说明 */
+  imageSourceHint?: string | null;
   /** @deprecated 优先使用 preset */
   title?: string;
   preset?: AiLoadingPresetId;
@@ -19,6 +21,7 @@ type AiAnalysisOverlayProps = {
 
 export default function AiAnalysisOverlay({
   imagePreview,
+  imageSourceHint,
   title,
   preset = "default",
   steps: stepsOverride,
@@ -79,6 +82,9 @@ export default function AiAnalysisOverlay({
               <div>
                 <h2 className="text-lg font-semibold">{displayTitle}</h2>
                 <p className="text-sm text-blue-100">{displaySubtitle}</p>
+                {imageSourceHint && (
+                  <p className="mt-1 text-xs text-blue-200/90">{imageSourceHint}</p>
+                )}
               </div>
             </div>
           </div>

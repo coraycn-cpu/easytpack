@@ -109,6 +109,11 @@ export default function ViewRegenerateOverlays({
           onRegenerateView(ab.id, draft.trim());
         };
 
+        const isFlatFront = ab.viewImageMeta?.kind === "flat_front";
+        const regenSourceHint = isFlatFront
+          ? "基于原参考图重新生成主款平铺"
+          : "基于主款平铺图重新生成";
+
         return (
           <div
             key={`regen-${ab.id}`}
@@ -118,6 +123,9 @@ export default function ViewRegenerateOverlays({
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="rounded border border-violet-200/80 bg-white/95 px-1 py-0.5 shadow-sm backdrop-blur-sm">
+              <p className="mb-0.5 px-0.5 text-[9px] leading-snug text-violet-700/90">
+                {regenSourceHint}
+              </p>
               {isExpanded && (
                 <textarea
                   ref={(el) => {

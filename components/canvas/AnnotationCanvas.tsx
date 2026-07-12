@@ -80,6 +80,8 @@ type AnnotationCanvasProps = {
   layerVisibility?: LayerVisibility;
   onLayerVisibilityChange?: (layers: LayerVisibility) => void;
   toolbarMessage?: string | null;
+  /** 画布 AI 图片来源常驻说明 */
+  aiSourceBanner?: string | null;
   /** 多画板并排模式 */
   multiArtboards?: Artboard[];
   artboardSlots?: ArtboardSlot[];
@@ -149,6 +151,7 @@ export default function AnnotationCanvas({
   layerVisibility = DEFAULT_LAYER_VISIBILITY,
   onLayerVisibilityChange,
   toolbarMessage,
+  aiSourceBanner,
   multiArtboards,
   artboardSlots,
   activeArtboardId,
@@ -1146,6 +1149,7 @@ export default function AnnotationCanvas({
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
       hint={toolbarMessage ?? toolbarHint}
+      aiSourceBanner={aiSourceBanner}
       onFullCollect={onFullCollect}
       onAnnotateProcess={onAnnotateProcess}
       annotateProcessLoading={annotateProcessLoading}

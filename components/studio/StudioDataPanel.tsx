@@ -212,6 +212,7 @@ export default function StudioDataPanel({
                     type="button"
                     disabled={interactionLocked || regionAiLoading}
                     onClick={onRegionAiFill}
+                    title="基于当前画板识别框选区域的工艺"
                     className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {regionAiLoading ? "识别中…" : "AI 识别工艺"}
@@ -248,6 +249,7 @@ export default function StudioDataPanel({
                     type="button"
                     disabled={interactionLocked || dimensionAiLoading}
                     onClick={onDimensionAiFill}
+                    title="基于当前画板识别尺寸线的数值"
                     className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {dimensionAiLoading ? "识别中…" : "AI 识别尺寸"}

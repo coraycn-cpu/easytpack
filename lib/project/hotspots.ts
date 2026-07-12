@@ -171,9 +171,25 @@ function scaleRegionFromLegacy(hs: Hotspot): Hotspot {
   };
 }
 
-function getCategoryPartTemplate(category?: string): TemplateRegion[] {
+function getSetPartTemplate(): TemplateRegion[] {
+  const s = scaleCoord;
+  return [
+    { label: "上装-领口", x: s(330), y: s(85, 600), width: s(140), height: s(55, 600) },
+    { label: "上装-袖窿", x: s(200), y: s(140, 600), width: s(80), height: s(75, 600) },
+    { label: "上装-下摆", x: s(260), y: s(250, 600), width: s(280), height: s(40, 600) },
+    { label: "下装-腰头", x: s(280), y: s(310, 600), width: s(240), height: s(40, 600) },
+    { label: "下装-侧缝", x: s(250), y: s(360, 600), width: s(45), height: s(120, 600) },
+    { label: "下装-脚口", x: s(270), y: s(490, 600), width: s(260), height: s(35, 600) },
+  ];
+}
+
+function getCategoryPartTemplate(category?: string, isSet?: boolean): TemplateRegion[] {
   const c = (category ?? "").toLowerCase();
   const s = scaleCoord;
+
+  if (isSet || c.includes("套装") || c.includes("set")) {
+    return getSetPartTemplate();
+  }
 
   if (c.includes("马甲") || c.includes("vest")) {
     return [
@@ -229,13 +245,14 @@ export function mergeSuggestedPartAnnotations(
   aiRegions: Hotspot[],
   category?: string,
   photoType?: PhotoType,
+  options?: { isSet?: boolean },
 ): Annotation[] {
   const scaled = aiRegions.map(scaleRegionFromLegacy);
   const filtered = filterSuggestedRegions(scaled, { category, photoType });
   const regions =
     filtered.length >= 3
       ? filtered
-      : getCategoryPartTemplate(category).map((r, i) => ({
+      : getCategoryPartTemplate(category, options?.isSet).map((r, i) => ({
           ...r,
           id: `tpl_${i}`,
         }));

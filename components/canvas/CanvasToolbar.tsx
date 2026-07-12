@@ -5,6 +5,7 @@ import {
   DEFAULT_ANNOTATION_COLOR,
 } from "@/lib/canvas/constants";
 import type { LayerVisibility } from "@/lib/canvas/annotation-layers";
+import { AI_ACTION_BUTTON_TITLES } from "@/lib/ai/image-source-hints";
 import type { CanvasTool } from "@/types/canvas";
 
 type CanvasToolbarProps = {
@@ -24,6 +25,8 @@ type CanvasToolbarProps = {
   zoom?: number;
   onZoomChange?: (z: number) => void;
   hint?: string;
+  /** 画布 AI 图片来源常驻说明 */
+  aiSourceBanner?: string | null;
   flat?: boolean;
   theme?: "light" | "dark";
   /** Collect 全功能标注 */
@@ -73,6 +76,7 @@ export default function CanvasToolbar({
   zoom = 1,
   onZoomChange,
   hint,
+  aiSourceBanner,
   flat,
   theme = "dark",
   onFullCollect,
@@ -263,7 +267,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFullCollect}
                   className={aiBtn(true)}
-                  title="问卷 + 工艺/BOM/标注/尺寸全量初稿"
+                  title={AI_ACTION_BUTTON_TITLES["full-collect"]}
                 >
                   <span>✦</span>
                   AI 一键标注
@@ -275,7 +279,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onAnnotateProcess}
                   className={aiBtn()}
-                  title="画布区域标注 + 工艺 tab"
+                  title={AI_ACTION_BUTTON_TITLES["annotate-process"]}
                 >
                   {annotateProcessLoading ? "标注中…" : "AI 标工艺"}
                 </button>
@@ -286,7 +290,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFillBom}
                   className={aiBtn()}
-                  title="生成物料清单 → 物料 tab"
+                  title={AI_ACTION_BUTTON_TITLES["fill-bom"]}
                 >
                   AI 填物料
                 </button>
@@ -297,7 +301,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFillSize}
                   className={aiBtn()}
-                  title="解析测量点 + 基准码估算 → 尺寸 tab"
+                  title={AI_ACTION_BUTTON_TITLES["fill-size"]}
                 >
                   AI 填尺寸
                 </button>
@@ -308,7 +312,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onEnhanceAll}
                   className={aiBtn()}
-                  title="补全工艺/物料/尺寸空白项"
+                  title={AI_ACTION_BUTTON_TITLES.enhance}
                 >
                   一键补全
                 </button>
@@ -319,7 +323,7 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onExplain}
                   className={aiBtn()}
-                  title="生成面向版师/车版/设计师的款式评语（≤280字）"
+                  title={AI_ACTION_BUTTON_TITLES.explain}
                 >
                   款式评语
                 </button>
@@ -359,6 +363,19 @@ export default function CanvasToolbar({
           </div>
         </div>
       </div>
+      {aiSourceBanner && (
+        <p
+          className={`border-t px-4 py-1 text-[10px] leading-snug ${
+            light
+              ? "border-blue-100 bg-blue-50/60 text-blue-800"
+              : flat
+                ? "border-[#333] bg-blue-950/40 text-blue-200"
+                : "border-zinc-800 bg-blue-950/30 text-blue-200"
+          }`}
+        >
+          {aiSourceBanner}
+        </p>
+      )}
       {hint && (
         <p
           className={`border-t px-4 py-1.5 text-[11px] ${

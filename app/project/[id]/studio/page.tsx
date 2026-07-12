@@ -78,6 +78,12 @@ import {
 } from "@/lib/studio/layout";
 import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-chart/apply-assist";
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
+import {
+  aiPresetToActionId,
+  buildStudioAiSourceBanner,
+  getAiActionImageSource,
+  resolveAiImagePreviewUrl,
+} from "@/lib/ai/image-source-hints";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 import { createViewPlaceholderImage, getImageDimensions, matchImageToSourceSize } from "@/lib/studio/view-image-client";
@@ -627,6 +633,26 @@ export default function StudioPage() {
     () => (project ? getPrimaryArtboardId(project.canvas_data.artboards) : undefined),
     [project],
   );
+
+  const aiSourceBanner = useMemo(
+    () => (project ? buildStudioAiSourceBanner(project, activeArtboardId) : null),
+    [project, activeArtboardId],
+  );
+
+  const flatFrontRegenerating = useMemo(() => {
+    if (!regeneratingArtboardId || !project) return false;
+    const ab = project.canvas_data.artboards.find((a) => a.id === regeneratingArtboardId);
+    return ab?.viewImageMeta?.kind === "flat_front";
+  }, [regeneratingArtboardId, project]);
+
+  const activeAiImageSource = useMemo(() => {
+    if (!project || !activeAiPreset) return null;
+    const actionId = aiPresetToActionId(activeAiPreset, {
+      isFlatFrontRegen: flatFrontRegenerating,
+    });
+    if (!actionId) return null;
+    return getAiActionImageSource(actionId, project, activeArtboardId);
+  }, [project, activeAiPreset, activeArtboardId, flatFrontRegenerating]);
 
   const handleDeleteArtboard = useCallback(
     (artboardId: string) => {
@@ -1461,6 +1487,7 @@ export default function StudioPage() {
               viewport={layout.viewport}
               onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
               toolbarMessage={aiMessage ?? aiTip}
+              aiSourceBanner={aiSourceBanner}
               processItems={project.process_items}
               selectedAnnId={selectedAnnId}
               onSelectedAnnIdChange={handleSelectedAnnIdChange}
@@ -1500,7 +1527,20 @@ export default function StudioPage() {
           {aiBusy && activeAiPreset && !garmentBlocked && (
             <AiAnalysisOverlay
               preset={activeAiPreset}
-              imagePreview={project.intake.imageDataUrl}
+              imageSourceHint={activeAiImageSource?.hint}
+              imagePreview={(() => {
+                const actionId = aiPresetToActionId(activeAiPreset, {
+                  isFlatFrontRegen: flatFrontRegenerating,
+                });
+                if (actionId) {
+                  return resolveAiImagePreviewUrl(
+                    project,
+                    actionId,
+                    activeArtboardId,
+                  );
+                }
+                return project.intake.imageDataUrl;
+              })()}
             />
           )}
 

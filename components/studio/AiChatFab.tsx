@@ -25,7 +25,7 @@ export default function AiChatFab({ project, onProjectUpdate, disabled, flat }: 
       id: "welcome",
       role: "assistant",
       content:
-        "你好！我是版房 AI 助手。你可以用大白话告诉我怎么改，比如「把袖口改成罗纹」「加一条拉链物料」「尺码表加大一码」。",
+        "你好！我是版房 AI 助手。你可以用大白话告诉我怎么改，比如「把袖口改成罗纹」「加一条拉链物料」「尺码表加大一码」。我会根据当前已锁定的目标款/套装范围修改工艺包。",
     },
   ]);
   const [input, setInput] = useState("");
