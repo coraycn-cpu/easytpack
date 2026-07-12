@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import type { z } from "zod";
 import { buildGarmentScopeContext } from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
+import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
   IntentAnalysisSchema,
   QuestionnaireSchema,
@@ -176,7 +177,7 @@ ${answersText}
 要求：
 - 仅针对目标单款；process_items 覆盖其主要结构部位（领、袖、下摆、侧缝等）
 - bom_items 列出主要面辅料；非目标款物料不得加入
-- suggestedHotspots 仅标注目标单款结构部位（坐标基于 800x600，不要标注人脸/背景/其他服装，最多 6 个）
+- suggestedHotspots 仅标注目标单款结构部位（坐标基于 ${CANVAS_W}×${CANVAS_H}，不要标注人脸/背景/其他服装，最多 6 个）
 - size_chart 仅输出 sizes 列与 rows 的 part/method，values 留空
 - aiSummary 用 2-3 句话说明初稿要点`,
     userText: context,

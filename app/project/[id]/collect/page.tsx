@@ -8,8 +8,6 @@ import SizeStandardFields, {
   defaultSizeStandard,
   type SizeStandardInput,
 } from "@/components/studio/SizeStandardFields";
-import { applySizeChartAssist } from "@/lib/size-chart/apply-assist";
-import { buildInitialSizeChart } from "@/lib/project/create-style";
 import { getProject, saveProject } from "@/lib/project/storage";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import {
@@ -19,8 +17,7 @@ import {
   needsFlatFrontAfterGarmentPick,
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
-import { createDefaultCanvasData, mergeSuggestedPartAnnotations } from "@/lib/project/hotspots";
-import { generateProcessId } from "@/lib/process/ids";
+import { runFullTechPackAnnotation } from "@/lib/studio/run-full-annotation";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 export default function CollectPage() {
@@ -219,113 +216,26 @@ export default function CollectPage() {
       answers.size_region = regionStandard;
       answers.sample_size = sampleSize;
 
-      const res = await fetch("/api/ai/draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: project.intake.description,
-          imageDataUrl: project.intake.imageDataUrl,
-          intentSummary: project.intake.aiIntentAnalysis,
-          detectedCategory: project.intake.detectedCategory,
-          answers,
-          questions: [
-            ...project.questionnaire.questions,
-            { id: "size_region", question: "区域标准" },
-            { id: "sample_size", question: "样衣基准码" },
-            ...(extraNote.trim()
-              ? [{ id: "extra_note", question: "补充说明" }]
-              : []),
-          ],
-          regionStandard,
-          sampleSize,
-          intake: project.intake,
-        }),
+      const { project: annotated, summary } = await runFullTechPackAnnotation({
+        project,
+        answers,
+        regionStandard,
+        sampleSize,
       });
-
-      const draft = await res.json();
-      if (!res.ok) throw new Error(draft.error);
-
-      const rawHotspots = (draft.suggestedHotspots ?? []).map(
-        (hs: { label: string; x: number; y: number; width: number; height: number }, i: number) => ({
-          id: `hs_ai_${i}_${Date.now()}`,
-          label: hs.label,
-          x: hs.x,
-          y: hs.y,
-          width: hs.width,
-          height: hs.height,
-        }),
-      );
-
-      const processItems: TechPackProject["process_items"] = (draft.process_items ?? []).map(
-        (item: { part: string; process: string; stitch?: string; seam_allowance?: string }) => ({
-          ...item,
-          id: generateProcessId(),
-        }),
-      );
-
-      const partAnnotations = mergeSuggestedPartAnnotations(
-        rawHotspots,
-        project.intake.detectedCategory,
-        project.intake.photoType,
-      ).map((ann) => {
-        const label = ann.linkedPart ?? ann.text;
-        const pid = processItems.find((p) => p.part?.trim() === label?.trim())?.id;
-        if (!pid) return ann;
-        const { linkedPart: _lp, ...rest } = ann;
-        return { ...rest, linkedProcessIds: [pid] };
-      });
-
-      const canvas_data = createDefaultCanvasData(project.intake.imageDataUrl);
-      if (canvas_data.artboards[0]) {
-        canvas_data.artboards[0].annotations = partAnnotations;
-      }
-
-      let size_chart = buildInitialSizeChart(regionStandard, sampleSize);
-
-      try {
-        const sizeRes = await fetch("/api/ai/size-chart", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category: project.intake.detectedCategory,
-            description: project.intake.description,
-            imageDataUrl: project.intake.imageDataUrl,
-            answers,
-            existingChart: size_chart,
-            regionStandard,
-            sampleSize,
-            intake: project.intake,
-          }),
-        });
-        const sizeData = await sizeRes.json();
-        if (sizeRes.ok) {
-          size_chart = applySizeChartAssist(
-            { sizes: sizeData.sizes, rows: sizeData.rows },
-            { regionStandard, sampleSize },
-            size_chart,
-          );
-        }
-      } catch {
-        /* 尺寸 AI 失败时保留空表结构 */
-      }
 
       const updated: TechPackProject = {
-        ...project,
+        ...annotated,
         status: "studio",
         title: project.intake.suggestedTitle ?? project.title,
-        process_items: processItems,
-        bom_items: draft.bom_items ?? [],
-        size_chart,
-        canvas_data,
         questionnaire: {
           ...project.questionnaire,
           answers,
           isComplete: true,
         },
         intake: {
-          ...project.intake,
-          aiIntentAnalysis: draft.aiSummary
-            ? `${project.intake.aiIntentAnalysis ?? ""}\n\n初稿说明：${draft.aiSummary}`.trim()
+          ...annotated.intake,
+          aiIntentAnalysis: summary
+            ? `${project.intake.aiIntentAnalysis ?? ""}\n\n初稿说明：${summary}`.trim()
             : project.intake.aiIntentAnalysis,
         },
       };

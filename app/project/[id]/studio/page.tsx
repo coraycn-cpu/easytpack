@@ -1351,6 +1351,12 @@ export default function StudioPage() {
           <InfiniteCanvas
             viewport={layout.viewport}
             onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
+            titleLabel={
+              project.title?.trim() ||
+              project.intake.suggestedTitle?.trim() ||
+              project.intake.targetGarment?.label?.trim() ||
+              undefined
+            }
           >
             <AnnotationCanvas
               fixedChrome
