@@ -19,7 +19,7 @@ export function canDeleteArtboard(artboards: Artboard[], artboardId: string): bo
   return !isPrimaryArtboard(artboards, artboardId);
 }
 
-/** 尺寸标注应落在正面主款图，而非当前选中的背面/细节画板 */
+/** @deprecated 尺寸标注已改为跟随当前选中画板；保留供旧逻辑或测试参考 */
 export function findPrimarySizingArtboard(
   artboards: Artboard[],
 ): Artboard | undefined {

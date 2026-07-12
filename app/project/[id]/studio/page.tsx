@@ -36,7 +36,6 @@ import {
   collectLinkedSizePartsFromProject,
 } from "@/lib/canvas/apply-size-dimensions";
 import {
-  findPrimarySizingArtboard,
   findSlotForArtboard,
   getPrimaryArtboardId,
 } from "@/lib/canvas/sizing-artboard";
@@ -906,7 +905,6 @@ export default function StudioPage() {
     try {
       const imageDataUrl = await resolveImageDataUrlForAi(
         activeArtboard?.imageDataUrl,
-        project.canvas_data.artboards.find((a) => a.imageDataUrl)?.imageDataUrl,
         project.intake.imageDataUrl,
       );
 
@@ -943,7 +941,6 @@ export default function StudioPage() {
       }
 
       const targetArtboard =
-        findPrimarySizingArtboard(project.canvas_data.artboards) ??
         activeArtboard ??
         project.canvas_data.artboards.find((a) => a.imageDataUrl) ??
         project.canvas_data.artboards[0];
@@ -1028,7 +1025,7 @@ export default function StudioPage() {
               dimensionBatchFailed = true;
               setAiTip(
                 skippedDimensions > 0
-                  ? `尺码表已生成，但 ${skippedDimensions} 条尺寸线未能匹配部位或已存在，请在正面款图上手动标注`
+                  ? `尺码表已生成，但 ${skippedDimensions} 条尺寸线未能匹配部位或已存在，请在当前选中款图上手动标注`
                   : "尺码表已生成，但尺寸线未能写入画布（请检查部位名称或手动标注）",
               );
             }
@@ -1049,7 +1046,7 @@ export default function StudioPage() {
         } else {
           setAiTip(
             addedDimensions > 0
-              ? `已在款式图上标注 ${addedDimensions} 条尺寸线（蓝色）`
+              ? `已在当前选中款图上标注 ${addedDimensions} 条尺寸线（蓝色）`
               : (data.plainExplanation ?? "尺码表已生成"),
           );
         }

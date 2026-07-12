@@ -55,9 +55,6 @@ export function isViewImageKind(value: string): value is ViewImageKind {
   );
 }
 
-/** 侧栏 AI 使用说明 */
-export const VIEW_IMAGE_AI_GUIDE = [
-  "基于左侧「正面主图」生成指定视角款式图",
-  "生成结果须与原版版型、面料、颜色、工艺细节一致，尺寸比例与导入主图相同",
-  "若效果有偏差，可在生成图下方填写修正提示词后点「重新生成」",
-] as const;
+/** 侧栏 AI 使用说明（单行紧凑） */
+export const VIEW_IMAGE_AI_GUIDE =
+  "基于正面主图生成 · 版型/面料/颜色与主图一致 · 偏差可展开修正后重生成";

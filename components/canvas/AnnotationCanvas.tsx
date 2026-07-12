@@ -1232,6 +1232,7 @@ export default function AnnotationCanvas({
                 const deletable =
                   Boolean(onDeleteArtboard && primaryArtboardId) &&
                   ab.id !== primaryArtboardId &&
+                  !ab.viewImageMeta &&
                   tool === "select" &&
                   !interactionLocked;
 
@@ -1551,6 +1552,7 @@ export default function AnnotationCanvas({
           regeneratingArtboardId={regeneratingArtboardId}
           interactionLocked={interactionLocked}
           onRegenerateView={onRegenerateView}
+          onDeleteArtboard={onDeleteArtboard}
         />
       )}
     </div>
