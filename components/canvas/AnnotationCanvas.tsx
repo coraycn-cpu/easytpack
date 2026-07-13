@@ -808,6 +808,7 @@ export default function AnnotationCanvas({
   };
 
   const handleAnnDragEnd = (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true;
     pushHistory();
     const node = e.target;
     const ann = annotations.find((a) => a.id === id);
@@ -843,6 +844,7 @@ export default function AnnotationCanvas({
   };
 
   const handleLineTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
+    e.cancelBubble = true;
     pushHistory();
     const node = e.target;
     const ann = annotations.find((a) => a.id === id);
@@ -870,6 +872,7 @@ export default function AnnotationCanvas({
   };
 
   const handleAnnTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
+    e.cancelBubble = true;
     pushHistory();
     const node = e.target;
     const ann = annotations.find((a) => a.id === id);
@@ -917,6 +920,10 @@ export default function AnnotationCanvas({
     const draggable = tool === "select" && canInteract && !isPanActive;
     const listening = canInteract && !isPanActive && (tool === "select" || !isDrawingMode);
 
+    const stopDragBubble = (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true;
+    };
+
     switch (ann.type) {
       case "rect": {
         const partLabel = (ann.linkedProcessIds ?? [])
@@ -937,6 +944,7 @@ export default function AnnotationCanvas({
               fill={`${c}22`}
               listening={listening}
               draggable={draggable}
+              onDragStart={stopDragBubble}
               onClick={(e) => handleAnnClick(e, ann.id)}
               onTap={(e) => handleAnnClick(e, ann.id)}
               onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
@@ -972,6 +980,7 @@ export default function AnnotationCanvas({
             fill={`${c}22`}
             listening={listening}
             draggable={draggable}
+            onDragStart={stopDragBubble}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
@@ -995,6 +1004,7 @@ export default function AnnotationCanvas({
             visible={layerVisible}
             listening={listening}
             draggable={draggable}
+            onDragStart={stopDragBubble}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
@@ -1043,6 +1053,7 @@ export default function AnnotationCanvas({
             padding={4}
             listening={listening}
             draggable={draggable}
+            onDragStart={stopDragBubble}
             onClick={(e) => handleAnnClick(e, ann.id)}
             onTap={(e) => handleAnnClick(e, ann.id)}
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
@@ -1274,91 +1285,99 @@ export default function AnnotationCanvas({
 
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
-                    <Group
-                      x={imgX}
-                      y={imgY}
-                      draggable={imageDraggable}
-                      onDragEnd={(e) => {
-                        if (!isActive) return;
-                        onImageOffsetChange?.({
-                          x: e.target.x() - entry.fit.x,
-                          y: e.target.y() - entry.fit.y,
-                        });
-                      }}
-                    >
-                      <Group y={-labelAbove} listening={false}>
-                        <Text
-                          text={ab.name}
+                    <Group x={imgX} y={imgY} name={`artboard_${ab.id}`}>
+                      <Group
+                        name="garment_image_drag"
+                        draggable={imageDraggable}
+                        onDragStart={(e) => {
+                          e.cancelBubble = true;
+                        }}
+                        onDragEnd={(e) => {
+                          if (!isActive) return;
+                          e.cancelBubble = true;
+                          const dx = e.target.x();
+                          const dy = e.target.y();
+                          e.target.position({ x: 0, y: 0 });
+                          onImageOffsetChange?.({
+                            x: abOffset.x + dx,
+                            y: abOffset.y + dy,
+                          });
+                        }}
+                      >
+                        <Group y={-labelAbove} listening={false}>
+                          <Text
+                            text={ab.name}
+                            x={0}
+                            y={0}
+                            fontSize={13}
+                            fontStyle="600"
+                            fill={isActive ? "#2563eb" : "#64748b"}
+                            listening={false}
+                          />
+                          {deletable && (
+                            <Group
+                              x={nameWidth + 6}
+                              y={-1}
+                              onClick={(e) => {
+                                e.cancelBubble = true;
+                                confirmDeleteArtboard();
+                              }}
+                              onTap={(e) => {
+                                e.cancelBubble = true;
+                                confirmDeleteArtboard();
+                              }}
+                            >
+                              <Rect
+                                width={20}
+                                height={18}
+                                fill="#fee2e2"
+                                cornerRadius={4}
+                                stroke="#fecaca"
+                                strokeWidth={1}
+                              />
+                              <Text
+                                text="×"
+                                x={5}
+                                y={2}
+                                fontSize={14}
+                                fill="#dc2626"
+                                listening={false}
+                              />
+                            </Group>
+                          )}
+                        </Group>
+                        <KonvaImage
+                          id={isActive ? "garment_image" : undefined}
+                          image={entry.img}
                           x={0}
                           y={0}
-                          fontSize={13}
-                          fontStyle="600"
-                          fill={isActive ? "#2563eb" : "#64748b"}
-                          listening={false}
+                          width={entry.fit.width}
+                          height={entry.fit.height}
+                          listening={!isPanActive && !isDrawingMode}
+                          draggable={false}
+                          stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
+                          strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
+                          opacity={isActive ? 1 : 0.92}
+                          onClick={(e) => {
+                            if (tool !== "select") return;
+                            e.cancelBubble = true;
+                            if (!isActive) {
+                              onActiveArtboardChange?.(ab.id);
+                              return;
+                            }
+                            selectImage();
+                          }}
+                          onTap={(e) => {
+                            e.cancelBubble = true;
+                            if (!isActive) {
+                              onActiveArtboardChange?.(ab.id);
+                              return;
+                            }
+                            if (tool !== "select") return;
+                            selectImage();
+                          }}
                         />
-                        {deletable && (
-                          <Group
-                            x={nameWidth + 6}
-                            y={-1}
-                            onClick={(e) => {
-                              e.cancelBubble = true;
-                              confirmDeleteArtboard();
-                            }}
-                            onTap={(e) => {
-                              e.cancelBubble = true;
-                              confirmDeleteArtboard();
-                            }}
-                          >
-                            <Rect
-                              width={20}
-                              height={18}
-                              fill="#fee2e2"
-                              cornerRadius={4}
-                              stroke="#fecaca"
-                              strokeWidth={1}
-                            />
-                            <Text
-                              text="×"
-                              x={5}
-                              y={2}
-                              fontSize={14}
-                              fill="#dc2626"
-                              listening={false}
-                            />
-                          </Group>
-                        )}
                       </Group>
-                      <KonvaImage
-                        id={isActive ? "garment_image" : undefined}
-                        image={entry.img}
-                        x={0}
-                        y={0}
-                        width={entry.fit.width}
-                        height={entry.fit.height}
-                        listening={!isPanActive && !isDrawingMode}
-                        draggable={false}
-                        stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
-                        strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
-                        opacity={isActive ? 1 : 0.92}
-                        onClick={(e) => {
-                          if (tool !== "select") return;
-                          e.cancelBubble = true;
-                          if (!isActive) {
-                            onActiveArtboardChange?.(ab.id);
-                            return;
-                          }
-                          selectImage();
-                        }}
-                        onTap={(e) => {
-                          e.cancelBubble = true;
-                          if (!isActive) {
-                            onActiveArtboardChange?.(ab.id);
-                            return;
-                          }
-                          if (tool !== "select") return;
-                          selectImage();
-                        }}
-                      />
                       {abAnns.map((ann) =>
                         renderAnnotation(
                           ann,
@@ -1458,39 +1477,47 @@ export default function AnnotationCanvas({
             };
             imageCoordOriginRef.current = singleImageAnchor;
             return (
-              <Group
-                x={singleImageAnchor.x}
-                y={singleImageAnchor.y}
-                draggable={tool === "select" && imageSelected && !isPanActive}
-                onDragEnd={(e) => {
-                  onImageOffsetChange?.({
-                    x: e.target.x() - imageFit.x,
-                    y: e.target.y() - imageFit.y,
-                  });
-                }}
-              >
-                <KonvaImage
-                  id="garment_image"
-                  image={image}
-                  x={0}
-                  y={0}
-                  width={imageFit.width}
-                  height={imageFit.height}
-                  listening={!isDrawingMode && !isPanActive}
-                  draggable={false}
-                  stroke={imageSelected ? "#2563eb" : undefined}
-                  strokeWidth={imageSelected ? 2 : 0}
-                  onClick={(e) => {
-                    if (tool !== "select") return;
+              <Group x={singleImageAnchor.x} y={singleImageAnchor.y}>
+                <Group
+                  name="garment_image_drag"
+                  draggable={tool === "select" && imageSelected && !isPanActive}
+                  onDragStart={(e) => {
                     e.cancelBubble = true;
-                    selectImage();
                   }}
-                  onTap={(e) => {
-                    if (tool !== "select") return;
+                  onDragEnd={(e) => {
                     e.cancelBubble = true;
-                    selectImage();
+                    const dx = e.target.x();
+                    const dy = e.target.y();
+                    e.target.position({ x: 0, y: 0 });
+                    onImageOffsetChange?.({
+                      x: imageOffset.x + dx,
+                      y: imageOffset.y + dy,
+                    });
                   }}
-                />
+                >
+                  <KonvaImage
+                    id="garment_image"
+                    image={image}
+                    x={0}
+                    y={0}
+                    width={imageFit.width}
+                    height={imageFit.height}
+                    listening={!isDrawingMode && !isPanActive}
+                    draggable={false}
+                    stroke={imageSelected ? "#2563eb" : undefined}
+                    strokeWidth={imageSelected ? 2 : 0}
+                    onClick={(e) => {
+                      if (tool !== "select") return;
+                      e.cancelBubble = true;
+                      selectImage();
+                    }}
+                    onTap={(e) => {
+                      if (tool !== "select") return;
+                      e.cancelBubble = true;
+                      selectImage();
+                    }}
+                  />
+                </Group>
                 {normalizedAnnotations.map((ann) =>
                   renderAnnotation(
                     ann,
