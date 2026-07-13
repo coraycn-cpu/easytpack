@@ -114,6 +114,8 @@ export type Annotation = {
   linkedProcessIds?: string[];
   /** 关联尺码表部位名（尺寸标注 dimension） */
   linkedSizePart?: string;
+  /** 锁定后不可拖动/删除/AI 改写 */
+  locked?: boolean;
   /** @deprecated 迁移至 linkedProcessIds */
   markerIndex?: number;
   /** @deprecated 迁移至 linkedProcessIds */

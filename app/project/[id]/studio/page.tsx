@@ -60,7 +60,18 @@ import {
   MANUAL_ANNOTATION_COLOR,
   mapAnnotationColor,
 } from "@/lib/canvas/annotation-colors";
-import { PART_ANNOTATION_COLOR } from "@/lib/project/hotspots";
+import {
+  filterNonOverlappingRects,
+  markAnnotationsManual,
+  toggleAnnotationsLock,
+  removeAnnotationsByIds,
+  isAnnotationLocked,
+} from "@/lib/canvas/annotation-helpers";
+import { buildPartTemplateAnnotations } from "@/lib/canvas/insert-part-templates";
+import {
+  nextPasteArtboardName,
+  prepareImageDataUrlForCanvas,
+} from "@/lib/canvas/paste-image";
 import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
@@ -124,7 +135,8 @@ export default function StudioPage() {
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
-  const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
+  const [selectedAnnIds, setSelectedAnnIds] = useState<string[]>([]);
+  const [insertTemplatesLoading, setInsertTemplatesLoading] = useState(false);
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
   const [highlightedSizePart, setHighlightedSizePart] = useState<string>("");
@@ -391,7 +403,7 @@ export default function StudioPage() {
             },
           });
         }
-        setSelectedAnnId(first.annotation.id);
+        setSelectedAnnIds([first.annotation.id]);
         setLinkedHighlightAnnIds(linked.map((l) => l.annotation.id));
       } else {
         setLinkedHighlightAnnIds([]);
@@ -400,50 +412,50 @@ export default function StudioPage() {
     [project, activeArtboardId, persist],
   );
 
-  const handleSelectedAnnIdChange = useCallback(
-    (annId: string | null) => {
-      setSelectedAnnId(annId);
-      if (!project || !annId) {
+  const handleSelectedAnnIdsChange = useCallback(
+    (annIds: string[]) => {
+      setSelectedAnnIds(annIds);
+      if (!project || annIds.length === 0) {
         setHighlightedProcessIds([]);
         setLinkedHighlightAnnIds([]);
         setHighlightedSizePart("");
         return;
       }
+      const primaryId = annIds[annIds.length - 1];
       const ab = project.canvas_data.artboards.find((a) => a.id === activeArtboardId);
-      const ann = ab?.annotations.find((a) => a.id === annId);
+      const ann = ab?.annotations.find((a) => a.id === primaryId);
       if (!ann) return;
       const pids = findProcessIdsForAnnotation(ann, project.process_items);
       setHighlightedProcessIds(pids);
-      setLinkedHighlightAnnIds([annId]);
-      if (isLinkableShape(ann.type)) {
-        focusTab("process");
-        if (pids.length === 0) {
-          setAiMessage("已框选区域 — 可 AI 识别工艺，或在工艺 Tab 勾选行手动关联");
+      setLinkedHighlightAnnIds(annIds);
+      if (annIds.length === 1) {
+        if (isLinkableShape(ann.type)) {
+          focusTab("process");
+        } else if (isDimensionAnnotation(ann)) {
+          focusTab("size");
+          const part = getAnnotationSizePart(ann);
+          setHighlightedSizePart(part ?? "");
+        } else if (pids.length > 0) {
+          setActiveTab("process");
         }
-      } else if (isDimensionAnnotation(ann)) {
-        focusTab("size");
-        const part = getAnnotationSizePart(ann);
-        setHighlightedSizePart(part ?? "");
-        if (!part) {
-          setAiMessage("已选尺寸线 — 可 AI 识别尺寸，或在尺寸 Tab 勾选行手动关联");
-        }
-      } else if (pids.length > 0) {
-        setActiveTab("process");
       }
     },
     [project, activeArtboardId, focusTab],
   );
 
+  const primarySelectedAnnId =
+    selectedAnnIds.length > 0 ? selectedAnnIds[selectedAnnIds.length - 1] : null;
+
   const handleToggleProcessLink = useCallback(
     (processId: string, linked: boolean) => {
-      if (!project || !selectedAnnId) return;
+      if (!project || !primarySelectedAnnId) return;
       const artboards = project.canvas_data.artboards.map((ab) =>
         ab.id === activeArtboardId
           ? {
               ...ab,
               annotations: mapAnnotationColor(
-                toggleShapeProcessLink(ab.annotations, selectedAnnId, processId, linked),
-                selectedAnnId,
+                toggleShapeProcessLink(ab.annotations, primarySelectedAnnId, processId, linked),
+                primarySelectedAnnId,
                 MANUAL_ANNOTATION_COLOR,
               ),
             }
@@ -457,13 +469,19 @@ export default function StudioPage() {
         linked ? [...new Set([...prev, processId])] : prev.filter((id) => id !== processId),
       );
     },
-    [project, selectedAnnId, activeArtboardId, persist],
+    [project, primarySelectedAnnId, activeArtboardId, persist],
   );
 
+  const selectedAnns = useMemo(() => {
+    if (!activeArtboard || selectedAnnIds.length === 0) return [];
+    const set = new Set(selectedAnnIds);
+    return activeArtboard.annotations.filter((a) => set.has(a.id));
+  }, [selectedAnnIds, activeArtboard]);
+
   const selectedAnn = useMemo(() => {
-    if (!selectedAnnId || !activeArtboard) return null;
-    return activeArtboard.annotations.find((a) => a.id === selectedAnnId) ?? null;
-  }, [selectedAnnId, activeArtboard]);
+    if (!primarySelectedAnnId || !activeArtboard) return null;
+    return activeArtboard.annotations.find((a) => a.id === primarySelectedAnnId) ?? null;
+  }, [primarySelectedAnnId, activeArtboard]);
 
   const linkedProcessIdsForSelection = useMemo(() => {
     if (!selectedAnn) return [];
@@ -477,14 +495,14 @@ export default function StudioPage() {
 
   const handleToggleSizeLink = useCallback(
     (part: string, linked: boolean) => {
-      if (!project || !selectedAnnId) return;
+      if (!project || !primarySelectedAnnId) return;
       const artboards = project.canvas_data.artboards.map((ab) =>
         ab.id === activeArtboardId
           ? {
               ...ab,
               annotations: mapAnnotationColor(
-                toggleDimensionSizePartLink(ab.annotations, selectedAnnId, part, linked),
-                selectedAnnId,
+                toggleDimensionSizePartLink(ab.annotations, primarySelectedAnnId, part, linked),
+                primarySelectedAnnId,
                 MANUAL_ANNOTATION_COLOR,
               ),
             }
@@ -496,7 +514,7 @@ export default function StudioPage() {
       });
       if (linked) setHighlightedSizePart(part);
     },
-    [project, selectedAnnId, activeArtboardId, persist],
+    [project, primarySelectedAnnId, activeArtboardId, persist],
   );
 
   const handleSizeRowSelect = useCallback(
@@ -517,7 +535,7 @@ export default function StudioPage() {
             },
           });
         }
-        setSelectedAnnId(first.annotation.id);
+        setSelectedAnnIds([first.annotation.id]);
         setLinkedHighlightAnnIds(linked.map((l) => l.annotation.id));
       } else {
         setLinkedHighlightAnnIds([]);
@@ -663,7 +681,7 @@ export default function StudioPage() {
       const nextActiveId =
         activeArtboardId === artboardId ? primaryArtboardId : activeArtboardId;
       setActiveArtboardId(nextActiveId);
-      setSelectedAnnId(null);
+      setSelectedAnnIds([]);
       persist({
         ...project,
         canvas_data: {
@@ -674,7 +692,131 @@ export default function StudioPage() {
       });
       setAiMessage(`已删除「${target.name}」`);
     },
-    [project, primaryArtboardId, activeArtboardId, persist, setSelectedAnnId],
+    [project, primaryArtboardId, activeArtboardId, persist],
+  );
+
+  const updateActiveArtboardAnnotations = useCallback(
+    (updater: (annotations: Annotation[]) => Annotation[]) => {
+      if (!project || !activeArtboard) return;
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboard.id
+          ? { ...ab, annotations: updater(ab.annotations) }
+          : ab,
+      );
+      persist({
+        ...project,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+    },
+    [project, activeArtboard, persist],
+  );
+
+  const handleMarkManualSelected = useCallback(() => {
+    if (!project || selectedAnnIds.length === 0) return;
+    const ids = new Set(selectedAnnIds);
+    updateActiveArtboardAnnotations((anns) => markAnnotationsManual(anns, ids));
+    setAiMessage(`已标记 ${selectedAnnIds.length} 项为手动（红色）`);
+  }, [project, selectedAnnIds, updateActiveArtboardAnnotations]);
+
+  const handleToggleLockSelected = useCallback(() => {
+    if (!project || selectedAnnIds.length === 0 || !activeArtboard) return;
+    const ids = new Set(selectedAnnIds);
+    const selected = activeArtboard.annotations.filter((a) => ids.has(a.id));
+    const allLocked = selected.every(isAnnotationLocked);
+    updateActiveArtboardAnnotations((anns) =>
+      toggleAnnotationsLock(anns, ids, !allLocked),
+    );
+    setAiMessage(allLocked ? "已解锁选中标注" : "已锁定选中标注");
+  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations]);
+
+  const handleDeleteSelectedAnnotations = useCallback(() => {
+    if (!project || selectedAnnIds.length === 0 || !activeArtboard) return;
+    const ids = new Set(selectedAnnIds);
+    const locked = activeArtboard.annotations.filter(
+      (a) => ids.has(a.id) && isAnnotationLocked(a),
+    );
+    if (locked.length > 0) {
+      setAiMessage("已锁定的标注不可删除，请先解锁");
+      return;
+    }
+    updateActiveArtboardAnnotations((anns) => removeAnnotationsByIds(anns, ids));
+    setSelectedAnnIds([]);
+    setLinkedHighlightAnnIds([]);
+    setHighlightedProcessIds([]);
+    setHighlightedSizePart("");
+  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations]);
+
+  const handleInsertPartTemplates = useCallback(async () => {
+    if (aiBusy || !project || !activeArtboard) return;
+    setInsertTemplatesLoading(true);
+    setAiMessage(null);
+    try {
+      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
+      const templates = await buildPartTemplateAnnotations({
+        category: project.intake.detectedCategory,
+        photoType: project.intake.photoType,
+        intake: project.intake,
+        imageDataUrl: imgUrl,
+        imageOffset: activeArtboard.imageOffset ?? { x: 0, y: 0 },
+      });
+      if (templates.length === 0) {
+        setAiMessage("暂无该品类标准框模板");
+        return;
+      }
+      const artboards = project.canvas_data.artboards.map((ab) =>
+        ab.id === activeArtboard.id
+          ? { ...ab, annotations: [...ab.annotations, ...templates] }
+          : ab,
+      );
+      persist({
+        ...project,
+        canvas_data: { ...project.canvas_data, artboards },
+      });
+      setSelectedAnnIds(templates.map((t) => t.id));
+      focusTab("process");
+      setAiMessage(`已插入 ${templates.length} 个标准部位框，可拖动调整后 AI 识别或手动关联`);
+    } catch (e) {
+      setAiMessage(e instanceof Error ? e.message : "插入标准框失败");
+    } finally {
+      setInsertTemplatesLoading(false);
+    }
+  }, [aiBusy, project, activeArtboard, persist, focusTab]);
+
+  const handlePasteImageToCanvas = useCallback(
+    async (rawDataUrl: string) => {
+      if (aiBusy || !project || !activeArtboard) return;
+      setAiMessage(null);
+      try {
+        const imageDataUrl = await prepareImageDataUrlForCanvas(rawDataUrl);
+
+        if (!activeArtboard.imageDataUrl) {
+          updateArtboard(activeArtboard.id, { imageDataUrl });
+          setAiMessage("已贴图到当前画板");
+          return;
+        }
+
+        const slots = await computeArtboardSlots(project.canvas_data.artboards);
+        const origin = nextArtboardOrigin(slots);
+        const name = nextPasteArtboardName(project.canvas_data.artboards);
+        const newBoard = createArtboard(name, imageDataUrl);
+        newBoard.canvasOrigin = origin;
+
+        const artboards = [...project.canvas_data.artboards, newBoard];
+        persist({
+          ...project,
+          canvas_data: {
+            ...project.canvas_data,
+            artboards,
+            activeArtboardId: newBoard.id,
+          },
+        });
+        setActiveArtboardId(newBoard.id);
+        setAiMessage(`已新建「${name}」贴图画板`);
+      } catch (e) {
+        setAiMessage(e instanceof Error ? e.message : "贴图失败");
+      }
+    },
+    [aiBusy, project, activeArtboard, updateArtboard, persist],
   );
 
   const sourceImageUrl = useMemo(() => {
@@ -910,7 +1052,26 @@ export default function StudioPage() {
       let processItems = [...project.process_items];
       const newAnnotations: Annotation[] = [];
 
-      for (const [i, region] of (data.regions ?? []).entries()) {
+      const existingLogical = activeArtboard.annotations
+        .filter((a) => a.type === "rect" || a.type === "circle")
+        .map((a) => annotationToLogicalRect(a, imageFit, imageOffset))
+        .filter((r) => r.width > 0 && r.height > 0);
+
+      type BatchRegion = {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        linkToExistingProcessId?: string;
+        process?: Partial<ProcessItem>;
+      };
+
+      const rawRegions = filterNonOverlappingRects(
+        (data.regions ?? []) as BatchRegion[],
+        existingLogical,
+      );
+
+      for (const [i, region] of rawRegions.entries()) {
         let processId = region.linkToExistingProcessId as string | undefined;
         const existingIdx = processId
           ? processItems.findIndex((p) => p.id === processId)
@@ -925,7 +1086,13 @@ export default function StudioPage() {
           processId = processItems[existingIdx].id;
         } else {
           processId = generateProcessId();
-          processItems.push({ id: processId, ...region.process });
+          processItems.push({
+            id: processId,
+            part: region.process?.part ?? "",
+            process: region.process?.process ?? "",
+            stitch: region.process?.stitch ?? "",
+            seam_allowance: region.process?.seam_allowance ?? "",
+          });
         }
 
         const ann = mapAiAnnotationToCanvas(
@@ -935,7 +1102,7 @@ export default function StudioPage() {
             y: region.y,
             width: region.width,
             height: region.height,
-            color: PART_ANNOTATION_COLOR,
+            color: AI_ANNOTATION_COLOR,
             linkedProcessIds: [processId!],
           },
           imageFit,
@@ -955,12 +1122,17 @@ export default function StudioPage() {
         process_items: processItems,
         canvas_data: { ...project.canvas_data, artboards },
       });
+      const skipped = (data.regions?.length ?? 0) - rawRegions.length;
       setAiTip(
         isModelPhoto(project.intake.photoType)
           ? `${data.userTips ?? "已添加 AI 区域标注"}（模特图基于选定单款，建议用 AI 生图补平铺图）`
           : (data.userTips ?? "已添加 AI 区域标注"),
       );
-      setAiMessage("AI 标工艺完成");
+      setAiMessage(
+        skipped > 0
+          ? `AI 标工艺完成，跳过 ${skipped} 个与已有区域重叠的部位`
+          : "AI 标工艺完成",
+      );
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "标工艺失败");
     } finally {
@@ -1492,9 +1664,13 @@ export default function StudioPage() {
               toolbarMessage={aiMessage ?? aiTip}
               aiSourceBanner={aiSourceBanner}
               processItems={project.process_items}
-              selectedAnnId={selectedAnnId}
-              onSelectedAnnIdChange={handleSelectedAnnIdChange}
+              selectedAnnIds={selectedAnnIds}
+              onSelectedAnnIdsChange={handleSelectedAnnIdsChange}
               linkedHighlightAnnIds={linkedHighlightAnnIds}
+              onInsertPartTemplates={handleInsertPartTemplates}
+              insertTemplatesLoading={insertTemplatesLoading}
+              onPasteImage={handlePasteImageToCanvas}
+              pasteImageDisabled={aiBusy}
             />
           </InfiniteCanvas>
 
@@ -1507,14 +1683,17 @@ export default function StudioPage() {
                 onPersist={persist}
                 highlightedProcessIds={highlightedProcessIds}
                 onProcessRowSelect={handleProcessRowSelect}
-                selectedAnnId={selectedAnnId}
-                selectedAnn={selectedAnn}
+                selectedAnnIds={selectedAnnIds}
+                selectedAnns={selectedAnns}
                 linkedProcessIdsForSelection={linkedProcessIdsForSelection}
                 onToggleProcessLink={handleToggleProcessLink}
                 onRegionAiFill={handleRegionAiFill}
                 regionAiLoading={aiTask === "region-annotate"}
                 onDimensionAiFill={handleDimensionAiFill}
                 dimensionAiLoading={aiTask === "size-dimension"}
+                onMarkManual={handleMarkManualSelected}
+                onToggleLock={handleToggleLockSelected}
+                onDeleteSelected={handleDeleteSelectedAnnotations}
                 linkedSizePartForSelection={linkedSizePartForSelection}
                 onToggleSizeLink={handleToggleSizeLink}
                 highlightedSizePart={highlightedSizePart}

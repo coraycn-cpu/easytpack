@@ -45,6 +45,9 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
+import { ANN_SELECT_HINT } from "@/lib/studio/annotation-ux";
+import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
+import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
 import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
 
 type Snapshot = { annotations: Annotation[] };
@@ -112,9 +115,13 @@ type AnnotationCanvasProps = {
   viewport?: { panX: number; panY: number; scale: number };
   onViewportChange?: (viewport: { panX: number; panY: number; scale: number }) => void;
   processItems?: ProcessItem[];
-  selectedAnnId?: string | null;
-  onSelectedAnnIdChange?: (id: string | null) => void;
+  selectedAnnIds?: string[];
+  onSelectedAnnIdsChange?: (ids: string[]) => void;
   linkedHighlightAnnIds?: string[];
+  onInsertPartTemplates?: () => void;
+  insertTemplatesLoading?: boolean;
+  onPasteImage?: (dataUrl: string) => void;
+  pasteImageDisabled?: boolean;
 };
 
 function createId(prefix: string) {
@@ -180,9 +187,13 @@ export default function AnnotationCanvas({
   viewport,
   onViewportChange,
   processItems,
-  selectedAnnId: controlledSelectedAnnId,
-  onSelectedAnnIdChange,
+  selectedAnnIds: controlledSelectedAnnIds,
+  onSelectedAnnIdsChange,
   linkedHighlightAnnIds = [],
+  onInsertPartTemplates,
+  insertTemplatesLoading,
+  onPasteImage,
+  pasteImageDisabled,
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -196,17 +207,18 @@ export default function AnnotationCanvas({
   const [tool, setTool] = useState<CanvasTool>("select");
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
-  const [internalSelectedAnnId, setInternalSelectedAnnId] = useState<string | null>(null);
-  const isSelectionControlled = controlledSelectedAnnId !== undefined;
-  const selectedAnnId = isSelectionControlled
-    ? (controlledSelectedAnnId ?? null)
-    : internalSelectedAnnId;
-  const setSelectedAnnId = useCallback(
-    (id: string | null) => {
-      if (isSelectionControlled) onSelectedAnnIdChange?.(id);
-      else setInternalSelectedAnnId(id);
+  const [internalSelectedAnnIds, setInternalSelectedAnnIds] = useState<string[]>([]);
+  const isSelectionControlled = controlledSelectedAnnIds !== undefined;
+  const selectedAnnIds = isSelectionControlled
+    ? (controlledSelectedAnnIds ?? [])
+    : internalSelectedAnnIds;
+  const primarySelectedAnnId = selectedAnnIds.length > 0 ? selectedAnnIds[selectedAnnIds.length - 1] : null;
+  const setSelectedAnnIds = useCallback(
+    (ids: string[]) => {
+      if (isSelectionControlled) onSelectedAnnIdsChange?.(ids);
+      else setInternalSelectedAnnIds(ids);
     },
-    [isSelectionControlled, onSelectedAnnIdChange],
+    [isSelectionControlled, onSelectedAnnIdsChange],
   );
   const [imageSelected, setImageSelected] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
@@ -398,7 +410,7 @@ export default function AnnotationCanvas({
 
   const applySnapshot = (snap: Snapshot) => {
     onAnnotationsChange(snap.annotations);
-    setSelectedAnnId(null);
+    setSelectedAnnIds([]);
   };
 
   const undo = useCallback(() => {
@@ -507,14 +519,21 @@ export default function AnnotationCanvas({
 
   const handlePanEnd = () => setIsPanning(false);
 
-  const selectAnnotation = (id: string) => {
-    setSelectedAnnId(id);
+  const selectAnnotation = (id: string, additive = false) => {
+    if (additive) {
+      const next = selectedAnnIds.includes(id)
+        ? selectedAnnIds.filter((x) => x !== id)
+        : [...selectedAnnIds, id];
+      setSelectedAnnIds(next);
+    } else {
+      setSelectedAnnIds([id]);
+    }
     setImageSelected(false);
   };
 
   const selectImage = () => {
     setImageSelected(true);
-    setSelectedAnnId(null);
+    setSelectedAnnIds([]);
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
     }
@@ -525,7 +544,8 @@ export default function AnnotationCanvas({
     id: string,
   ) => {
     e.cancelBubble = true;
-    selectAnnotation(id);
+    const additive = "shiftKey" in e.evt && Boolean(e.evt.shiftKey);
+    selectAnnotation(id, additive);
     if (tool !== "select") setTool("select");
   };
 
@@ -543,7 +563,7 @@ export default function AnnotationCanvas({
     // 选择工具：点空白取消选中；点图片由图片自身处理
     if (currentTool === "select") {
       if (isEmptyTarget(e)) {
-        setSelectedAnnId(null);
+        setSelectedAnnIds([]);
         setImageSelected(false);
       }
       return;
@@ -724,15 +744,24 @@ export default function AnnotationCanvas({
   }, [tool, finishDrawing]);
 
   const deleteSelected = useCallback(() => {
-    if (selectedAnnId) {
-      pushHistory();
-      onAnnotationsChange(annotations.filter((a) => a.id !== selectedAnnId));
-      setSelectedAnnId(null);
-      syncHistoryButtons();
-      return true;
-    }
-    return false;
-  }, [selectedAnnId, annotations, pushHistory, onAnnotationsChange, setSelectedAnnId]);
+    if (selectedAnnIds.length === 0) return false;
+    const locked = selectedAnnIds.filter((id) => {
+      const ann = annotations.find((a) => a.id === id);
+      return ann && isAnnotationLocked(ann);
+    });
+    if (locked.length === selectedAnnIds.length) return true;
+    const deletable = new Set(
+      selectedAnnIds.filter((id) => {
+        const ann = annotations.find((a) => a.id === id);
+        return ann && !isAnnotationLocked(ann);
+      }),
+    );
+    pushHistory();
+    onAnnotationsChange(annotations.filter((a) => !deletable.has(a.id)));
+    setSelectedAnnIds(selectedAnnIds.filter((id) => !deletable.has(id)));
+    syncHistoryButtons();
+    return true;
+  }, [selectedAnnIds, annotations, pushHistory, onAnnotationsChange, setSelectedAnnIds]);
 
   const tryDeleteActiveArtboard = useCallback(() => {
     if (
@@ -741,7 +770,7 @@ export default function AnnotationCanvas({
       !primaryArtboardId ||
       activeArtboardId === primaryArtboardId ||
       tool !== "select" ||
-      selectedAnnId
+      selectedAnnIds.length > 0
     ) {
       return false;
     }
@@ -755,7 +784,7 @@ export default function AnnotationCanvas({
     activeArtboardId,
     primaryArtboardId,
     tool,
-    selectedAnnId,
+    selectedAnnIds,
     multiArtboards,
   ]);
 
@@ -784,18 +813,39 @@ export default function AnnotationCanvas({
   }, [deleteSelected, tryDeleteActiveArtboard, undo, redo]);
 
   useEffect(() => {
+    if (!onPasteImage) return;
+    const onPaste = async (e: ClipboardEvent) => {
+      if (interactionLocked || pasteImageDisabled) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      const dataUrl = await readImageDataUrlFromClipboard(e);
+      if (!dataUrl) return;
+      e.preventDefault();
+      onPasteImage(dataUrl);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [onPasteImage, interactionLocked, pasteImageDisabled]);
+
+  useEffect(() => {
     const tr = transformerRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
 
-    if (selectedAnnId) {
-      const ann = normalizedAnnotations.find((a) => a.id === selectedAnnId);
+    if (primarySelectedAnnId) {
+      const ann = normalizedAnnotations.find((a) => a.id === primarySelectedAnnId);
       if (ann && !isLayerVisible(ann, layerVisibility)) {
         tr.nodes([]);
         tr.getLayer()?.batchDraw();
         return;
       }
-      const node = stage.findOne(`#ann_${selectedAnnId}`);
+      if (ann && isAnnotationLocked(ann)) {
+        tr.nodes([]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
+      const node = stage.findOne(`#ann_${primarySelectedAnnId}`);
       if (node) {
         tr.nodes([node]);
         tr.getLayer()?.batchDraw();
@@ -804,15 +854,18 @@ export default function AnnotationCanvas({
     }
     tr.nodes([]);
     tr.getLayer()?.batchDraw();
-  }, [selectedAnnId, annotations, layerVisibility, normalizedAnnotations]);
+  }, [primarySelectedAnnId, annotations, layerVisibility, normalizedAnnotations]);
 
   useEffect(() => {
-    if (!selectedAnnId) return;
-    const ann = normalizedAnnotations.find((a) => a.id === selectedAnnId);
-    if (ann && !isLayerVisible(ann, layerVisibility)) {
-      setSelectedAnnId(null);
+    if (selectedAnnIds.length === 0) return;
+    const visibleIds = selectedAnnIds.filter((id) => {
+      const ann = normalizedAnnotations.find((a) => a.id === id);
+      return ann && isLayerVisible(ann, layerVisibility);
+    });
+    if (visibleIds.length !== selectedAnnIds.length) {
+      setSelectedAnnIds(visibleIds);
     }
-  }, [layerVisibility, selectedAnnId, normalizedAnnotations, setSelectedAnnId]);
+  }, [layerVisibility, selectedAnnIds, normalizedAnnotations, setSelectedAnnIds]);
 
   const updateAnnotation = (id: string, patch: Partial<Annotation>) => {
     onAnnotationsChange(
@@ -943,12 +996,14 @@ export default function AnnotationCanvas({
     const displayAnn = coordOrigin ? annotationToLocalCoords(ann, coordOrigin) : ann;
     const c = displayAnn.color ?? DEFAULT_ANNOTATION_COLOR;
     const sw = displayAnn.strokeWidth ?? 3;
-    const isSelected = selectedAnnId === ann.id;
+    const isSelected = selectedAnnIds.includes(ann.id);
     const isLinkedHighlight = linkedHighlightAnnIds.includes(ann.id);
     const hasProcessLink = (ann.linkedProcessIds?.length ?? 0) > 0;
+    const locked = isAnnotationLocked(ann);
     const canInteract = interactive && layerVisible;
-    const draggable = tool === "select" && canInteract && !isPanActive;
+    const draggable = tool === "select" && canInteract && !isPanActive && !locked;
     const listening = canInteract && !isPanActive && (tool === "select" || !isDrawingMode);
+    const strokeDash = locked ? [5, 4] : hasProcessLink ? [6, 3] : undefined;
 
     const stopDragBubble = (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
@@ -970,7 +1025,7 @@ export default function AnnotationCanvas({
               height={displayAnn.height ?? 0}
               stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
-              dash={hasProcessLink ? [6, 3] : undefined}
+              dash={strokeDash}
               fill={`${c}22`}
               listening={listening}
               draggable={draggable}
@@ -1123,21 +1178,14 @@ export default function AnnotationCanvas({
     [processItems, visibleAnnotations, layerVisibility.process],
   );
 
-  const selectedLinkable =
-    selectedAnnId &&
-    visibleAnnotations.some(
-      (a) => a.id === selectedAnnId && isLinkableShape(a.type),
-    );
-
-  const selectedAnn = selectedAnnId
-    ? normalizedAnnotations.find((a) => a.id === selectedAnnId)
+  const primaryAnn = primarySelectedAnnId
+    ? normalizedAnnotations.find((a) => a.id === primarySelectedAnnId)
     : undefined;
-  const selectedHasProcessLink = (selectedAnn?.linkedProcessIds?.length ?? 0) > 0;
-  const selectedDimension =
-    selectedAnnId &&
-    selectedAnn &&
-    isDimensionAnnotation(selectedAnn);
-  const selectedHasSizeLink = Boolean(selectedAnn?.linkedSizePart?.trim());
+  const selectedLinkable =
+    primaryAnn && isLinkableShape(primaryAnn.type);
+  const selectedHasProcessLink = (primaryAnn?.linkedProcessIds?.length ?? 0) > 0;
+  const selectedDimension = primaryAnn && isDimensionAnnotation(primaryAnn);
+  const selectedHasSizeLink = Boolean(primaryAnn?.linkedSizePart?.trim());
 
   const toolbarHint =
     tool === "pan"
@@ -1152,13 +1200,15 @@ export default function AnnotationCanvas({
             : "绘制完成后自动切回选择"
           : imageSelected
             ? "款式图已选中 — 可拖动位置"
-            : selectedLinkable && !selectedHasProcessLink
-              ? "已框选区域 — 点「AI 识别工艺」或右侧面板手动关联"
-              : selectedDimension && !selectedHasSizeLink
-                ? "已选尺寸线 — 点「AI 识别尺寸」或右侧面板手动关联"
-                : selectedAnnId
-                ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
-                : "点击款式图或标注进行选中";
+            : selectedAnnIds.length > 1
+              ? `已选 ${selectedAnnIds.length} 项 · Shift+点击 增减 · Delete 删除未锁定项`
+              : selectedLinkable && !selectedHasProcessLink
+                ? "已框选区域 — 右侧面板「AI 识别此区域」"
+                : selectedDimension && !selectedHasSizeLink
+                  ? "已选尺寸线 — 右侧面板「AI 识别此尺寸」"
+                  : primarySelectedAnnId
+                    ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
+                    : ANN_SELECT_HINT;
 
   const toolbarEl = (
     <CanvasToolbar
@@ -1168,7 +1218,7 @@ export default function AnnotationCanvas({
         setTool(t);
         if (t !== "select") {
           setImageSelected(false);
-          setSelectedAnnId(null);
+          setSelectedAnnIds([]);
         }
         if (t === "rect" || t === "circle") {
           ensureProcessLayerVisible();
@@ -1181,7 +1231,10 @@ export default function AnnotationCanvas({
       canUndo={canUndo}
       canRedo={canRedo}
       onDelete={deleteSelected}
-      canDelete={Boolean(selectedAnnId)}
+      canDelete={selectedAnnIds.some((id) => {
+        const ann = normalizedAnnotations.find((a) => a.id === id);
+        return ann && !isAnnotationLocked(ann);
+      })}
       zoom={fixedChrome ? 1 : zoom}
       onZoomChange={fixedChrome ? undefined : setZoom}
       viewportScale={viewportScale}
@@ -1202,6 +1255,10 @@ export default function AnnotationCanvas({
       interactionLocked={interactionLocked}
       layerVisibility={layerVisibility}
       onLayerVisibilityChange={onLayerVisibilityChange}
+      onInsertPartTemplates={onInsertPartTemplates}
+      insertTemplatesLoading={insertTemplatesLoading}
+      onPasteImage={onPasteImage}
+      pasteImageDisabled={pasteImageDisabled ?? interactionLocked}
     />
   );
 

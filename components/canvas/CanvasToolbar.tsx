@@ -1,11 +1,14 @@
 "use client";
 
+import { useRef } from "react";
 import {
   ANNOTATION_COLORS,
   DEFAULT_ANNOTATION_COLOR,
 } from "@/lib/canvas/constants";
 import type { LayerVisibility } from "@/lib/canvas/annotation-layers";
 import { AI_ACTION_BUTTON_TITLES } from "@/lib/ai/image-source-hints";
+import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
+import { readImageDataUrlFromFile } from "@/lib/canvas/paste-image";
 import type { CanvasTool } from "@/types/canvas";
 
 type CanvasToolbarProps = {
@@ -46,6 +49,10 @@ type CanvasToolbarProps = {
   interactionLocked?: boolean;
   layerVisibility?: LayerVisibility;
   onLayerVisibilityChange?: (layers: LayerVisibility) => void;
+  onInsertPartTemplates?: () => void;
+  insertTemplatesLoading?: boolean;
+  onPasteImage?: (dataUrl: string) => void;
+  pasteImageDisabled?: boolean;
 };
 
 const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
@@ -90,7 +97,12 @@ export default function CanvasToolbar({
   interactionLocked,
   layerVisibility,
   onLayerVisibilityChange,
+  onInsertPartTemplates,
+  insertTemplatesLoading,
+  onPasteImage,
+  pasteImageDisabled,
 }: CanvasToolbarProps) {
+  const pasteFileRef = useRef<HTMLInputElement>(null);
   const light = theme === "light";
   const scale = viewportScale ?? zoom;
   const setScale = onViewportScaleChange ?? onZoomChange ?? (() => {});
@@ -197,7 +209,52 @@ export default function CanvasToolbar({
             ))}
           </div>
 
-          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+          {onInsertPartTemplates && (
+            <>
+              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+              <button
+                type="button"
+                disabled={manualLocked || insertTemplatesLoading}
+                onClick={onInsertPartTemplates}
+                className={actionBtn(manualLocked || Boolean(insertTemplatesLoading))}
+                title={ANN_ACTION_LABELS.insertTemplatesHint}
+              >
+                {insertTemplatesLoading ? "插入中…" : ANN_ACTION_LABELS.insertTemplates}
+              </button>
+            </>
+          )}
+
+          {onPasteImage && (
+            <>
+              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+              <button
+                type="button"
+                disabled={manualLocked || pasteImageDisabled}
+                onClick={() => pasteFileRef.current?.click()}
+                className={actionBtn(manualLocked || Boolean(pasteImageDisabled))}
+                title={ANN_ACTION_LABELS.pasteImageHint}
+              >
+                {ANN_ACTION_LABELS.pasteImage}
+              </button>
+              <input
+                ref={pasteFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file || manualLocked || pasteImageDisabled) return;
+                  try {
+                    const dataUrl = await readImageDataUrlFromFile(file);
+                    onPasteImage(dataUrl);
+                  } catch {
+                    /* ignore read errors */
+                  }
+                }}
+              />
+            </>
+          )}
 
           <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
 
@@ -279,9 +336,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onAnnotateProcess}
                   className={aiBtn()}
-                  title={AI_ACTION_BUTTON_TITLES["annotate-process"]}
+                  title={`${AI_ACTION_BUTTON_TITLES["annotate-process"]} · ${ANN_ACTION_LABELS.aiBatchProcessHint}`}
                 >
-                  {annotateProcessLoading ? "标注中…" : "AI 标工艺"}
+                  {annotateProcessLoading ? "标注中…" : ANN_ACTION_LABELS.aiBatchProcess}
                 </button>
               )}
               {onFillBom && (

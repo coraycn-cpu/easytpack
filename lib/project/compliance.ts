@@ -4,6 +4,10 @@ import {
   getAllLinkedProcessIds,
   hasCanvasAnnotations,
 } from "@/lib/canvas/part-annotations";
+import {
+  countDimensionsLinkedToSizePart,
+  isDimensionAnnotation,
+} from "@/lib/canvas/size-annotations";
 import { isSetTarget } from "@/lib/ai/garment-scope";
 
 export type ComplianceIssue = {
@@ -52,6 +56,54 @@ export function checkCompliance(project: TechPackProject): ComplianceIssue[] {
       level: "warning",
       message: `${unlinkedProcess.length} 条工艺尚未在图上标注对应部位`,
     });
+  }
+
+  const unlinkedShapes = project.canvas_data.artboards.reduce((n, ab) => {
+    for (const ann of ab.annotations) {
+      if (
+        (ann.type === "rect" || ann.type === "circle") &&
+        !(ann.linkedProcessIds?.length ?? 0)
+      ) {
+        n += 1;
+      }
+    }
+    return n;
+  }, 0);
+  if (unlinkedShapes > 0) {
+    issues.push({
+      level: "warning",
+      message:
+        unlinkedShapes === 1
+          ? "图上有 1 个工艺框未关联工艺表"
+          : `图上有 ${unlinkedShapes} 个工艺框未关联工艺表`,
+    });
+  }
+
+  const unlinkedDimensions = project.canvas_data.artboards.reduce((n, ab) => {
+    for (const ann of ab.annotations) {
+      if (isDimensionAnnotation(ann) && !ann.linkedSizePart?.trim()) n += 1;
+    }
+    return n;
+  }, 0);
+  if (unlinkedDimensions > 0) {
+    issues.push({
+      level: "warning",
+      message:
+        unlinkedDimensions === 1
+          ? "图上有 1 条尺寸线未关联尺码表"
+          : `图上有 ${unlinkedDimensions} 条尺寸线未关联尺码表`,
+    });
+  }
+
+  for (const row of project.size_chart.rows) {
+    const part = row.part?.trim();
+    if (!part) continue;
+    if (countDimensionsLinkedToSizePart(project, part) === 0) {
+      issues.push({
+        level: "warning",
+        message: `尺码表「${part}」尚无对应尺寸线标注`,
+      });
+    }
   }
 
   if (project.bom_items.length === 0) {
