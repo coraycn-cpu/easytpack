@@ -45,7 +45,7 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
-import { ANN_ACTION_LABELS, ANN_SELECT_HINT } from "@/lib/studio/annotation-ux";
+import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
 import type { ImageCropRect } from "@/lib/canvas/crop-image";
 import { isPasteArtboard, readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
@@ -89,9 +89,6 @@ type AnnotationCanvasProps = {
   dimensionAiLoading?: boolean;
   layerVisibility?: LayerVisibility;
   onLayerVisibilityChange?: (layers: LayerVisibility) => void;
-  toolbarMessage?: string | null;
-  /** 画布 AI 图片来源常驻说明 */
-  aiSourceBanner?: string | null;
   /** 多画板并排模式 */
   multiArtboards?: Artboard[];
   artboardSlots?: ArtboardSlot[];
@@ -166,8 +163,6 @@ export default function AnnotationCanvas({
   dimensionAiLoading,
   layerVisibility = DEFAULT_LAYER_VISIBILITY,
   onLayerVisibilityChange,
-  toolbarMessage,
-  aiSourceBanner,
   multiArtboards,
   artboardSlots,
   activeArtboardId,
@@ -1254,31 +1249,6 @@ export default function AnnotationCanvas({
   const selectedDimension = primaryAnn && isDimensionAnnotation(primaryAnn);
   const selectedHasSizeLink = Boolean(primaryAnn?.linkedSizePart?.trim());
 
-  const toolbarHint =
-    cropSession
-      ? `${ANN_ACTION_LABELS.cropImageHint} · Enter 确认 · Esc 取消`
-      : tool === "pan"
-      ? "抓手工具 — 拖动画布视口，不移动款式图"
-      : spaceDown
-        ? "按住空格 — 拖动画布视口"
-        : tool !== "select"
-          ? tool === "rect" || tool === "circle"
-            ? !layerVisibility.process
-              ? "工艺层已关闭 — 正在自动开启；拖拽框选区域"
-              : "拖拽框选工艺区域，松开后自动切回选择"
-            : "绘制完成后自动切回选择"
-          : imageSelected
-            ? "款式图已选中 — 可拖动位置"
-            : selectedAnnIds.length > 1
-              ? `已选 ${selectedAnnIds.length} 项 · Shift+点击 增减 · Delete 删除未锁定项`
-              : selectedLinkable && !selectedHasProcessLink
-                ? "已框选区域 — 右侧面板「AI 识别此区域」"
-                : selectedDimension && !selectedHasSizeLink
-                  ? "已选尺寸线 — 右侧面板「AI 识别此尺寸」"
-                  : primarySelectedAnnId
-                    ? "已选中 — Delete 删除 · Ctrl+Z 撤销"
-                    : ANN_SELECT_HINT;
-
   const toolbarEl = (
     <CanvasToolbar
       tool={tool}
@@ -1311,8 +1281,6 @@ export default function AnnotationCanvas({
       onResetViewport={onResetViewport}
       flat
       theme={fixedChrome || splitOnCanvas ? "light" : "dark"}
-      hint={toolbarMessage ?? toolbarHint}
-      aiSourceBanner={aiSourceBanner}
       onFullCollect={onFullCollect}
       onAnnotateProcess={onAnnotateProcess}
       annotateProcessLoading={annotateProcessLoading}

@@ -27,9 +27,6 @@ type CanvasToolbarProps = {
   onResetViewport?: () => void;
   zoom?: number;
   onZoomChange?: (z: number) => void;
-  hint?: string;
-  /** 画布 AI 图片来源常驻说明 */
-  aiSourceBanner?: string | null;
   flat?: boolean;
   theme?: "light" | "dark";
   /** Collect 全功能标注 */
@@ -82,8 +79,6 @@ export default function CanvasToolbar({
   onResetViewport,
   zoom = 1,
   onZoomChange,
-  hint,
-  aiSourceBanner,
   flat,
   theme = "dark",
   onFullCollect,
@@ -420,28 +415,6 @@ export default function CanvasToolbar({
           </div>
         </div>
       </div>
-      {aiSourceBanner && (
-        <p
-          className={`border-t px-4 py-1 text-[10px] leading-snug ${
-            light
-              ? "border-blue-100 bg-blue-50/60 text-blue-800"
-              : flat
-                ? "border-[#333] bg-blue-950/40 text-blue-200"
-                : "border-zinc-800 bg-blue-950/30 text-blue-200"
-          }`}
-        >
-          {aiSourceBanner}
-        </p>
-      )}
-      {hint && (
-        <p
-          className={`border-t px-4 py-1.5 text-[11px] ${
-            light ? "border-slate-100 text-slate-400" : flat ? "border-[#333] text-zinc-500" : "border-zinc-800 text-zinc-500"
-          }`}
-        >
-          {hint}
-        </p>
-      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import AiChatFab from "@/components/studio/AiChatFab";
+import StudioAiDock from "@/components/studio/StudioAiDock";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
@@ -98,7 +98,6 @@ import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-char
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import {
   aiPresetToActionId,
-  buildStudioAiSourceBanner,
   getAiActionImageSource,
   resolveAiImagePreviewUrl,
 } from "@/lib/ai/image-source-hints";
@@ -687,11 +686,6 @@ export default function StudioPage() {
   const primaryArtboardId = useMemo(
     () => (project ? getPrimaryArtboardId(project.canvas_data.artboards) : undefined),
     [project],
-  );
-
-  const aiSourceBanner = useMemo(
-    () => (project ? buildStudioAiSourceBanner(project, activeArtboardId) : null),
-    [project, activeArtboardId],
   );
 
   const flatFrontRegenerating = useMemo(() => {
@@ -1744,8 +1738,6 @@ export default function StudioPage() {
               }
               viewport={layout.viewport}
               onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
-              toolbarMessage={aiMessage ?? aiTip}
-              aiSourceBanner={aiSourceBanner}
               processItems={project.process_items}
               selectedAnnIds={selectedAnnIds}
               onSelectedAnnIdsChange={handleSelectedAnnIdsChange}
@@ -1757,6 +1749,13 @@ export default function StudioPage() {
               onCropArtboardImage={handleCropArtboardImage}
             />
           </InfiniteCanvas>
+
+          <StudioAiDock
+            project={project}
+            onProjectUpdate={persist}
+            disabled={aiBusy}
+            statusText={aiMessage ?? aiTip}
+          />
 
           <div className="pointer-events-none fixed top-14 right-4 z-30 w-[min(100vw-1.5rem,340px)]">
             <div className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
@@ -1787,8 +1786,6 @@ export default function StudioPage() {
               />
             </div>
           </div>
-
-          <AiChatFab project={project} onProjectUpdate={persist} disabled={aiBusy} flat />
 
           {aiBusy && activeAiPreset && !garmentBlocked && (
             <AiAnalysisOverlay
