@@ -1463,6 +1463,9 @@ export default function StudioPage() {
               onImageOffsetChange={(imageOffset) =>
                 updateArtboard(activeArtboard.id, { imageOffset })
               }
+              onArtboardImageDragEnd={({ imageOffset, annotations }) =>
+                updateArtboard(activeArtboard.id, { imageOffset, annotations })
+              }
               onRegionAiFill={handleRegionAiFill}
               onDimensionAiFill={handleDimensionAiFill}
               dimensionAiLoading={aiTask === "size-dimension"}

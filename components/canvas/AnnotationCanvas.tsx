@@ -31,6 +31,7 @@ import {
   computeMultiStudioStageBounds,
   computeImagePlacement,
   annotationToLocalCoords,
+  offsetAnnotations,
 } from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
@@ -59,6 +60,11 @@ type AnnotationCanvasProps = {
   stageHeight?: number;
   imageOffset?: { x: number; y: number };
   onImageOffsetChange?: (offset: { x: number; y: number }) => void;
+  /** 拖动款式图结束时原子更新 offset + 标注，避免错位 */
+  onArtboardImageDragEnd?: (payload: {
+    imageOffset: { x: number; y: number };
+    annotations: Annotation[];
+  }) => void;
   splitOnCanvas?: boolean;
   splitLayout?: { tabs: PanelPosition; toolbar: PanelPosition; stage: PanelPosition };
   onSplitLayoutChange?: (
@@ -135,6 +141,7 @@ export default function AnnotationCanvas({
   stageHeight = 480,
   imageOffset = { x: 0, y: 0 },
   onImageOffsetChange,
+  onArtboardImageDragEnd,
   splitOnCanvas = false,
   splitLayout,
   onSplitLayoutChange,
@@ -256,6 +263,12 @@ export default function AnnotationCanvas({
   } | null>(null);
   const [freehandPoints, setFreehandPoints] = useState<number[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
+  /** 拖动款式图过程中标注层临时跟随位移（松手后写入持久化坐标） */
+  const [imageDragPreview, setImageDragPreview] = useState<{
+    artboardId: string;
+    dx: number;
+    dy: number;
+  } | null>(null);
 
   const draftRectRef = useRef(draftRect);
   const draftLineRef = useRef(draftLine);
@@ -807,6 +820,23 @@ export default function AnnotationCanvas({
     );
   };
 
+  const commitImageDrag = (
+    dx: number,
+    dy: number,
+    abOffset: { x: number; y: number },
+    anns: Annotation[],
+  ) => {
+    if (dx === 0 && dy === 0) return;
+    const nextOffset = { x: abOffset.x + dx, y: abOffset.y + dy };
+    const shifted = offsetAnnotations(anns, dx, dy);
+    if (onArtboardImageDragEnd) {
+      onArtboardImageDragEnd({ imageOffset: nextOffset, annotations: shifted });
+    } else {
+      onImageOffsetChange?.(nextOffset);
+      onAnnotationsChange(shifted);
+    }
+  };
+
   const handleAnnDragEnd = (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true;
     pushHistory();
@@ -1291,6 +1321,18 @@ export default function AnnotationCanvas({
                         draggable={imageDraggable}
                         onDragStart={(e) => {
                           e.cancelBubble = true;
+                          if (isActive) {
+                            setImageDragPreview({ artboardId: ab.id, dx: 0, dy: 0 });
+                          }
+                        }}
+                        onDragMove={(e) => {
+                          if (!isActive) return;
+                          e.cancelBubble = true;
+                          setImageDragPreview({
+                            artboardId: ab.id,
+                            dx: e.target.x(),
+                            dy: e.target.y(),
+                          });
                         }}
                         onDragEnd={(e) => {
                           if (!isActive) return;
@@ -1298,10 +1340,8 @@ export default function AnnotationCanvas({
                           const dx = e.target.x();
                           const dy = e.target.y();
                           e.target.position({ x: 0, y: 0 });
-                          onImageOffsetChange?.({
-                            x: abOffset.x + dx,
-                            y: abOffset.y + dy,
-                          });
+                          setImageDragPreview(null);
+                          commitImageDrag(dx, dy, abOffset, abAnns);
                         }}
                       >
                         <Group y={-labelAbove} listening={false}>
@@ -1378,6 +1418,14 @@ export default function AnnotationCanvas({
                           }}
                         />
                       </Group>
+                      <Group
+                        x={
+                          imageDragPreview?.artboardId === ab.id ? imageDragPreview.dx : 0
+                        }
+                        y={
+                          imageDragPreview?.artboardId === ab.id ? imageDragPreview.dy : 0
+                        }
+                      >
                       {abAnns.map((ann) =>
                         renderAnnotation(
                           ann,
@@ -1465,6 +1513,7 @@ export default function AnnotationCanvas({
                           listening={false}
                         />
                       )}
+                      </Group>
                     </Group>
                   </Group>
                 );
@@ -1483,16 +1532,23 @@ export default function AnnotationCanvas({
                   draggable={tool === "select" && imageSelected && !isPanActive}
                   onDragStart={(e) => {
                     e.cancelBubble = true;
+                    setImageDragPreview({ artboardId: "__single__", dx: 0, dy: 0 });
+                  }}
+                  onDragMove={(e) => {
+                    e.cancelBubble = true;
+                    setImageDragPreview({
+                      artboardId: "__single__",
+                      dx: e.target.x(),
+                      dy: e.target.y(),
+                    });
                   }}
                   onDragEnd={(e) => {
                     e.cancelBubble = true;
                     const dx = e.target.x();
                     const dy = e.target.y();
                     e.target.position({ x: 0, y: 0 });
-                    onImageOffsetChange?.({
-                      x: imageOffset.x + dx,
-                      y: imageOffset.y + dy,
-                    });
+                    setImageDragPreview(null);
+                    commitImageDrag(dx, dy, imageOffset, normalizedAnnotations);
                   }}
                 >
                   <KonvaImage
@@ -1518,6 +1574,14 @@ export default function AnnotationCanvas({
                     }}
                   />
                 </Group>
+                <Group
+                  x={
+                    imageDragPreview?.artboardId === "__single__" ? imageDragPreview.dx : 0
+                  }
+                  y={
+                    imageDragPreview?.artboardId === "__single__" ? imageDragPreview.dy : 0
+                  }
+                >
                 {normalizedAnnotations.map((ann) =>
                   renderAnnotation(
                     ann,
@@ -1599,6 +1663,7 @@ export default function AnnotationCanvas({
                     listening={false}
                   />
                 )}
+                </Group>
               </Group>
             );
           })()}
