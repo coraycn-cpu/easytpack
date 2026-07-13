@@ -36,3 +36,7 @@ export function nextPasteArtboardName(artboards: Array<{ name: string }>): strin
   if (pasteBoards.length === 0) return "贴图";
   return `贴图 ${pasteBoards.length + 1}`;
 }
+
+export function isPasteArtboard(name: string): boolean {
+  return name === "贴图" || name.startsWith("贴图 ");
+}

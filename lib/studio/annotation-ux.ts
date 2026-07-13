@@ -20,6 +20,10 @@ export const ANN_ACTION_LABELS = {
   insertTemplatesHint: "按品类插入常用工艺框，可拖动调整",
   pasteImage: "贴图",
   pasteImageHint: "粘贴图片到画布（Ctrl+V）· 空画板设主图 · 有图则新建贴图画板",
+  cropImage: "剪裁",
+  cropImageHint: "拖动选区调整，确认后应用剪裁",
+  cropConfirm: "确认剪裁",
+  cropCancel: "取消剪裁",
   linkProcessTab: "手动关联工艺",
   linkSizeTab: "手动关联尺寸",
 } as const;

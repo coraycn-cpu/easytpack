@@ -72,6 +72,11 @@ import {
   nextPasteArtboardName,
   prepareImageDataUrlForCanvas,
 } from "@/lib/canvas/paste-image";
+import {
+  applyCropToImageDataUrl,
+  displayCropToSourcePixels,
+  type ImageCropRect,
+} from "@/lib/canvas/crop-image";
 import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
@@ -817,6 +822,39 @@ export default function StudioPage() {
       }
     },
     [aiBusy, project, activeArtboard, updateArtboard, persist],
+  );
+
+  const handleCropArtboardImage = useCallback(
+    async (artboardId: string, displayCrop: ImageCropRect) => {
+      if (aiBusy || !project) return;
+      const ab = project.canvas_data.artboards.find((a) => a.id === artboardId);
+      if (!ab?.imageDataUrl) return;
+      setAiMessage(null);
+      try {
+        const fit = await loadImagePlacement(ab.imageDataUrl);
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = ab.imageDataUrl!;
+        });
+        const srcCrop = displayCropToSourcePixels(
+          displayCrop,
+          { width: fit.width, height: fit.height },
+          { width: img.naturalWidth, height: img.naturalHeight },
+        );
+        const imageDataUrl = await applyCropToImageDataUrl(ab.imageDataUrl, srcCrop);
+        updateArtboard(artboardId, {
+          imageDataUrl,
+          imageOffset: { x: 0, y: 0 },
+        });
+        setAiMessage(`已剪裁「${ab.name}」`);
+      } catch (e) {
+        setAiMessage(e instanceof Error ? e.message : "剪裁失败");
+      }
+    },
+    [aiBusy, project, updateArtboard],
   );
 
   const sourceImageUrl = useMemo(() => {
@@ -1671,6 +1709,7 @@ export default function StudioPage() {
               insertTemplatesLoading={insertTemplatesLoading}
               onPasteImage={handlePasteImageToCanvas}
               pasteImageDisabled={aiBusy}
+              onCropArtboardImage={handleCropArtboardImage}
             />
           </InfiniteCanvas>
 

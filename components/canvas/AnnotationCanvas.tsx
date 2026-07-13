@@ -45,9 +45,10 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
-import { ANN_SELECT_HINT } from "@/lib/studio/annotation-ux";
+import { ANN_ACTION_LABELS, ANN_SELECT_HINT } from "@/lib/studio/annotation-ux";
 import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
-import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
+import type { ImageCropRect } from "@/lib/canvas/crop-image";
+import { isPasteArtboard, readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
 import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
 
 type Snapshot = { annotations: Annotation[] };
@@ -122,6 +123,7 @@ type AnnotationCanvasProps = {
   insertTemplatesLoading?: boolean;
   onPasteImage?: (dataUrl: string) => void;
   pasteImageDisabled?: boolean;
+  onCropArtboardImage?: (artboardId: string, crop: ImageCropRect) => void;
 };
 
 function createId(prefix: string) {
@@ -194,6 +196,7 @@ export default function AnnotationCanvas({
   insertTemplatesLoading,
   onPasteImage,
   pasteImageDisabled,
+  onCropArtboardImage,
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -221,6 +224,9 @@ export default function AnnotationCanvas({
     [isSelectionControlled, onSelectedAnnIdsChange],
   );
   const [imageSelected, setImageSelected] = useState(false);
+  const [cropSession, setCropSession] = useState<
+    (ImageCropRect & { artboardId: string }) | null
+  >(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ clientX: 0, clientY: 0, panX: 0, panY: 0 });
@@ -788,6 +794,45 @@ export default function AnnotationCanvas({
     multiArtboards,
   ]);
 
+  const handleCropTransformEnd = useCallback((e: Konva.KonvaEventObject<Event>) => {
+    e.cancelBubble = true;
+    const node = e.target as Konva.Rect;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    setCropSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            x: node.x(),
+            y: node.y(),
+            width: Math.max(20, node.width() * scaleX),
+            height: Math.max(20, node.height() * scaleY),
+          }
+        : null,
+    );
+  }, []);
+
+  const handleCropDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true;
+    const node = e.target;
+    setCropSession((prev) =>
+      prev ? { ...prev, x: node.x(), y: node.y() } : null,
+    );
+  }, []);
+
+  const confirmCropSession = useCallback(() => {
+    if (!cropSession || !onCropArtboardImage) return;
+    onCropArtboardImage(cropSession.artboardId, {
+      x: cropSession.x,
+      y: cropSession.y,
+      width: cropSession.width,
+      height: cropSession.height,
+    });
+    setCropSession(null);
+  }, [cropSession, onCropArtboardImage]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -795,8 +840,19 @@ export default function AnnotationCanvas({
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
+        if (cropSession) return;
         if (!deleteSelected()) {
           tryDeleteActiveArtboard();
+        }
+      }
+      if (cropSession) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setCropSession(null);
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          confirmCropSession();
         }
       }
       if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
@@ -810,7 +866,7 @@ export default function AnnotationCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelected, tryDeleteActiveArtboard, undo, redo]);
+  }, [deleteSelected, tryDeleteActiveArtboard, undo, redo, cropSession, confirmCropSession]);
 
   useEffect(() => {
     if (!onPasteImage) return;
@@ -833,6 +889,17 @@ export default function AnnotationCanvas({
     const stage = stageRef.current;
     if (!tr || !stage) return;
 
+    if (cropSession && cropSession.artboardId === activeArtboardId) {
+      const node = stage.findOne(`#crop_rect_${cropSession.artboardId}`);
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+      } else {
+        tr.nodes([]);
+      }
+      return;
+    }
+
     if (primarySelectedAnnId) {
       const ann = normalizedAnnotations.find((a) => a.id === primarySelectedAnnId);
       if (ann && !isLayerVisible(ann, layerVisibility)) {
@@ -854,7 +921,7 @@ export default function AnnotationCanvas({
     }
     tr.nodes([]);
     tr.getLayer()?.batchDraw();
-  }, [primarySelectedAnnId, annotations, layerVisibility, normalizedAnnotations]);
+  }, [primarySelectedAnnId, cropSession, activeArtboardId, annotations, layerVisibility, normalizedAnnotations]);
 
   useEffect(() => {
     if (selectedAnnIds.length === 0) return;
@@ -1188,7 +1255,9 @@ export default function AnnotationCanvas({
   const selectedHasSizeLink = Boolean(primaryAnn?.linkedSizePart?.trim());
 
   const toolbarHint =
-    tool === "pan"
+    cropSession
+      ? `${ANN_ACTION_LABELS.cropImageHint} · Enter 确认 · Esc 取消`
+      : tool === "pan"
       ? "抓手工具 — 拖动画布视口，不移动款式图"
       : spaceDown
         ? "按住空格 — 拖动画布视口"
@@ -1350,11 +1419,22 @@ export default function AnnotationCanvas({
                 const labelAbove = 22;
                 const nameWidth = ab.name.length * 13;
                 const imageDraggable =
-                  isActive && tool === "select" && imageSelected && !isPanActive;
+                  isActive &&
+                  tool === "select" &&
+                  imageSelected &&
+                  !isPanActive &&
+                  !cropSession;
                 const deletable =
                   Boolean(onDeleteArtboard && primaryArtboardId) &&
                   ab.id !== primaryArtboardId &&
                   !ab.viewImageMeta &&
+                  tool === "select" &&
+                  !interactionLocked &&
+                  !cropSession;
+                const croppable =
+                  Boolean(onCropArtboardImage && ab.imageDataUrl) &&
+                  isPasteArtboard(ab.name) &&
+                  isActive &&
                   tool === "select" &&
                   !interactionLocked;
 
@@ -1364,6 +1444,60 @@ export default function AnnotationCanvas({
                     onDeleteArtboard(ab.id);
                   }
                 };
+
+                const startCropSession = () => {
+                  if (!croppable || cropSession) return;
+                  setCropSession({
+                    artboardId: ab.id,
+                    x: 0,
+                    y: 0,
+                    width: entry.fit.width,
+                    height: entry.fit.height,
+                  });
+                  setImageSelected(false);
+                  setSelectedAnnIds([]);
+                };
+
+                const renderLabelAction = (
+                  x: number,
+                  label: string,
+                  fill: string,
+                  bg: string,
+                  border: string,
+                  onAction: () => void,
+                ) => (
+                  <Group
+                    x={x}
+                    y={-1}
+                    listening
+                    onClick={(e) => {
+                      e.cancelBubble = true;
+                      onAction();
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true;
+                      onAction();
+                    }}
+                  >
+                    <Rect
+                      width={label.length * 11 + 10}
+                      height={18}
+                      fill={bg}
+                      cornerRadius={4}
+                      stroke={border}
+                      strokeWidth={1}
+                    />
+                    <Text
+                      text={label}
+                      x={5}
+                      y={3}
+                      fontSize={10}
+                      fontStyle="600"
+                      fill={fill}
+                      listening={false}
+                    />
+                  </Group>
+                );
 
                 const imageAnchor = { x: imgX, y: imgY };
                 if (isActive) {
@@ -1401,7 +1535,7 @@ export default function AnnotationCanvas({
                           commitImageDrag(dx, dy, abOffset, abAnns);
                         }}
                       >
-                        <Group y={-labelAbove} listening={false}>
+                        <Group y={-labelAbove}>
                           <Text
                             text={ab.name}
                             x={0}
@@ -1411,35 +1545,49 @@ export default function AnnotationCanvas({
                             fill={isActive ? "#2563eb" : "#64748b"}
                             listening={false}
                           />
-                          {deletable && (
-                            <Group
-                              x={nameWidth + 6}
-                              y={-1}
-                              onClick={(e) => {
-                                e.cancelBubble = true;
-                                confirmDeleteArtboard();
-                              }}
-                              onTap={(e) => {
-                                e.cancelBubble = true;
-                                confirmDeleteArtboard();
-                              }}
-                            >
-                              <Rect
-                                width={20}
-                                height={18}
-                                fill="#fee2e2"
-                                cornerRadius={4}
-                                stroke="#fecaca"
-                                strokeWidth={1}
-                              />
-                              <Text
-                                text="×"
-                                x={5}
-                                y={2}
-                                fontSize={14}
-                                fill="#dc2626"
-                                listening={false}
-                              />
+                          {(croppable || deletable) && (
+                            <Group x={nameWidth + 6} listening>
+                              {cropSession?.artboardId === ab.id ? (
+                                <>
+                                  {renderLabelAction(
+                                    0,
+                                    ANN_ACTION_LABELS.cropConfirm,
+                                    "#166534",
+                                    "#dcfce7",
+                                    "#bbf7d0",
+                                    confirmCropSession,
+                                  )}
+                                  {renderLabelAction(
+                                    58,
+                                    ANN_ACTION_LABELS.cropCancel,
+                                    "#64748b",
+                                    "#f1f5f9",
+                                    "#e2e8f0",
+                                    () => setCropSession(null),
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {croppable &&
+                                    renderLabelAction(
+                                      0,
+                                      ANN_ACTION_LABELS.cropImage,
+                                      "#1d4ed8",
+                                      "#eff6ff",
+                                      "#bfdbfe",
+                                      startCropSession,
+                                    )}
+                                  {deletable &&
+                                    renderLabelAction(
+                                      croppable ? 38 : 0,
+                                      "×",
+                                      "#dc2626",
+                                      "#fee2e2",
+                                      "#fecaca",
+                                      confirmDeleteArtboard,
+                                    )}
+                                </>
+                              )}
                             </Group>
                           )}
                         </Group>
@@ -1456,7 +1604,7 @@ export default function AnnotationCanvas({
                           strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
                           opacity={isActive ? 1 : 0.92}
                           onClick={(e) => {
-                            if (tool !== "select") return;
+                            if (tool !== "select" || cropSession) return;
                             e.cancelBubble = true;
                             if (!isActive) {
                               onActiveArtboardChange?.(ab.id);
@@ -1470,10 +1618,26 @@ export default function AnnotationCanvas({
                               onActiveArtboardChange?.(ab.id);
                               return;
                             }
-                            if (tool !== "select") return;
+                            if (tool !== "select" || cropSession) return;
                             selectImage();
                           }}
                         />
+                        {cropSession?.artboardId === ab.id && (
+                          <Rect
+                            id={`crop_rect_${ab.id}`}
+                            x={cropSession.x}
+                            y={cropSession.y}
+                            width={cropSession.width}
+                            height={cropSession.height}
+                            stroke="#22c55e"
+                            strokeWidth={2}
+                            dash={[8, 4]}
+                            fill="rgba(34,197,94,0.08)"
+                            draggable
+                            onDragEnd={handleCropDragEnd}
+                            onTransformEnd={handleCropTransformEnd}
+                          />
+                        )}
                       </Group>
                       <Group
                         x={
