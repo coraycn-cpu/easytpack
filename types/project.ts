@@ -48,6 +48,8 @@ export type IntakeData = {
   requiresGarmentPick?: boolean;
   /** 已从模特/拼贴图生成平铺正面主款 */
   flatFrontGenerated?: boolean;
+  /** 用户选择暂不自动生成平铺正面，直接使用原参考图进入画布 */
+  flatFrontSkipped?: boolean;
 };
 
 export type QuestionOption = {

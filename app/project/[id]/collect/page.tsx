@@ -15,6 +15,7 @@ import {
   confirmTargetGarment,
   needsGarmentConfirmation,
   needsFlatFrontAfterGarmentPick,
+  skipFlatFrontGeneration,
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { runFullTechPackAnnotation } from "@/lib/studio/run-full-annotation";
@@ -128,7 +129,10 @@ export default function CollectPage() {
     setAnswer(questionId, next);
   };
 
-  const handleGarmentConfirm = async (garment: Parameters<typeof confirmTargetGarment>[1]) => {
+  const handleGarmentConfirm = async (
+    garment: Parameters<typeof confirmTargetGarment>[1],
+    options?: { skipFlatFront?: boolean },
+  ) => {
     if (!project) return;
     setLoading(true);
     setError(null);
@@ -141,7 +145,14 @@ export default function CollectPage() {
       saveProject(updated);
       setProject(updated);
 
-      if (needsFlatFrontAfterGarmentPick(updated.intake)) {
+      if (options?.skipFlatFront) {
+        updated = {
+          ...updated,
+          intake: skipFlatFrontGeneration(updated.intake),
+        };
+        saveProject(updated);
+        setProject(updated);
+      } else if (needsFlatFrontAfterGarmentPick(updated.intake)) {
         setInitPhase("intake");
         const flatResult = await generateFlatFrontForPrimary(updated);
         updated = flatResult.project;
@@ -294,6 +305,7 @@ export default function CollectPage() {
             intake={project.intake}
             imagePreview={project.intake.imageDataUrl}
             onConfirm={handleGarmentConfirm}
+            flatFrontLoading={loading && initPhase === "intake"}
           />
         ) : (
         <div

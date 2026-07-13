@@ -101,5 +101,10 @@ export function needsFlatFrontAfterGarmentPick(intake: IntakeData): boolean {
     return false;
   }
   if (intake.flatFrontGenerated) return false;
+  if (intake.flatFrontSkipped) return false;
   return intake.photoType === "model" || intake.photoType === "collage";
+}
+
+export function skipFlatFrontGeneration(intake: IntakeData): IntakeData {
+  return { ...intake, flatFrontSkipped: true };
 }

@@ -11,11 +11,13 @@ import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
+import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
 import {
   applyIntentToIntake,
   confirmTargetGarment,
   needsGarmentConfirmation,
   needsFlatFrontAfterGarmentPick,
+  skipFlatFrontGeneration,
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { shouldKeepPhotoReference } from "@/lib/studio/reference-artboard";
@@ -147,6 +149,7 @@ export default function StudioPage() {
   const [highlightedSizePart, setHighlightedSizePart] = useState<string>("");
   const [sizeAiDialogOpen, setSizeAiDialogOpen] = useState(false);
   const [aiHighlightTab, setAiHighlightTab] = useState<Tab | null>(null);
+  const [flatFrontOfferHandled, setFlatFrontOfferHandled] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectRef = useRef<TechPackProject | null>(null);
   const layoutRef = useRef<StudioLayout>(layout);
@@ -158,6 +161,10 @@ export default function StudioPage() {
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
+
+  useEffect(() => {
+    setFlatFrontOfferHandled(false);
+  }, [project?.id]);
 
   useEffect(() => {
     const p = getProject(id);
@@ -284,31 +291,56 @@ export default function StudioPage() {
     [persist],
   );
 
-  useEffect(() => {
-    if (!project || garmentBlocked || viewGenerating) return;
-    if (!needsFlatFrontAfterGarmentPick(project.intake)) return;
-    void runFlatFrontGeneration(project);
-  }, [
-    project?.id,
-    project?.intake.garmentConfirmed,
-    project?.intake.flatFrontGenerated,
-    project?.intake.photoType,
-    garmentBlocked,
-    viewGenerating,
-    runFlatFrontGeneration,
-  ]);
+  const flatFrontPromptOpen = Boolean(
+    project &&
+      !garmentBlocked &&
+      !flatFrontOfferHandled &&
+      !viewGenerating &&
+      needsFlatFrontAfterGarmentPick(project.intake),
+  );
+
+  const handleFlatFrontSkip = useCallback(() => {
+    if (!project) return;
+    setFlatFrontOfferHandled(true);
+    persist({
+      ...project,
+      intake: skipFlatFrontGeneration(project.intake),
+    });
+    setAiMessage("已进入画布");
+    setAiTip("当前使用原参考图，可稍后在主款画板重新生成平铺正面");
+  }, [project, persist]);
+
+  const handleFlatFrontGenerate = useCallback(async () => {
+    if (!project) return;
+    setFlatFrontOfferHandled(true);
+    await runFlatFrontGeneration(project);
+  }, [project, runFlatFrontGeneration]);
 
   const handleGarmentConfirm = useCallback(
-    async (garment: Parameters<typeof confirmTargetGarment>[1]) => {
+    async (
+      garment: Parameters<typeof confirmTargetGarment>[1],
+      options?: { skipFlatFront?: boolean },
+    ) => {
       if (!project) return;
+      setFlatFrontOfferHandled(true);
       let updated: TechPackProject = {
         ...project,
         title: garment.label,
         intake: confirmTargetGarment(project.intake, garment),
       };
+      if (options?.skipFlatFront) {
+        updated = {
+          ...updated,
+          intake: skipFlatFrontGeneration(updated.intake),
+        };
+        persist(updated);
+        setAiMessage(`已锁定目标单款：${garment.label}`);
+        setAiTip("当前使用原参考图，可稍后在主款画板重新生成平铺正面");
+        return;
+      }
       persist(updated);
       if (needsFlatFrontAfterGarmentPick(updated.intake)) {
-        updated = await runFlatFrontGeneration(updated);
+        await runFlatFrontGeneration(updated);
       } else {
         setAiMessage(`已锁定目标单款：${garment.label}`);
       }
@@ -1591,7 +1623,20 @@ export default function StudioPage() {
             <GarmentPickerStep
               intake={project.intake}
               imagePreview={project.intake.imageDataUrl}
-              onConfirm={(g) => void handleGarmentConfirm(g)}
+              onConfirm={(g, opts) => void handleGarmentConfirm(g, opts)}
+              flatFrontLoading={viewGenerating}
+            />
+          </div>
+        </div>
+      )}
+      {flatFrontPromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md">
+            <FlatFrontPromptStep
+              intake={project.intake}
+              onGenerate={() => void handleFlatFrontGenerate()}
+              onSkip={handleFlatFrontSkip}
+              generateLoading={viewGenerating}
             />
           </div>
         </div>

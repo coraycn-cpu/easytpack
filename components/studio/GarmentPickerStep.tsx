@@ -7,13 +7,19 @@ import {
   garmentOptionSubtitle,
   isSetGarment,
 } from "@/lib/intake/garment-picker-options";
+import { FlatFrontChoiceActions } from "@/components/studio/FlatFrontPromptStep";
 import type { IntakeData, TargetGarment } from "@/types/project";
+
+export type GarmentConfirmOptions = {
+  skipFlatFront?: boolean;
+};
 
 type GarmentPickerStepProps = {
   intake: IntakeData;
   imagePreview?: string | null;
-  onConfirm: (garment: TargetGarment) => void;
+  onConfirm: (garment: TargetGarment, options?: GarmentConfirmOptions) => void;
   compact?: boolean;
+  flatFrontLoading?: boolean;
 };
 
 export default function GarmentPickerStep({
@@ -21,6 +27,7 @@ export default function GarmentPickerStep({
   imagePreview,
   onConfirm,
   compact = false,
+  flatFrontLoading = false,
 }: GarmentPickerStepProps) {
   const garments = useMemo(() => buildGarmentPickerOptions(intake), [intake]);
 
@@ -34,15 +41,28 @@ export default function GarmentPickerStep({
 
   const selected = garments.find((g) => g.id === selectedId);
 
-  const handleConfirm = () => {
+  const willNeedFlatFront = selected
+    ? needsFlatFrontAfterGarmentPick({
+        ...intake,
+        garmentConfirmed: true,
+        targetGarment: selected,
+        flatFrontGenerated: false,
+        flatFrontSkipped: false,
+      })
+    : false;
+
+  const confirmGarment = (skipFlatFront?: boolean) => {
     if (!selected) return;
-    onConfirm({
-      id: selected.id,
-      label: selected.label,
-      category: selected.category,
-      kind: selected.kind,
-      componentIds: selected.componentIds,
-    });
+    onConfirm(
+      {
+        id: selected.id,
+        label: selected.label,
+        category: selected.category,
+        kind: selected.kind,
+        componentIds: selected.componentIds,
+      },
+      skipFlatFront !== undefined ? { skipFlatFront } : undefined,
+    );
   };
 
   if (garments.length === 0) {
@@ -63,15 +83,10 @@ export default function GarmentPickerStep({
       <p className="mt-1 text-[11px] leading-snug text-slate-600">
         一个项目对应一个目标款式（单件或套装）。当前为{photoTypeLabel(intake.photoType)}
         ，请选择本次 Tech Pack 要做的款式：
-        {needsFlatFrontAfterGarmentPick({
-          ...intake,
-          garmentConfirmed: true,
-          targetGarment: selected ?? intake.targetGarment,
-          flatFrontGenerated: false,
-        }) && (
+        {willNeedFlatFront && (
           <span className="mt-1 block text-violet-700">
-            确认后将自动生成平铺正面主款图；{photoTypeLabel(intake.photoType)}
-            原图会保留在画布参考画板，可修正后重新生成
+            确认后可生成平铺正面主款图，或暂不生成直接进入画布；
+            {photoTypeLabel(intake.photoType)}原图会保留在参考画板
           </span>
         )}
       </p>
@@ -119,14 +134,22 @@ export default function GarmentPickerStep({
         })}
       </div>
 
-      <button
-        type="button"
-        disabled={!selected}
-        onClick={handleConfirm}
-        className="mt-3 w-full rounded-lg bg-violet-600 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
-      >
-        确认，继续
-      </button>
+      {willNeedFlatFront ? (
+        <FlatFrontChoiceActions
+          onGenerate={() => confirmGarment(false)}
+          onSkip={() => confirmGarment(true)}
+          generateLoading={flatFrontLoading}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={!selected}
+          onClick={() => confirmGarment()}
+          className="mt-3 w-full rounded-lg bg-violet-600 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+        >
+          确认，继续
+        </button>
+      )}
     </div>
   );
 }
