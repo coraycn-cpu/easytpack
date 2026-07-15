@@ -54,3 +54,47 @@ export async function applyCropToImageDataUrl(
   }
   return result;
 }
+
+/**
+ * 从画板图按标注框裁出局部（含 padding），供区域 AI 识别。
+ * ann / imageFit / imageOffset 与 annotationToLogicalRect 同一坐标系。
+ */
+export async function cropAnnotationRegionForAi(input: {
+  imageDataUrl: string;
+  ann: { x: number; y: number; width?: number; height?: number };
+  imageFit: { x: number; y: number; width: number; height: number };
+  imageOffset: { x: number; y: number };
+  padRatio?: number;
+}): Promise<string | null> {
+  const { imageDataUrl, ann, imageFit, imageOffset, padRatio = 0.18 } = input;
+  const ox = imageFit.x + imageOffset.x;
+  const oy = imageFit.y + imageOffset.y;
+  const relX = (ann.x ?? 0) - ox;
+  const relY = (ann.y ?? 0) - oy;
+  const relW = Math.max(1, ann.width ?? 0);
+  const relH = Math.max(1, ann.height ?? 0);
+
+  if (relW < 2 || relH < 2) return null;
+
+  const padX = relW * padRatio;
+  const padY = relH * padRatio;
+  const displayCrop: ImageCropRect = {
+    x: Math.max(0, relX - padX),
+    y: Math.max(0, relY - padY),
+    width: Math.min(imageFit.width - Math.max(0, relX - padX), relW + padX * 2),
+    height: Math.min(imageFit.height - Math.max(0, relY - padY), relH + padY * 2),
+  };
+
+  try {
+    const img = await loadImageElement(imageDataUrl);
+    const pixelCrop = displayCropToSourcePixels(
+      displayCrop,
+      { width: imageFit.width, height: imageFit.height },
+      { width: img.naturalWidth, height: img.naturalHeight },
+    );
+    if (pixelCrop.width < 4 || pixelCrop.height < 4) return null;
+    return applyCropToImageDataUrl(imageDataUrl, pixelCrop);
+  } catch {
+    return null;
+  }
+}

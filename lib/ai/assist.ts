@@ -439,19 +439,25 @@ export async function generateRegionAnnotate(input: {
   region: { x: number; y: number; width: number; height: number };
   existingPart?: string;
   intake?: GarmentScopeInput;
+  /** 已裁成框选局部时，勿再依赖坐标猜测整图其他部位 */
+  regionCropped?: boolean;
 }) {
+  const regionLine = input.regionCropped
+    ? `附图为用户框选区域的裁剪局部（可含少量邻接上下文）。请只描述图中主体结构部位，不要臆测图外部位（如把袖臂说成前胸）。`
+    : `用户框选区域（1000×750 坐标）：x=${input.region.x}, y=${input.region.y}, width=${input.region.width}, height=${input.region.height}`;
+
   const context = prependScope(
     `
 品类：${input.category ?? "未指定"}
 描述：${input.description ?? "无"}
-用户框选区域（1000×750 坐标）：x=${input.region.x}, y=${input.region.y}, width=${input.region.width}, height=${input.region.height}
+${regionLine}
 ${input.existingPart ? `已有部位名参考：${input.existingPart}` : ""}
 请识别该区域的服装结构部位，输出 part/process/stitch/seam_allowance。`.trim(),
     input.intake,
   );
 
   return callStructured({
-    instructions: `你是版房工艺师，根据目标单款局部区域填写工艺说明。勿描述模特、非目标服装或背景。输出简洁专业。`,
+    instructions: `你是版房工艺师，根据目标单款局部区域填写工艺说明。勿描述模特、非目标服装或背景。输出简洁专业。部位命名必须与图中实际位置一致（胸/袖/下摆等勿混淆）。`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: RegionAnnotateSchema,

@@ -76,6 +76,7 @@ import {
 } from "@/lib/canvas/paste-image";
 import {
   applyCropToImageDataUrl,
+  cropAnnotationRegionForAi,
   displayCropToSourcePixels,
   type ImageCropRect,
 } from "@/lib/canvas/crop-image";
@@ -1249,14 +1250,43 @@ export default function StudioPage() {
     setAiTask("region-annotate");
     setAiMessage(null);
     try {
-      const { dataUrl: imgUrl } = await resolveGarmentImageForAi(project, {
-        activeArtboardId: activeArtboard.id,
-      });
+      // 必须用当前画板原图算坐标，避免 AI 压缩图 imageFit 与标注坐标系不一致
+      const boardImageUrl =
+        activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
       const imageOffset = activeArtboard.imageOffset ?? { x: 0, y: 0 };
-      const imageFit = imgUrl
-        ? await loadImagePlacement(imgUrl)
+      const imageFit = boardImageUrl
+        ? await loadImagePlacement(boardImageUrl)
         : { x: 0, y: 0, width: 1000, height: 750 };
       const region = annotationToLogicalRect(selectedAnn, imageFit, imageOffset);
+
+      let regionCropped = false;
+      let imageDataUrl: string | undefined;
+      if (boardImageUrl) {
+        const cropped = await cropAnnotationRegionForAi({
+          imageDataUrl: boardImageUrl,
+          ann: selectedAnn,
+          imageFit,
+          imageOffset,
+        });
+        if (cropped) {
+          imageDataUrl = cropped;
+          regionCropped = true;
+        }
+      }
+      if (!imageDataUrl) {
+        const resolved = await resolveGarmentImageForAi(project, {
+          activeArtboardId: activeArtboard.id,
+        });
+        imageDataUrl = resolved.dataUrl;
+      } else {
+        imageDataUrl =
+          (await resolveImageDataUrlForAi(imageDataUrl)) ?? imageDataUrl;
+      }
+
+      const linkedId = selectedAnn.linkedProcessIds?.[0];
+      const existingPart = linkedId
+        ? project.process_items.find((p) => p.id === linkedId)?.part
+        : undefined;
 
       const res = await fetch("/api/ai/annotate-region", {
         method: "POST",
@@ -1264,11 +1294,10 @@ export default function StudioPage() {
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          imageDataUrl: imgUrl,
+          imageDataUrl,
           region,
-          existingPart: selectedAnn.linkedProcessIds?.length
-            ? project.process_items.find((p) => p.id === selectedAnn.linkedProcessIds![0])?.part
-            : undefined,
+          regionCropped,
+          existingPart,
           intake: project.intake,
         }),
       });
@@ -1276,10 +1305,16 @@ export default function StudioPage() {
       if (!res.ok) throw new Error(data.error);
 
       let processItems = [...project.process_items];
-      let processId = processItems.find((p) => p.part?.trim() === data.part?.trim())?.id;
+      // 已有关联工艺行时更新该行；勿仅凭同名合并，避免「胸/袖」认错后串改另一条
+      let processId = linkedId;
       if (processId) {
         const idx = processItems.findIndex((p) => p.id === processId);
-        processItems[idx] = { ...processItems[idx], ...data, id: processId };
+        if (idx >= 0) {
+          processItems[idx] = { ...processItems[idx], ...data, id: processId };
+        } else {
+          processId = generateProcessId();
+          processItems.push({ id: processId, ...data });
+        }
       } else {
         processId = generateProcessId();
         processItems.push({ id: processId, ...data });
