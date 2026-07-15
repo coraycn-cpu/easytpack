@@ -31,6 +31,21 @@ export async function prepareImageDataUrlForCanvas(dataUrl: string): Promise<str
   return compressed ?? dataUrl;
 }
 
+/** 新建入库更激进的压缩阈值（约 0.65MB），减轻 localStorage 压力 */
+const STORAGE_DATA_URL_LEN = 900_000;
+
+export async function prepareImageDataUrlForStorage(dataUrl: string): Promise<string> {
+  if (!dataUrl.startsWith("data:")) return dataUrl;
+  if (dataUrl.length <= STORAGE_DATA_URL_LEN) return dataUrl;
+  const compressed = await compressImageDataUrlForAi(
+    dataUrl,
+    1280,
+    STORAGE_DATA_URL_LEN,
+    0.78,
+  );
+  return compressed ?? (await prepareImageDataUrlForCanvas(dataUrl));
+}
+
 export function nextPasteArtboardName(artboards: Array<{ name: string }>): string {
   const pasteBoards = artboards.filter((a) => a.name === "贴图" || a.name.startsWith("贴图 "));
   if (pasteBoards.length === 0) return "贴图";

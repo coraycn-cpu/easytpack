@@ -1,8 +1,14 @@
 import type { TechPackProject } from "@/types/project";
 import { createDefaultCanvasData } from "@/lib/project/hotspots";
 import { migrateProject } from "@/lib/project/hotspots";
+import {
+  clearViewGenRecords,
+  getViewGenRecordsStorageBytes,
+} from "@/lib/training/view-gen-log";
 
 const STORAGE_KEY = "easytpack_projects";
+
+const QUOTA_MESSAGE = "本地存储空间已满，请删除旧项目或大图后重试";
 
 function readAll(): Record<string, TechPackProject> {
   if (typeof window === "undefined") return {};
@@ -14,14 +20,46 @@ function readAll(): Record<string, TechPackProject> {
   }
 }
 
+/** UTF-16 approximate bytes for a localStorage value string */
+function stringStorageBytes(value: string | null): number {
+  return value ? value.length * 2 : 0;
+}
+
+/**
+ * Drop non-project caches first so project saves can proceed.
+ * Returns true if any key was removed.
+ */
+export function evacuateNonProjectStorage(): boolean {
+  if (typeof window === "undefined") return false;
+  const before = getViewGenRecordsStorageBytes();
+  clearViewGenRecords();
+  return before > 0;
+}
+
 function writeAll(projects: Record<string, TechPackProject>) {
+  const payload = JSON.stringify(projects);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    localStorage.setItem(STORAGE_KEY, payload);
   } catch (err) {
-    if (err instanceof DOMException && err.name === "QuotaExceededError") {
-      throw new Error("本地存储空间已满，请删除旧项目或大图后重试");
+    if (!(err instanceof DOMException && err.name === "QuotaExceededError")) {
+      throw err;
     }
-    throw err;
+    // Free training / auxiliary caches, then retry once without deleting projects
+    if (evacuateNonProjectStorage()) {
+      try {
+        localStorage.setItem(STORAGE_KEY, payload);
+        return;
+      } catch (retryErr) {
+        if (
+          retryErr instanceof DOMException &&
+          retryErr.name === "QuotaExceededError"
+        ) {
+          throw new Error(QUOTA_MESSAGE);
+        }
+        throw retryErr;
+      }
+    }
+    throw new Error(QUOTA_MESSAGE);
   }
 }
 
@@ -112,6 +150,37 @@ export function deleteProject(id: string) {
   const all = readAll();
   delete all[id];
   writeAll(all);
+}
+
+/** Approximate localStorage usage for easytpack keys (UTF-16 bytes). */
+export function getEasytpackStorageStats(): {
+  projectsBytes: number;
+  trainingBytes: number;
+  totalBytes: number;
+  projectCount: number;
+} {
+  if (typeof window === "undefined") {
+    return { projectsBytes: 0, trainingBytes: 0, totalBytes: 0, projectCount: 0 };
+  }
+  let projectsBytes = 0;
+  try {
+    projectsBytes = stringStorageBytes(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    projectsBytes = 0;
+  }
+  const trainingBytes = getViewGenRecordsStorageBytes();
+  return {
+    projectsBytes,
+    trainingBytes,
+    totalBytes: projectsBytes + trainingBytes,
+    projectCount: Object.keys(readAll()).length,
+  };
+}
+
+export function formatStorageBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function fileToDataUrl(file: File): Promise<string> {

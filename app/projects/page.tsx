@@ -8,6 +8,9 @@ import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import {
   deleteProject,
   duplicateProject,
+  evacuateNonProjectStorage,
+  formatStorageBytes,
+  getEasytpackStorageStats,
   listProjects,
 } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
@@ -16,9 +19,25 @@ export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [filter, setFilter] = useState<"all" | "draft" | "in_review" | "finalized">("all");
+  const [storageLabel, setStorageLabel] = useState<string>("");
+  const [trainingBytes, setTrainingBytes] = useState(0);
+  const [cacheNote, setCacheNote] = useState<string | null>(null);
+
+  const refresh = () => {
+    setProjects(listProjects());
+    const stats = getEasytpackStorageStats();
+    setTrainingBytes(stats.trainingBytes);
+    setStorageLabel(
+      `约占 ${formatStorageBytes(stats.totalBytes)}（项目 ${formatStorageBytes(stats.projectsBytes)}` +
+        (stats.trainingBytes > 0
+          ? ` · 缓存 ${formatStorageBytes(stats.trainingBytes)}`
+          : "") +
+        "）",
+    );
+  };
 
   useEffect(() => {
-    setProjects(listProjects());
+    refresh();
   }, []);
 
   const filtered = projects.filter((p) =>
@@ -36,18 +55,40 @@ export default function ProjectsPage() {
     <div className="min-h-screen bg-zinc-50">
       <AppHeader />
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">我的项目</h1>
-            <p className="mt-1 text-sm text-zinc-500">本地保存，共 {projects.length} 个款式</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              本地保存，共 {projects.length} 个款式
+              {storageLabel ? ` · ${storageLabel}` : ""}
+            </p>
           </div>
-          <Link
-            href="/"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            + 新建
-          </Link>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <Link
+              href="/"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              + 新建
+            </Link>
+            {trainingBytes > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  evacuateNonProjectStorage();
+                  setCacheNote("已清理视角生成缓存，项目未删除");
+                  refresh();
+                }}
+                className="text-[11px] text-blue-600 hover:underline"
+              >
+                清理训练缓存（释放约 {formatStorageBytes(trainingBytes)}）
+              </button>
+            )}
+          </div>
         </div>
+
+        {cacheNote && (
+          <p className="mb-3 text-xs text-emerald-700">{cacheNote}</p>
+        )}
 
         <div className="mb-4 flex gap-2">
           {(
@@ -85,7 +126,7 @@ export default function ProjectsPage() {
                 key={p.id}
                 className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3"
               >
-                <Link href={getHref(p)} className="flex-1 min-w-0">
+                <Link href={getHref(p)} className="min-w-0 flex-1">
                   <p className="truncate font-medium text-zinc-900">{p.title}</p>
                   <p className="mt-0.5 text-xs text-zinc-400">
                     {p.intake.detectedCategory ?? "未分类"} ·{" "}
@@ -97,10 +138,19 @@ export default function ProjectsPage() {
                     type="button"
                     title="复制"
                     onClick={() => {
-                      const copy = duplicateProject(p.id);
-                      if (copy) {
-                        setProjects(listProjects());
-                        router.push(`/project/${copy.id}/studio`);
+                      try {
+                        const copy = duplicateProject(p.id);
+                        if (copy) {
+                          setProjects(listProjects());
+                          router.push(`/project/${copy.id}/studio`);
+                        }
+                      } catch (e) {
+                        window.alert(
+                          e instanceof Error
+                            ? e.message
+                            : "复制失败，本地空间可能已满",
+                        );
+                        refresh();
                       }
                     }}
                     className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100"
@@ -113,7 +163,7 @@ export default function ProjectsPage() {
                     onClick={() => {
                       if (window.confirm(`确定删除「${p.title}」？`)) {
                         deleteProject(p.id);
-                        setProjects(listProjects());
+                        refresh();
                       }
                     }}
                     className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50"

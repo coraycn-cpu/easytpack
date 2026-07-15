@@ -103,6 +103,26 @@ export function listViewGenRecords(): ViewGenTrainingRecord[] {
   return readRecords();
 }
 
+/** 清空视角生成训练日志，腾出 localStorage 空间（不删项目） */
+export function clearViewGenRecords(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function getViewGenRecordsStorageBytes(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? raw.length * 2 : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function exportViewGenRecordsJsonl(): string {
   return readRecords().map((r) => JSON.stringify(r)).join("\n");
 }

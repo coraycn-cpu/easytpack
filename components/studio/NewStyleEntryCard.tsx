@@ -10,6 +10,7 @@ import SizeStandardFields, {
 import { createStyleProject } from "@/lib/project/create-style";
 import { applyIntentToIntake, confirmTargetGarment, needsGarmentConfirmation } from "@/lib/intake/apply-intent";
 import { fileToDataUrl } from "@/lib/project/storage";
+import { prepareImageDataUrlForStorage } from "@/lib/canvas/paste-image";
 import type { IntakeData } from "@/types/project";
 
 export type NewStyleMode = "quick" | "full";
@@ -48,7 +49,8 @@ export default function NewStyleEntryCard({
 
   const handleImage = async (file: File) => {
     setError(null);
-    const dataUrl = await fileToDataUrl(file);
+    const raw = await fileToDataUrl(file);
+    const dataUrl = await prepareImageDataUrlForStorage(raw);
     setImageDataUrl(dataUrl);
     setImagePreview(dataUrl);
   };
@@ -93,9 +95,11 @@ export default function NewStyleEntryCard({
       return project;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "创建失败";
+      const isQuota =
+        /quota|QuotaExceeded|存储空间已满/i.test(msg);
       setError(
-        /quota|QuotaExceeded/i.test(msg)
-          ? "本地存储空间已满，请删除旧项目或使用更小的图片后重试"
+        isQuota
+          ? "本地存储空间已满。可先到「我的项目」删除旧款，或清理缓存后重试；大图会自动压缩。"
           : msg,
       );
       return null;
@@ -197,7 +201,19 @@ export default function NewStyleEntryCard({
             </p>
           </div>
 
-          {error && <p className="text-center text-xs text-red-600">{error}</p>}
+          {error && (
+            <div className="space-y-1.5 text-center">
+              <p className="text-xs text-red-600">{error}</p>
+              {/存储空间已满/.test(error) && (
+                <Link
+                  href="/projects"
+                  className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
+                >
+                  打开我的项目 · 删除或清理空间 →
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         <input
