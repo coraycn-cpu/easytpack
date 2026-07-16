@@ -167,21 +167,27 @@ export default function StudioPage() {
   }, [project?.id]);
 
   useEffect(() => {
-    const p = getProject(id);
-    if (!p) {
-      router.replace("/");
-      return;
-    }
-    if (p.status !== "studio" && p.status !== "completed") {
-      router.replace(`/project/${id}/collect`);
-      return;
-    }
-    setProject(p);
-    setActiveArtboardId(p.canvas_data.activeArtboardId);
-    setLayout(getStudioLayout(p.canvas_data.studioLayout));
-    if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
-      setAiTip("左侧 AI 生成多视角 · 顶部左手动右 AI · 右下角编辑工艺数据");
-    }
+    let cancelled = false;
+    void getProject(id).then((p) => {
+      if (cancelled) return;
+      if (!p) {
+        router.replace("/");
+        return;
+      }
+      if (p.status !== "studio" && p.status !== "completed") {
+        router.replace(`/project/${id}/collect`);
+        return;
+      }
+      setProject(p);
+      setActiveArtboardId(p.canvas_data.activeArtboardId);
+      setLayout(getStudioLayout(p.canvas_data.studioLayout));
+      if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
+        setAiTip("左侧 AI 生成多视角 · 顶部左手动右 AI · 右上角编辑工艺数据");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
   useEffect(() => {
@@ -203,14 +209,11 @@ export default function StudioPage() {
   const persist = useCallback((updated: TechPackProject): boolean => {
     projectRef.current = updated;
     setProject(updated);
-    try {
-      saveProject(updated);
-      return true;
-    } catch (err) {
+    void saveProject(updated).catch((err) => {
       const msg = err instanceof Error ? err.message : "保存失败";
       setAiMessage(msg);
-      return false;
-    }
+    });
+    return true;
   }, []);
 
   /** 基于最新 project 合并保存，避免异步 AI 流程中 stale closure 覆盖 size_chart 等字段 */

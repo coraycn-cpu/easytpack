@@ -1,5 +1,4 @@
 import { getPrimaryArtboardId } from "@/lib/canvas/sizing-artboard";
-import { isSetTarget } from "@/lib/ai/garment-scope";
 import {
   COLLAGE_REFERENCE_NAME,
   MODEL_REFERENCE_NAME,
@@ -162,22 +161,6 @@ export function aiPresetToActionId(
   if (preset === "explain") return "explain";
   if (preset === "draft") return "full-collect";
   return null;
-}
-
-/** 画布工具栏常驻说明 */
-export function buildStudioAiSourceBanner(
-  project: ProjectSlice,
-  activeArtboardId?: string,
-): string {
-  const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
-  const active = describeArtboardById(project, activeArtboardId ?? primaryId);
-  const setNote = isSetTarget(project.intake) ? " · 套装请分上装/下装标注" : "";
-
-  if (activeArtboardId && activeArtboardId !== primaryId) {
-    return `AI 识图：标工艺/填尺寸 → ${active.label} · 填物料/补全 → ${describeIntakeOriginal(project.intake)} · 侧栏生视角图 → 主款平铺${setNote}`;
-  }
-
-  return `AI 识图：标工艺/填尺寸/评语 → 主款平铺 · 填物料/补全 → ${describeIntakeOriginal(project.intake)} · 侧栏生视角图 → 主款平铺${setNote}`;
 }
 
 /** 同步解析 overlay 预览图（不做压缩） */

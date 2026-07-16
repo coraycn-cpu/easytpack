@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
-import { exportBomCsv, exportSizeChartCsv } from "@/lib/export/excel";
+import { exportBomCsv, exportProcessCsv, exportSizeChartCsv } from "@/lib/export/excel";
 import {
   renderAllArtboards,
   renderTechPackSheetToDataUrl,
@@ -36,19 +36,27 @@ export default function ExportPage() {
   const [rendering, setRendering] = useState(false);
 
   useEffect(() => {
-    const p = getProject(id);
-    if (!p) {
-      router.replace("/");
-      return;
-    }
-    if (p.workflowStatus !== "finalized") {
-      const updated = { ...p, workflowStatus: "in_review" as const };
-      saveProject(updated);
-      setProject(updated);
-    } else {
-      setProject(p);
-    }
-    setImageMode(p.exportSettings?.annotatedImageMode ?? "merged");
+    let cancelled = false;
+    void getProject(id).then(async (p) => {
+      if (cancelled) return;
+      if (!p) {
+        router.replace("/");
+        return;
+      }
+      if (p.workflowStatus !== "finalized") {
+        const updated = { ...p, workflowStatus: "in_review" as const };
+        await saveProject(updated);
+        if (!cancelled) setProject(updated);
+      } else if (!cancelled) {
+        setProject(p);
+      }
+      if (!cancelled) {
+        setImageMode(p.exportSettings?.annotatedImageMode ?? "merged");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
   useEffect(() => {
@@ -86,7 +94,7 @@ export default function ExportPage() {
       ...project,
       exportSettings: { ...project.exportSettings, annotatedImageMode: mode },
     };
-    saveProject(updated);
+    void saveProject(updated);
     setProject(updated);
   };
 
@@ -159,6 +167,15 @@ export default function ExportPage() {
                 className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
               >
                 下载工艺包大图
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  exportProcessCsv(project.process_items, `${project.title}-工艺表.csv`)
+                }
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
+              >
+                导出工艺表
               </button>
               <button
                 type="button"

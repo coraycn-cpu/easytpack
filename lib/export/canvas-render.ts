@@ -21,6 +21,7 @@ import {
   measureSheetSectionsHeight,
   MIN_SHEET_W,
 } from "@/lib/export/sheet-layout";
+import { formatDate } from "@/lib/project/progress";
 
 export type AnnotatedImageMode = "merged" | "split";
 
@@ -407,6 +408,7 @@ export async function renderTechPackSheetToDataUrl(
   const meta = [
     project.intake.detectedCategory,
     project.styleNo ?? project.id.slice(-8).toUpperCase(),
+    formatDate(project.updatedAt),
   ]
     .filter(Boolean)
     .join(" · ");

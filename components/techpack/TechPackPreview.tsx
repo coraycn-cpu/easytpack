@@ -197,6 +197,17 @@ export default function TechPackPreview({
         </section>
       )}
 
+      {project.style_review?.trim() && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            备注 REMARKS
+          </h2>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
+            {project.style_review.trim()}
+          </p>
+        </section>
+      )}
+
       <footer className="mt-10 border-t border-zinc-100 pt-4 text-xs text-zinc-400">
         EasytPack 生成 · {formatDate(project.updatedAt)}
       </footer>

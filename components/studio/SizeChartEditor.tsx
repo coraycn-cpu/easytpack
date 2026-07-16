@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { regionStandardLabel } from "@/lib/size-chart/standards";
+import SizeGradeDialog from "@/components/studio/SizeGradeDialog";
 import type { SizeChart } from "@/types/project";
 
 type SizeChartEditorProps = {
@@ -32,6 +34,7 @@ export default function SizeChartEditor({
   dimensionCounts,
   onRemoveRowPart,
 }: SizeChartEditorProps) {
+  const [gradeOpen, setGradeOpen] = useState(false);
   const sampleSize = chart.sampleSize;
   const regionLabel = regionStandardLabel(chart.regionStandard);
 
@@ -47,6 +50,10 @@ export default function SizeChartEditor({
   };
 
   const removeSize = (size: string) => {
+    if (size === sampleSize) {
+      window.alert("不能删除基准码列；请先在跳码面板中调整");
+      return;
+    }
     const sizes = chart.sizes.filter((s) => s !== size);
     const rows = chart.rows.map((r) => {
       const values = { ...r.values };
@@ -94,6 +101,7 @@ export default function SizeChartEditor({
           onClick={() =>
             onChange({
               sizes: ["S", "M", "L", "XL"],
+              sampleSize: "M",
               rows: [
                 { part: "胸宽", method: "夹下1cm", values: { S: "", M: "", L: "", XL: "" } },
                 { part: "衣长", method: "后中直量", values: { S: "", M: "", L: "", XL: "" } },
@@ -121,14 +129,25 @@ export default function SizeChartEditor({
           )}
         </p>
       )}
-      <div className="mb-2 flex gap-2">
+      <div className="mb-2 flex flex-wrap gap-2">
         <button type="button" onClick={addSize} className="text-blue-600 hover:underline">
           + 尺码
         </button>
         <button type="button" onClick={addRow} className="text-blue-600 hover:underline">
           + 部位
         </button>
+        <button
+          type="button"
+          onClick={() => setGradeOpen(true)}
+          className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+          title="打开大面板：跳码、增减码段、手改"
+        >
+          跳码 / 放码
+        </button>
       </div>
+      <p className="mb-2 text-[10px] leading-snug text-slate-400">
+        码段可增减；跳码在大面板操作，默认只填空格、不覆盖手改。
+      </p>
       <table className="w-full border-collapse">
         <thead>
           <tr className="text-zinc-400">
@@ -144,22 +163,18 @@ export default function SizeChartEditor({
                   {s === sampleSize && (
                     <span className="text-[8px] font-normal text-blue-400">基准</span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => removeSize(s)}
-                    className="text-zinc-300 hover:text-red-400"
-                  >
-                    ×
-                  </button>
+                  {s !== sampleSize && (
+                    <button
+                      type="button"
+                      onClick={() => removeSize(s)}
+                      className="text-zinc-300 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               </th>
             ))}
-            <th
-              className="px-0.5 py-1 text-[10px] font-normal text-zinc-300"
-              title="跳码功能即将推出"
-            >
-              跳码
-            </th>
             <th />
           </tr>
         </thead>
@@ -172,85 +187,91 @@ export default function SizeChartEditor({
               partKey && linkedSizePartForSelection === partKey;
 
             return (
-            <tr
-              key={i}
-              role={onSizeRowSelect && partKey ? "button" : undefined}
-              tabIndex={onSizeRowSelect && partKey ? 0 : undefined}
-              onClick={() => partKey && onSizeRowSelect?.(partKey, i)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && partKey) {
-                  onSizeRowSelect?.(partKey, i);
-                }
-              }}
-              className={`border-t border-zinc-50 ${
-                isHighlighted ? "bg-amber-50 ring-1 ring-amber-200" : ""
-              } ${dimCount > 0 ? "bg-emerald-50/40" : ""}`}
-            >
-              <td className="py-1 pr-1">
-                <div className="flex items-center gap-0.5">
-                  {selectedAnnId && dimensionLinkable && partKey && onToggleSizeLink && (
+              <tr
+                key={i}
+                role={onSizeRowSelect && partKey ? "button" : undefined}
+                tabIndex={onSizeRowSelect && partKey ? 0 : undefined}
+                onClick={() => partKey && onSizeRowSelect?.(partKey, i)}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && partKey) {
+                    onSizeRowSelect?.(partKey, i);
+                  }
+                }}
+                className={`border-t border-zinc-50 ${
+                  isHighlighted ? "bg-amber-50 ring-1 ring-amber-200" : ""
+                } ${dimCount > 0 ? "bg-emerald-50/40" : ""}`}
+              >
+                <td className="py-1 pr-1">
+                  <div className="flex items-center gap-0.5">
+                    {selectedAnnId && dimensionLinkable && partKey && onToggleSizeLink && (
+                      <input
+                        type="checkbox"
+                        checked={Boolean(isLinkedToSelection)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => onToggleSizeLink(partKey, e.target.checked)}
+                        className="shrink-0"
+                        title="关联当前选中尺寸线"
+                      />
+                    )}
                     <input
-                      type="checkbox"
-                      checked={Boolean(isLinkedToSelection)}
+                      value={row.part}
                       onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => onToggleSizeLink(partKey, e.target.checked)}
-                      className="shrink-0"
-                      title="关联当前选中尺寸线"
+                      onChange={(e) => updateRow(i, "part", e.target.value)}
+                      className="w-14 bg-transparent outline-none"
                     />
-                  )}
+                    {dimCount > 0 && (
+                      <span className="text-[8px] text-emerald-600">{dimCount}线</span>
+                    )}
+                  </div>
+                </td>
+                <td className="max-w-[3.5rem] py-1 pr-0.5">
                   <input
-                    value={row.part}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateRow(i, "part", e.target.value)}
-                    className="w-14 bg-transparent outline-none"
-                  />
-                  {dimCount > 0 && (
-                    <span className="text-[8px] text-emerald-600">{dimCount}线</span>
-                  )}
-                </div>
-              </td>
-              <td className="max-w-[3.5rem] py-1 pr-0.5">
-                <input
-                  value={row.method}
-                  onChange={(e) => updateRow(i, "method", e.target.value)}
-                  maxLength={12}
-                  title={row.method}
-                  className="w-full min-w-0 bg-transparent text-[10px] text-zinc-500 outline-none"
-                />
-              </td>
-              {chart.sizes.map((s) => (
-                <td
-                  key={s}
-                  className={`px-0.5 py-1 ${s === sampleSize ? "bg-blue-50/60" : ""}`}
-                >
-                  <input
-                    value={row.values[s] ?? ""}
-                    onChange={(e) => updateCell(i, s, e.target.value)}
-                    placeholder={s === sampleSize ? "—" : ""}
-                    className={`w-9 bg-transparent text-center outline-none ${
-                      s === sampleSize ? "font-medium text-slate-800" : "text-zinc-400"
-                    }`}
+                    value={row.method}
+                    onChange={(e) => updateRow(i, "method", e.target.value)}
+                    maxLength={12}
+                    title={row.method}
+                    className="w-full min-w-0 bg-transparent text-[10px] text-zinc-500 outline-none"
                   />
                 </td>
-              ))}
-              <td className="px-0.5 py-1 text-center text-[10px] text-zinc-300">—</td>
-              <td className="py-1">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeRow(i);
-                  }}
-                  className="text-zinc-300 hover:text-red-400"
-                >
-                  ×
-                </button>
-              </td>
-            </tr>
+                {chart.sizes.map((s) => (
+                  <td
+                    key={s}
+                    className={`px-0.5 py-1 ${s === sampleSize ? "bg-blue-50/60" : ""}`}
+                  >
+                    <input
+                      value={row.values[s] ?? ""}
+                      onChange={(e) => updateCell(i, s, e.target.value)}
+                      placeholder={s === sampleSize ? "—" : ""}
+                      className={`w-9 bg-transparent text-center outline-none ${
+                        s === sampleSize ? "font-medium text-slate-800" : "text-zinc-400"
+                      }`}
+                    />
+                  </td>
+                ))}
+                <td className="py-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRow(i);
+                    }}
+                    className="text-zinc-300 hover:text-red-400"
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
             );
           })}
         </tbody>
       </table>
+
+      <SizeGradeDialog
+        chart={chart}
+        open={gradeOpen}
+        onClose={() => setGradeOpen(false)}
+        onChange={onChange}
+      />
     </div>
   );
 }

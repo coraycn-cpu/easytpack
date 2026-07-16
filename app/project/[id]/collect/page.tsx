@@ -34,7 +34,7 @@ export default function CollectPage() {
 
   useEffect(() => {
     async function init() {
-      const p = getProject(id);
+      const p = await getProject(id);
       if (!p) {
         router.replace("/");
         return;
@@ -54,7 +54,7 @@ export default function CollectPage() {
           const intent = await res.json();
           if (res.ok) {
             p.intake = applyIntentToIntake(p.intake, intent);
-            saveProject(p);
+            await saveProject(p);
           }
         } catch {
           /* 非阻断 */
@@ -89,7 +89,7 @@ export default function CollectPage() {
             answers: {},
             isComplete: false,
           };
-          saveProject(p);
+          await saveProject(p);
         } catch (err) {
           setError(err instanceof Error ? err.message : "问卷加载失败");
         }
@@ -117,7 +117,7 @@ export default function CollectPage() {
       },
     };
     setProject(updated);
-    saveProject(updated);
+    void saveProject(updated);
   };
 
   const toggleMulti = (questionId: string, optionId: string) => {
@@ -142,7 +142,7 @@ export default function CollectPage() {
         title: garment.label,
         intake: confirmTargetGarment(project.intake, garment),
       };
-      saveProject(updated);
+      await saveProject(updated);
       setProject(updated);
 
       if (options?.skipFlatFront) {
@@ -150,13 +150,13 @@ export default function CollectPage() {
           ...updated,
           intake: skipFlatFrontGeneration(updated.intake),
         };
-        saveProject(updated);
+        await saveProject(updated);
         setProject(updated);
       } else if (needsFlatFrontAfterGarmentPick(updated.intake)) {
         setInitPhase("intake");
         const flatResult = await generateFlatFrontForPrimary(updated);
         updated = flatResult.project;
-        saveProject(updated);
+        await saveProject(updated);
         setProject(updated);
       }
 
@@ -182,7 +182,7 @@ export default function CollectPage() {
           answers: {},
           isComplete: false,
         };
-        saveProject(updated);
+        await saveProject(updated);
         setProject({ ...updated });
       }
     } catch (err) {
@@ -251,7 +251,7 @@ export default function CollectPage() {
         },
       };
 
-      saveProject(updated);
+      await saveProject(updated);
       router.push(`/project/${id}/studio`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成初稿失败");
@@ -318,7 +318,7 @@ export default function CollectPage() {
               尺码标准 <span className="text-red-500">*</span>
             </legend>
             <p className="mb-3 text-[11px] text-slate-500">
-              用于 AI 解析测量点并按基准码估算尺寸，跳码功能后续完善
+              用于 AI 解析测量点并按基准码估算尺寸；进入画布后可在「尺寸」里跳码并增减码段（如 S–XL）
             </p>
             <SizeStandardFields value={sizeStandard} onChange={setSizeStandard} />
           </fieldset>

@@ -1,4 +1,4 @@
-import type { BomItem } from "@/types/process";
+import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart } from "@/types/project";
 
 function escapeCsv(val: string) {
@@ -29,6 +29,23 @@ export function exportBomCsv(items: BomItem[], filename = "bom.csv") {
       item.usage ?? "",
       item.supplier ?? "",
       item.code ?? "",
+    ]
+      .map(escapeCsv)
+      .join(","),
+  );
+  const csv = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+  downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename);
+}
+
+export function exportProcessCsv(items: ProcessItem[], filename = "process.csv") {
+  const headers = ["序号", "部位", "工艺描述", "针法", "缝份"];
+  const rows = items.map((item, i) =>
+    [
+      String(i + 1),
+      item.part ?? "",
+      item.process ?? "",
+      item.stitch ?? "",
+      item.seam_allowance ?? "",
     ]
       .map(escapeCsv)
       .join(","),

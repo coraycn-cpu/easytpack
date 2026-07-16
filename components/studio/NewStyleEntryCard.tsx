@@ -80,7 +80,7 @@ export default function NewStyleEntryCard({
         intake = applyIntentToIntake(intake, intent);
       }
 
-      const project = createStyleProject({
+      const project = await createStyleProject({
         title:
           intake.suggestedTitle ||
           description.trim().slice(0, 40) ||

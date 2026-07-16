@@ -24,7 +24,7 @@ export default function ProjectsPage() {
   const [cacheNote, setCacheNote] = useState<string | null>(null);
 
   const refresh = () => {
-    setProjects(listProjects());
+    void listProjects().then(setProjects);
     const stats = getEasytpackStorageStats();
     setTrainingBytes(stats.trainingBytes);
     setStorageLabel(
@@ -138,20 +138,22 @@ export default function ProjectsPage() {
                     type="button"
                     title="复制"
                     onClick={() => {
-                      try {
-                        const copy = duplicateProject(p.id);
-                        if (copy) {
-                          setProjects(listProjects());
-                          router.push(`/project/${copy.id}/studio`);
+                      void (async () => {
+                        try {
+                          const copy = await duplicateProject(p.id);
+                          if (copy) {
+                            refresh();
+                            router.push(`/project/${copy.id}/studio`);
+                          }
+                        } catch (e) {
+                          window.alert(
+                            e instanceof Error
+                              ? e.message
+                              : "复制失败，本地空间可能已满",
+                          );
+                          refresh();
                         }
-                      } catch (e) {
-                        window.alert(
-                          e instanceof Error
-                            ? e.message
-                            : "复制失败，本地空间可能已满",
-                        );
-                        refresh();
-                      }
+                      })();
                     }}
                     className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100"
                   >
@@ -162,8 +164,7 @@ export default function ProjectsPage() {
                     title="删除"
                     onClick={() => {
                       if (window.confirm(`确定删除「${p.title}」？`)) {
-                        deleteProject(p.id);
-                        refresh();
+                        void deleteProject(p.id).then(() => refresh());
                       }
                     }}
                     className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50"

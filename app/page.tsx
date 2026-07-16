@@ -16,7 +16,7 @@ export default function CanvasHomePage() {
   const [recentProjects, setRecentProjects] = useState<TechPackProject[]>([]);
 
   useEffect(() => {
-    setRecentProjects(listProjects().slice(0, 5));
+    void listProjects().then((list) => setRecentProjects(list.slice(0, 5)));
   }, []);
 
   const handleCreated = (projectId: string, mode: NewStyleMode) => {

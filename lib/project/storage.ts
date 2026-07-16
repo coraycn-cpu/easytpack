@@ -1,14 +1,26 @@
-import type { TechPackProject } from "@/types/project";
+import type { Artboard, TechPackProject } from "@/types/project";
 import { createDefaultCanvasData } from "@/lib/project/hotspots";
 import { migrateProject } from "@/lib/project/hotspots";
 import {
   clearViewGenRecords,
   getViewGenRecordsStorageBytes,
 } from "@/lib/training/view-gen-log";
+import {
+  IDB_IMAGE_PREFIX,
+  idbDeleteProjectImages,
+  idbPutImage,
+  isIdbImageRef,
+  makeImageKey,
+  resolveImageRef,
+  toIdbRef,
+} from "@/lib/project/image-idb";
 
 const STORAGE_KEY = "easytpack_projects";
 
 const QUOTA_MESSAGE = "本地存储空间已满，请删除旧项目或大图后重试";
+
+/** Offload data URLs longer than this into IndexedDB */
+const IDB_OFFLOAD_MIN_LEN = 24_000;
 
 function readAll(): Record<string, TechPackProject> {
   if (typeof window === "undefined") return {};
@@ -44,7 +56,6 @@ function writeAll(projects: Record<string, TechPackProject>) {
     if (!(err instanceof DOMException && err.name === "QuotaExceededError")) {
       throw err;
     }
-    // Free training / auxiliary caches, then retry once without deleting projects
     if (evacuateNonProjectStorage()) {
       try {
         localStorage.setItem(STORAGE_KEY, payload);
@@ -61,6 +72,59 @@ function writeAll(projects: Record<string, TechPackProject>) {
     }
     throw new Error(QUOTA_MESSAGE);
   }
+}
+
+async function offloadImageField(
+  projectId: string,
+  slot: string,
+  value: string | undefined,
+): Promise<string | undefined> {
+  if (!value) return value;
+  if (isIdbImageRef(value)) return value;
+  if (!value.startsWith("data:") || value.length < IDB_OFFLOAD_MIN_LEN) {
+    return value;
+  }
+  const key = makeImageKey(projectId, slot);
+  await idbPutImage(key, value);
+  return toIdbRef(key);
+}
+
+async function dehydrateProject(project: TechPackProject): Promise<TechPackProject> {
+  const id = project.id;
+  const intakeUrl = await offloadImageField(
+    id,
+    "intake",
+    project.intake.imageDataUrl,
+  );
+
+  const artboards: Artboard[] = [];
+  for (const ab of project.canvas_data.artboards) {
+    const imageDataUrl = await offloadImageField(id, `ab:${ab.id}`, ab.imageDataUrl);
+    artboards.push({ ...ab, imageDataUrl });
+  }
+
+  return {
+    ...project,
+    intake: { ...project.intake, imageDataUrl: intakeUrl },
+    canvas_data: { ...project.canvas_data, artboards },
+  };
+}
+
+async function hydrateProject(project: TechPackProject): Promise<TechPackProject> {
+  const intakeUrl = await resolveImageRef(project.intake.imageDataUrl);
+  const artboards: Artboard[] = [];
+  for (const ab of project.canvas_data.artboards) {
+    const imageDataUrl = await resolveImageRef(ab.imageDataUrl);
+    artboards.push({ ...ab, imageDataUrl });
+  }
+  return {
+    ...project,
+    intake: {
+      ...project.intake,
+      imageDataUrl: intakeUrl ?? project.intake.imageDataUrl,
+    },
+    canvas_data: { ...project.canvas_data, artboards },
+  };
 }
 
 export function generateProjectId() {
@@ -92,16 +156,67 @@ export function createEmptyProject(
   };
 }
 
-export function saveProject(project: TechPackProject) {
-  const all = readAll();
-  all[project.id] = migrateProject({
+export async function saveProject(project: TechPackProject): Promise<void> {
+  const migrated = migrateProject({
     ...project,
     updatedAt: new Date().toISOString(),
   });
-  writeAll(all);
+  let slim = await dehydrateProject(migrated);
+  const all = readAll();
+  all[project.id] = slim;
+
+  try {
+    writeAll(all);
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.includes("存储空间已满")) {
+      throw err;
+    }
+    // Force-offload any remaining inline data URLs then retry
+    slim = await dehydrateProject({
+      ...migrated,
+      intake: {
+        ...migrated.intake,
+        imageDataUrl:
+          migrated.intake.imageDataUrl &&
+          !isIdbImageRef(migrated.intake.imageDataUrl) &&
+          migrated.intake.imageDataUrl.startsWith("data:")
+            ? migrated.intake.imageDataUrl
+            : migrated.intake.imageDataUrl,
+      },
+    });
+    // Lower threshold retry: offload everything that looks like data URL
+    const forceId = project.id;
+    if (
+      slim.intake.imageDataUrl?.startsWith("data:") &&
+      !isIdbImageRef(slim.intake.imageDataUrl)
+    ) {
+      const key = makeImageKey(forceId, "intake");
+      await idbPutImage(key, slim.intake.imageDataUrl);
+      slim = {
+        ...slim,
+        intake: { ...slim.intake, imageDataUrl: toIdbRef(key) },
+      };
+    }
+    const forceBoards: Artboard[] = [];
+    for (const ab of slim.canvas_data.artboards) {
+      if (ab.imageDataUrl?.startsWith("data:") && !isIdbImageRef(ab.imageDataUrl)) {
+        const key = makeImageKey(forceId, `ab:${ab.id}`);
+        await idbPutImage(key, ab.imageDataUrl);
+        forceBoards.push({ ...ab, imageDataUrl: toIdbRef(key) });
+      } else {
+        forceBoards.push(ab);
+      }
+    }
+    slim = {
+      ...slim,
+      canvas_data: { ...slim.canvas_data, artboards: forceBoards },
+    };
+    all[project.id] = slim;
+    writeAll(all);
+  }
 }
 
-export function getProject(id: string): TechPackProject | null {
+export async function getProject(id: string): Promise<TechPackProject | null> {
   const all = readAll();
   const p = all[id];
   if (!p) return null;
@@ -113,13 +228,20 @@ export function getProject(id: string): TechPackProject | null {
       return Boolean(ab.viewImageMeta) && !prev?.viewImageMeta;
     });
   if (canvasMigrated) {
-    all[id] = { ...migrated, updatedAt: p.updatedAt };
-    writeAll(all);
+    // Persist structural migration without re-hydrating images into localStorage
+    const dehydrated = await dehydrateProject(migrated);
+    all[id] = { ...dehydrated, updatedAt: p.updatedAt };
+    try {
+      writeAll(all);
+    } catch {
+      // ignore quota on structural migrate
+    }
   }
-  return migrated;
+  return hydrateProject(migrated);
 }
 
-export function listProjects(): TechPackProject[] {
+/** List projects for UI; images may remain as idb: refs (no hydrate). */
+export async function listProjects(): Promise<TechPackProject[]> {
   return Object.values(readAll())
     .map(migrateProject)
     .sort(
@@ -127,14 +249,15 @@ export function listProjects(): TechPackProject[] {
     );
 }
 
-export function duplicateProject(id: string): TechPackProject | null {
-  const source = getProject(id);
+export async function duplicateProject(id: string): Promise<TechPackProject | null> {
+  const source = await getProject(id);
   if (!source) return null;
 
   const now = new Date().toISOString();
+  const newId = generateProjectId();
   const copy: TechPackProject = {
     ...JSON.parse(JSON.stringify(source)),
-    id: generateProjectId(),
+    id: newId,
     title: `${source.title}（副本）`,
     workflowStatus: "draft",
     status: "studio",
@@ -142,14 +265,19 @@ export function duplicateProject(id: string): TechPackProject | null {
     updatedAt: now,
   };
 
-  saveProject(copy);
+  await saveProject(copy);
   return copy;
 }
 
-export function deleteProject(id: string) {
+export async function deleteProject(id: string): Promise<void> {
   const all = readAll();
   delete all[id];
   writeAll(all);
+  try {
+    await idbDeleteProjectImages(id);
+  } catch {
+    // ignore IDB cleanup failures
+  }
 }
 
 /** Approximate localStorage usage for easytpack keys (UTF-16 bytes). */
@@ -191,3 +319,5 @@ export function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+export { IDB_IMAGE_PREFIX };

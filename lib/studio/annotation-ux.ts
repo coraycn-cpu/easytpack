@@ -2,9 +2,6 @@
 
 export const ANN_COLOR_LEGEND = "蓝 = AI 标注 · 红 = 手动/已改 · 🔒 = 已锁定";
 
-export const ANN_SELECT_HINT =
-  "选择工具：点击选中 · Shift+点击 多选 · Delete 删除 · Ctrl+V 贴图 · 拖款式图前先点选图片";
-
 export const ANN_ACTION_LABELS = {
   aiBatchProcess: "AI 标工艺",
   aiBatchProcessHint: "补全空白部位（跳过已有区域）",

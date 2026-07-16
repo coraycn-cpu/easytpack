@@ -19,19 +19,19 @@ export function buildInitialSizeChart(
   };
 }
 
-export function createStyleProject(input: {
+export async function createStyleProject(input: {
   title?: string;
   intake: IntakeData;
   regionStandard: SizeRegionStandard;
   sampleSize: string;
   status: "studio" | "collecting";
-}): TechPackProject {
+}): Promise<TechPackProject> {
   const project = createEmptyProject({
     title: input.title ?? "未命名款式",
     intake: input.intake,
   });
   project.status = input.status;
   project.size_chart = buildInitialSizeChart(input.regionStandard, input.sampleSize);
-  saveProject(project);
+  await saveProject(project);
   return project;
 }
