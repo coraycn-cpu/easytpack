@@ -5,10 +5,24 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
 import { exportBomCsv, exportSizeChartCsv } from "@/lib/export/excel";
-import { renderAllArtboards, type AnnotatedImageMode } from "@/lib/export/canvas-render";
+import {
+  renderAllArtboards,
+  renderTechPackSheetToDataUrl,
+  type AnnotatedImageMode,
+} from "@/lib/export/canvas-render";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,7 +31,9 @@ export default function ExportPage() {
   const [annotatedImages, setAnnotatedImages] = useState<
     Array<{ name: string; dataUrl: string }>
   >([]);
+  const [stageCompositeUrl, setStageCompositeUrl] = useState<string | null>(null);
   const [imageMode, setImageMode] = useState<AnnotatedImageMode>("merged");
+  const [rendering, setRendering] = useState(false);
 
   useEffect(() => {
     const p = getProject(id);
@@ -37,12 +53,30 @@ export default function ExportPage() {
 
   useEffect(() => {
     if (!project) return;
-    renderAllArtboards(
-      project.canvas_data.artboards,
-      project.intake.imageDataUrl,
-      project.process_items,
-      imageMode,
-    ).then(setAnnotatedImages);
+    let cancelled = false;
+    setRendering(true);
+
+    Promise.all([
+      renderAllArtboards(
+        project.canvas_data.artboards,
+        project.intake.imageDataUrl,
+        project.process_items,
+        imageMode,
+      ),
+      renderTechPackSheetToDataUrl(project, "merged"),
+    ])
+      .then(([images, stageUrl]) => {
+        if (cancelled) return;
+        setAnnotatedImages(images);
+        setStageCompositeUrl(stageUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setRendering(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [project, imageMode]);
 
   const handleImageModeChange = (mode: AnnotatedImageMode) => {
@@ -57,6 +91,13 @@ export default function ExportPage() {
   };
 
   const handlePrint = () => window.print();
+
+  const handleDownloadStage = () => {
+    if (!stageCompositeUrl || !project) return;
+    const ext = stageCompositeUrl.startsWith("data:image/jpeg") ? "jpg" : "png";
+    const safeTitle = (project.title || "techpack").replace(/[\\/:*?"<>|]+/g, "_");
+    downloadDataUrl(stageCompositeUrl, `${safeTitle}-工艺包大图.${ext}`);
+  };
 
   if (!project) {
     return (
@@ -81,7 +122,10 @@ export default function ExportPage() {
                 ← 返回画板
               </Link>
               <h1 className="text-lg font-semibold text-zinc-900">Tech Pack 预览</h1>
-              <p className="text-xs text-zinc-500">完成度 {progress}%</p>
+              <p className="text-xs text-zinc-500">
+                完成度 {progress}%
+                {rendering ? " · 正在生成画布大图…" : ""}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-lg border border-zinc-200 p-0.5 text-xs">
@@ -110,6 +154,14 @@ export default function ExportPage() {
               </div>
               <button
                 type="button"
+                disabled={!stageCompositeUrl || rendering}
+                onClick={handleDownloadStage}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+              >
+                下载工艺包大图
+              </button>
+              <button
+                type="button"
                 onClick={() => exportBomCsv(project.bom_items, `${project.title}-BOM.csv`)}
                 className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
               >
@@ -136,7 +188,11 @@ export default function ExportPage() {
         </header>
 
         <main className="mx-auto max-w-4xl px-4 py-8">
-          <TechPackPreview project={project} annotatedImages={annotatedImages} />
+          <TechPackPreview
+            project={project}
+            annotatedImages={annotatedImages}
+            stageCompositeUrl={stageCompositeUrl}
+          />
         </main>
       </div>
 
@@ -144,6 +200,7 @@ export default function ExportPage() {
         <TechPackPreview
           project={project}
           annotatedImages={annotatedImages}
+          stageCompositeUrl={stageCompositeUrl}
           printMode
         />
       </div>

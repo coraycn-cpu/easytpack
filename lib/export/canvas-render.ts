@@ -1,4 +1,4 @@
-import type { Artboard, Annotation } from "@/types/project";
+import type { Artboard, Annotation, TechPackProject } from "@/types/project";
 import type { ProcessItem } from "@/types/process";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
 import {
@@ -7,9 +7,20 @@ import {
 } from "@/lib/canvas/annotation-layers";
 import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
 import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
-import { loadImagePlacement } from "@/lib/canvas/bounds";
+import {
+  annotationBounds,
+  loadImagePlacement,
+  type RectBounds,
+} from "@/lib/canvas/bounds";
 import { migrateArtboardHotspots } from "@/lib/project/hotspots";
 import { sortArtboardsForExport } from "@/lib/export/artboard-order";
+import { computeArtboardSlots } from "@/lib/studio/artboard-layout";
+import {
+  buildSheetSections,
+  drawSheetSections,
+  measureSheetSectionsHeight,
+  MIN_SHEET_W,
+} from "@/lib/export/sheet-layout";
 
 export type AnnotatedImageMode = "merged" | "split";
 
@@ -186,4 +197,238 @@ export async function renderAllArtboards(
     }
   }
   return results;
+}
+
+const STAGE_EXPORT_PAD = 48;
+const STAGE_MAX_PIXELS = 16_000_000;
+
+function mergeRect(a: RectBounds, b: RectBounds): RectBounds {
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+/** 导出用紧凑包围盒（不含 Studio 最小画布空白） */
+function computeStageExportBounds(
+  slots: Awaited<ReturnType<typeof computeArtboardSlots>>,
+  artboards: Artboard[],
+): { width: number; height: number; offsetX: number; offsetY: number } | null {
+  let content: RectBounds | null = null;
+
+  for (const slot of slots) {
+    const ab = artboards.find((a) => a.id === slot.id);
+    if (!ab) continue;
+    const ox = slot.origin.x + slot.imageOffset.x;
+    const oy = slot.origin.y + slot.imageOffset.y;
+    const imageRect: RectBounds = {
+      minX: ox + slot.imageFit.x,
+      minY: oy + slot.imageFit.y,
+      maxX: ox + slot.imageFit.x + slot.imageFit.width,
+      maxY: oy + slot.imageFit.y + slot.imageFit.height,
+    };
+    content = content ? mergeRect(content, imageRect) : imageRect;
+
+    for (const ann of ab.annotations) {
+      const b = annotationBounds(ann);
+      const annRect: RectBounds = {
+        minX: slot.origin.x + b.minX,
+        minY: slot.origin.y + b.minY,
+        maxX: slot.origin.x + b.maxX,
+        maxY: slot.origin.y + b.maxY,
+      };
+      content = mergeRect(content, annRect);
+    }
+  }
+
+  if (!content) return null;
+
+  const pad = STAGE_EXPORT_PAD;
+  return {
+    width: Math.max(1, Math.ceil(content.maxX - content.minX + pad * 2)),
+    height: Math.max(1, Math.ceil(content.maxY - content.minY + pad * 2)),
+    offsetX: pad - content.minX,
+    offsetY: pad - content.minY,
+  };
+}
+
+function canvasToExportDataUrl(canvas: HTMLCanvasElement): string {
+  try {
+    const png = canvas.toDataURL("image/png");
+    if (png.length > 12_000_000) {
+      return canvas.toDataURL("image/jpeg", 0.92);
+    }
+    return png;
+  } catch {
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+}
+
+/**
+ * 按 Studio 画布摆放位置，将多画板图+标注合成为一张大图。
+ * 坐标系与 AnnotationCanvas multiMode 一致：标注相对各板 origin。
+ */
+export async function renderStudioStageToDataUrl(
+  artboards: Artboard[],
+  processItems: ProcessItem[] = [],
+  mode: AnnotatedImageMode = "merged",
+): Promise<string | null> {
+  const stage = await renderStudioStageToCanvas(artboards, processItems, mode);
+  return stage ? canvasToExportDataUrl(stage.canvas) : null;
+}
+
+type StageCanvasResult = {
+  canvas: HTMLCanvasElement;
+  /** 逻辑宽度（未乘 scale 前的内容宽） */
+  contentWidth: number;
+  contentHeight: number;
+};
+
+async function renderStudioStageToCanvas(
+  artboards: Artboard[],
+  processItems: ProcessItem[] = [],
+  mode: AnnotatedImageMode = "merged",
+): Promise<StageCanvasResult | null> {
+  const slots = await computeArtboardSlots(artboards);
+  if (slots.length === 0) return null;
+
+  const bounds = computeStageExportBounds(slots, artboards);
+  if (!bounds) return null;
+
+  let { width, height, offsetX, offsetY } = bounds;
+  const contentWidth = width;
+  const contentHeight = height;
+  let scale = 1;
+  if (width * height > STAGE_MAX_PIXELS) {
+    scale = Math.sqrt(STAGE_MAX_PIXELS / (width * height));
+    width = Math.max(1, Math.floor(width * scale));
+    height = Math.max(1, Math.floor(height * scale));
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.scale(scale, scale);
+
+  const layerFilter: ExportLayerFilter = mode === "split" ? "process" : "all";
+
+  for (const slot of slots) {
+    const ab = artboards.find((a) => a.id === slot.id);
+    if (!ab?.imageDataUrl) continue;
+
+    const img = await loadImage(ab.imageDataUrl);
+    const drawX = offsetX + slot.origin.x + slot.imageOffset.x + slot.imageFit.x;
+    const drawY = offsetY + slot.origin.y + slot.imageOffset.y + slot.imageFit.y;
+    ctx.drawImage(img, drawX, drawY, slot.imageFit.width, slot.imageFit.height);
+
+    ctx.fillStyle = "#64748b";
+    ctx.font = "600 13px sans-serif";
+    ctx.fillText(ab.name, drawX, Math.max(14, drawY - 8));
+
+    const migrated = migrateArtboardHotspots(ab);
+    const anns = filterAnnotationsForExport(
+      normalizeAnnotations(migrated.annotations),
+      layerFilter,
+    );
+
+    ctx.save();
+    ctx.translate(offsetX + slot.origin.x, offsetY + slot.origin.y);
+    anns.forEach((ann) => drawAnnotation(ctx, ann));
+    if (layerFilter === "all" || layerFilter === "process") {
+      drawSequenceBadges(ctx, processItems, anns);
+    }
+    ctx.restore();
+  }
+
+  return { canvas, contentWidth, contentHeight };
+}
+
+/**
+ * 画布摆放图 + 有数据的工艺 / BOM / 尺寸 / 备注，合成一张完整导出图。
+ */
+export async function renderTechPackSheetToDataUrl(
+  project: TechPackProject,
+  mode: AnnotatedImageMode = "merged",
+): Promise<string | null> {
+  const stage = await renderStudioStageToCanvas(
+    project.canvas_data.artboards,
+    project.process_items,
+    mode,
+  );
+
+  const sheetWidth = Math.max(MIN_SHEET_W, stage?.canvas.width ?? 0);
+  const sections = buildSheetSections(project, sheetWidth);
+  const tablesH = measureSheetSectionsHeight(sections);
+
+  if (!stage && sections.length === 0) return null;
+
+  const stageW = stage?.canvas.width ?? 0;
+  const stageH = stage?.canvas.height ?? 0;
+  const headerH = 56;
+  const finalW = Math.max(sheetWidth, stageW);
+  const finalH = headerH + stageH + tablesH + (stage || sections.length ? 24 : 0);
+
+  let width = finalW;
+  let height = finalH;
+  let scale = 1;
+  if (width * height > STAGE_MAX_PIXELS) {
+    scale = Math.sqrt(STAGE_MAX_PIXELS / (width * height));
+    width = Math.max(1, Math.floor(width * scale));
+    height = Math.max(1, Math.floor(height * scale));
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.scale(scale, scale);
+
+  // header strip
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, finalW, headerH);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 16px sans-serif";
+  ctx.textBaseline = "middle";
+  const title = project.title?.trim() || "未命名款式";
+  ctx.fillText(title, 24, headerH / 2 - 8);
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  const meta = [
+    project.intake.detectedCategory,
+    project.styleNo ?? project.id.slice(-8).toUpperCase(),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  ctx.fillText(meta || "Tech Pack", 24, headerH / 2 + 12);
+
+  let y = headerH;
+  if (stage) {
+    const dx = Math.max(0, Math.floor((finalW - stageW) / 2));
+    ctx.drawImage(stage.canvas, dx, y);
+    y += stageH;
+  }
+
+  if (sections.length) {
+    const tableX = Math.max(24, Math.floor((finalW - sheetWidth) / 2));
+    // separator
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.beginPath();
+    ctx.moveTo(24, y + 12);
+    ctx.lineTo(finalW - 24, y + 12);
+    ctx.stroke();
+    drawSheetSections(ctx, sections, tableX, y, sheetWidth);
+  }
+
+  return canvasToExportDataUrl(canvas);
 }

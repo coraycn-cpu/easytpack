@@ -5,12 +5,15 @@ import { formatDate, WORKFLOW_LABELS } from "@/lib/project/progress";
 type TechPackPreviewProps = {
   project: TechPackProject;
   annotatedImages?: Array<{ name: string; dataUrl: string }>;
+  /** Studio 画布摆放合成的一张大图 */
+  stageCompositeUrl?: string | null;
   printMode?: boolean;
 };
 
 export default function TechPackPreview({
   project,
   annotatedImages = [],
+  stageCompositeUrl,
   printMode,
 }: TechPackPreviewProps) {
   const styleNo = project.styleNo ?? project.id.slice(-8).toUpperCase();
@@ -45,10 +48,29 @@ export default function TechPackPreview({
         )}
       </header>
 
+      {stageCompositeUrl && (
+        <section className="mt-8">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            画布拼接大图
+          </h2>
+          <p className="mb-3 text-[11px] text-zinc-400">
+            含 Studio 摆放图；有数据时自动附带工艺 / 物料 / 尺寸（及备注）
+          </p>
+          <div className="overflow-auto rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={stageCompositeUrl}
+              alt="画布拼接大图"
+              className="mx-auto max-h-[min(70vh,900px)] w-auto max-w-full object-contain"
+            />
+          </div>
+        </section>
+      )}
+
       {(annotatedImages.length > 0 || project.intake.imageDataUrl) && (
         <section className="mt-8">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-            款式图（含标注）
+            {stageCompositeUrl ? "分图画板（含标注）" : "款式图（含标注）"}
           </h2>
           <div className="space-y-4">
             {annotatedImages.length > 0
@@ -152,7 +174,7 @@ export default function TechPackPreview({
                 <th className="py-2 pr-3">部位</th>
                 <th className="py-2 pr-3">量法</th>
                 {project.size_chart.sizes.map((s) => (
-                  <th key={s} className="py-2 px-2">
+                  <th key={s} className="px-2 py-2">
                     {s}
                   </th>
                 ))}
