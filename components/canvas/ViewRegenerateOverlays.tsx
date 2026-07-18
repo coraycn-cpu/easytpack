@@ -66,7 +66,8 @@ export default function ViewRegenerateOverlays({
     requestAnimationFrame(() => textareaRefs.current[id]?.focus());
   }, []);
 
-  if (!onRegenerateView || !primaryArtboardId) return null;
+  if (!primaryArtboardId) return null;
+  if (!onRegenerateView && !onGenerateLineArt) return null;
 
   return (
     <>
@@ -79,17 +80,17 @@ export default function ViewRegenerateOverlays({
         if (ab.id === primaryArtboardId && !isPrimaryFlatFront) return null;
 
         const offset = ab.imageOffset ?? { x: 0, y: 0 };
-        const left =
+        const imageLeft =
           (contentOffsetX + slot.origin.x + slot.imageFit.x + offset.x) * fitScale;
-        const top =
-          (contentOffsetY +
-            slot.origin.y +
-            slot.imageFit.y +
-            offset.y +
-            slot.imageFit.height +
-            4) *
-          fitScale;
-        const width = slot.imageFit.width * fitScale;
+        const imageTop =
+          (contentOffsetY + slot.origin.y + slot.imageFit.y + offset.y) * fitScale;
+        const imageWidth = slot.imageFit.width * fitScale;
+        const imageHeight = slot.imageFit.height * fitScale;
+
+        const bottomLeft = imageLeft;
+        const bottomTop = imageTop + imageHeight + 4 * fitScale;
+        const bottomWidth = Math.max(imageWidth, 120);
+
         const busy = regeneratingArtboardId === ab.id;
         const draft = drafts[ab.id] ?? "";
         const hasDraft = draft.trim().length > 0;
@@ -109,7 +110,7 @@ export default function ViewRegenerateOverlays({
         };
 
         const handleRegenerate = () => {
-          if (locked) return;
+          if (!onRegenerateView || locked) return;
           if (!hasDraft) {
             focusDraftInput(ab.id);
             return;
@@ -125,89 +126,109 @@ export default function ViewRegenerateOverlays({
             : "基于主款平铺图重新生成";
 
         return (
-          <div
-            key={`regen-${ab.id}`}
-            className="absolute z-[12]"
-            style={{ left, top, width: Math.max(width, 120) }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="rounded border border-violet-200/80 bg-white/95 px-1 py-0.5 shadow-sm backdrop-blur-sm">
-              <p className="mb-0.5 px-0.5 text-[9px] leading-snug text-violet-700/90">
-                {regenSourceHint}
-              </p>
-              {isExpanded && (
-                <textarea
-                  ref={(el) => {
-                    textareaRefs.current[ab.id] = el;
-                  }}
-                  value={draft}
-                  onChange={(e) => setDraft(ab.id, e.target.value)}
-                  placeholder={
-                    isLineArt
-                      ? "必填：如「花纹线条再清晰」「袖长与彩图一致」"
-                      : "必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
-                  }
-                  rows={2}
-                  disabled={locked}
-                  className="mb-1 w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
-                />
-              )}
-              {!isExpanded && !hasDraft && (
-                <p className="mb-1 px-0.5 text-[9px] leading-snug text-slate-500">
-                  重新生成前请先填写修正词
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-1">
-                {canConvertToLineArt && (
-                  <button
-                    type="button"
-                    disabled={locked}
-                    onClick={() => onGenerateLineArt?.(ab.id)}
-                    title="按当前彩图严格转换为线稿"
-                    className="min-w-0 flex-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy ? "生成中…" : "生成线稿"}
-                  </button>
-                )}
+          <div key={`view-overlay-${ab.id}`}>
+            {canConvertToLineArt && (
+              <div
+                className="pointer-events-none absolute z-[13]"
+                style={{
+                  left: imageLeft,
+                  top: imageTop,
+                  width: imageWidth,
+                  height: imageHeight,
+                }}
+              >
                 <button
                   type="button"
                   disabled={locked}
-                  onClick={handleRegenerate}
-                  title={
-                    hasDraft
-                      ? "按修正词重新生成"
-                      : "请先展开并填写修正提示词"
-                  }
-                  className={`min-w-0 flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                    hasDraft
-                      ? "bg-violet-600 text-white hover:bg-violet-700"
-                      : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
-                  }`}
+                  onClick={() => onGenerateLineArt?.(ab.id)}
+                  title="按当前彩图严格转换为线稿"
+                  className="pointer-events-auto absolute right-2 top-2 rounded-md border border-emerald-400 bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
-                  {busy ? "生成中…" : hasDraft ? "重新生成" : "填写修正词"}
-                </button>
-                {onDeleteArtboard && (
-                  <button
-                    type="button"
-                    disabled={locked}
-                    onClick={handleDelete}
-                    className="shrink-0 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    删除
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={locked}
-                  onClick={() => toggleExpanded(ab.id)}
-                  title={isExpanded ? "收起修正提示词" : "展开修正提示词"}
-                  className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
-                >
-                  {isExpanded ? "▾" : "▸"}
+                  {busy ? "生成中…" : "生成线稿"}
                 </button>
               </div>
-            </div>
+            )}
+
+            {onRegenerateView && (
+              <div
+                className="absolute z-[12]"
+                style={{
+                  left: bottomLeft,
+                  top: bottomTop,
+                  width: bottomWidth,
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="rounded border border-violet-200/80 bg-white/95 px-1 py-0.5 shadow-sm backdrop-blur-sm">
+                  <p className="mb-0.5 px-0.5 text-[9px] leading-snug text-violet-700/90">
+                    {regenSourceHint}
+                  </p>
+                  {isExpanded && (
+                    <textarea
+                      ref={(el) => {
+                        textareaRefs.current[ab.id] = el;
+                      }}
+                      value={draft}
+                      onChange={(e) => setDraft(ab.id, e.target.value)}
+                      placeholder={
+                        isLineArt
+                          ? "必填：如「花纹线条再清晰」「袖长与彩图一致」"
+                          : "必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
+                      }
+                      rows={2}
+                      disabled={locked}
+                      className="mb-1 w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
+                    />
+                  )}
+                  {!isExpanded && !hasDraft && (
+                    <p className="mb-1 px-0.5 text-[9px] leading-snug text-slate-500">
+                      重新生成前请先填写修正词
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={handleRegenerate}
+                      title={
+                        hasDraft
+                          ? "按修正词重新生成"
+                          : "请先展开并填写修正提示词"
+                      }
+                      className={`min-w-0 flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        hasDraft
+                          ? "bg-violet-600 text-white hover:bg-violet-700"
+                          : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                      }`}
+                    >
+                      {busy ? "生成中…" : hasDraft ? "重新生成" : "填写修正词"}
+                    </button>
+                    {onDeleteArtboard && (
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={handleDelete}
+                        className="shrink-0 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        删除
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={() => toggleExpanded(ab.id)}
+                      title={isExpanded ? "收起修正提示词" : "展开修正提示词"}
+                      className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      {isExpanded ? "▾" : "▸"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

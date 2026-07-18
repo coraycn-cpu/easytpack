@@ -48,8 +48,8 @@ export default function FixedViewSidebar({
   projectTitle,
   category,
   targetGarmentLabel,
-  photoType,
-  flatFrontGenerated,
+  photoType: _photoType,
+  flatFrontGenerated: _flatFrontGenerated,
   workflowLabel,
   progress,
   workflowStatus,
@@ -98,13 +98,11 @@ export default function FixedViewSidebar({
         <div className="border-b border-violet-50 bg-violet-50/40 px-3 py-2">
           <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
           <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
-            背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
+            {VIEW_IMAGE_AI_GUIDE}
           </p>
-          {(flatFrontGenerated || photoType === "model" || photoType === "collage") && (
-            <p className="mt-1 text-[9px] leading-snug text-slate-500">
-              {SIDEBAR_AI_SOURCE_HINT}
-            </p>
-          )}
+          <p className="mt-1 text-[9px] leading-snug text-slate-500">
+            {SIDEBAR_AI_SOURCE_HINT}
+          </p>
         </div>
 
         <div className="space-y-1.5 p-2.5">
@@ -129,7 +127,7 @@ export default function FixedViewSidebar({
             <textarea
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="如：45°斜侧、口袋细节；也可写「正面平铺」"
+              placeholder="如：45°斜侧、口袋细节（线稿请用彩图下方按钮）"
               rows={2}
               disabled={viewGenerating}
               className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"
