@@ -159,7 +159,8 @@ export default function ViewRegenerateOverlays({
           (contentOffsetX + slot.origin.x + slot.imageFit.x + offset.x) * fitScale;
         const imageTop =
           (contentOffsetY + slot.origin.y + slot.imageFit.y + offset.y) * fitScale;
-        const imageWidth = slot.imageFit.width * fitScale;
+        const scale = ab.imageScale ?? { x: 1, y: 1 };
+        const imageWidth = slot.imageFit.width * fitScale * scale.x;
 
         const railLeft = imageLeft + imageWidth + 4 * Math.max(fitScale, 0.5);
         const railTop = imageTop;

@@ -169,7 +169,7 @@ function removeModelDirective(
     return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model, mannequin, and dress form. Neutral background, product close-up for tech pack.";
   }
   if (kind === "back") {
-    return "IMAGE EDIT: Transform into a BACK-VIEW true FLAT LAY — garment laid flat on a surface. Completely remove the human model AND any ghost mannequin, invisible mannequin, dress form, or white torso. Keep the same garment identity.";
+    return "IMAGE EDIT: Rotate / re-present the SAME garment as a TRUE BACK VIEW flat lay. The output MUST show the REAR of the garment (back neckline, back yoke/seams, back hem) — NOT a copy of the front. Completely remove the human model AND any ghost mannequin, dress form, or white torso. Keep fabric/color/print identity. If the reference is front-facing, invent the plausible back construction consistent with that garment type (e.g. vest back, dress back) while matching color and fabric.";
   }
   if (kind === "custom") {
     return "IMAGE EDIT: Produce a fashion tech-pack product image of the requested view. Completely remove any human model, face, hair, arms, body, ghost mannequin, and dress form. Keep garment identity; clean studio background.";
@@ -250,11 +250,13 @@ export function buildRecraftPromptForKind(input: {
     return [
       scope,
       removeModel,
+      "CRITICAL VIEW: BACK of the garment only — rear side facing camera. Do NOT output another front view.",
       "Professional fashion tech-pack BACK VIEW true flat lay — garment laid flat on a surface, NO ghost mannequin, NO dress form, NO white torso.",
-      "Same garment as front:",
+      "Show rear construction: back neckline/collar from behind, back seams, back hem, any back vents/closures. Front placket/chest details must NOT dominate.",
+      "Same garment identity as reference (color, fabric, silhouette family):",
       core + ".",
       locks,
-      "Show back construction clearly. White/neutral studio background, no watermark.",
+      "White/neutral studio background, no watermark, no text overlays.",
       `Task: ${viewHint}.${extra}${fix}`,
     ].join(" ");
   }
@@ -293,8 +295,11 @@ export function artboardNameForKind(
   kind: ViewImageKind,
   spec?: GarmentSpec | null,
 ): string {
-  const name = spec?.artboardName?.trim();
-  if (name) return name.slice(0, 8);
+  // 画板名跟生成类型走，不用 AI 瞎起的「马甲正面」等
+  if (kind === "custom") {
+    const name = spec?.artboardName?.trim();
+    if (name) return name.slice(0, 8);
+  }
   return ARTBOARD_FALLBACK[kind];
 }
 

@@ -32,7 +32,7 @@ export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [
     label: "背面图",
     icon: "↩",
     promptHint:
-      "同一款式的完整背面平铺图，版型、颜色、面料与工艺与正面完全一致，专业服装摄影平铺风格",
+      "同一款式的完整背面平铺图（必须是衣服背面朝上，不是正面复制），版型颜色面料与正面一致，真平铺无模特无人台",
   },
   {
     kind: "collar",

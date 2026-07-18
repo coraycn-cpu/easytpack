@@ -38,6 +38,15 @@ CRITICAL fidelity:
 
 Follow the view instruction below.`;
 
+const BACK_VIEW_INSTRUCTION = `Using the reference garment photo, generate a TRUE BACK VIEW flat lay of THE SAME garment.
+
+CRITICAL:
+- Output must be the REAR of the garment, not another front
+- Show back neckline, back seams, back hem
+- Same color/fabric/silhouette family as the reference
+- Flat on white/neutral surface; no model, no ghost mannequin
+- No text overlays on the image`;
+
 const LINE_ART_TRACE_INSTRUCTION = `TRACE the attached garment PHOTO into a black-and-white technical line drawing of THAT SAME garment.
 
 CRITICAL:
@@ -274,7 +283,9 @@ export async function synthesizeViaGateway(
           const instruction = `${
             kind === "line_art"
               ? LINE_ART_TRACE_INSTRUCTION
-              : REF_FIDELITY_INSTRUCTION
+              : kind === "back"
+                ? BACK_VIEW_INSTRUCTION
+                : REF_FIDELITY_INSTRUCTION
           }\n\nView / task: ${prompt}`;
           const result = await generateText({
             model,

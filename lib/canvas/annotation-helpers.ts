@@ -13,6 +13,36 @@ export function isAnnotationLocked(ann: Annotation): boolean {
   return Boolean(ann.locked);
 }
 
+/** 以原点为锚，按 sx/sy 缩放标注几何（用于款式图拉伸） */
+export function scaleAnnotationAroundOrigin(
+  ann: Annotation,
+  originX: number,
+  originY: number,
+  sx: number,
+  sy: number,
+): Annotation {
+  const mapX = (x: number) => originX + (x - originX) * sx;
+  const mapY = (y: number) => originY + (y - originY) * sy;
+  const next: Annotation = {
+    ...ann,
+    x: mapX(ann.x),
+    y: mapY(ann.y),
+  };
+  if (ann.width != null) next.width = Math.max(1, ann.width * sx);
+  if (ann.height != null) next.height = Math.max(1, ann.height * sy);
+  if (ann.x2 != null) next.x2 = mapX(ann.x2);
+  if (ann.y2 != null) next.y2 = mapY(ann.y2);
+  if (ann.points && ann.points.length >= 2) {
+    const pts = [...ann.points];
+    for (let i = 0; i + 1 < pts.length; i += 2) {
+      pts[i] = mapX(pts[i]);
+      pts[i + 1] = mapY(pts[i + 1]);
+    }
+    next.points = pts;
+  }
+  return next;
+}
+
 type Rect = { x: number; y: number; width: number; height: number };
 
 function rectArea(r: Rect): number {

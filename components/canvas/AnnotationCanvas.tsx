@@ -45,7 +45,7 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
-import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
+import { isAnnotationLocked, scaleAnnotationAroundOrigin } from "@/lib/canvas/annotation-helpers";
 import type { ImageCropRect } from "@/lib/canvas/crop-image";
 import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
 import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
@@ -66,6 +66,12 @@ type AnnotationCanvasProps = {
   /** 拖动款式图结束时原子更新 offset + 标注，避免错位 */
   onArtboardImageDragEnd?: (payload: {
     imageOffset: { x: number; y: number };
+    annotations: Annotation[];
+  }) => void;
+  /** 角/边拉伸款式图结束时原子更新 scale + offset + 标注 */
+  onArtboardImageTransformEnd?: (payload: {
+    imageOffset: { x: number; y: number };
+    imageScale: { x: number; y: number };
     annotations: Annotation[];
   }) => void;
   splitOnCanvas?: boolean;
@@ -147,6 +153,7 @@ export default function AnnotationCanvas({
   imageOffset = { x: 0, y: 0 },
   onImageOffsetChange,
   onArtboardImageDragEnd,
+  onArtboardImageTransformEnd,
   splitOnCanvas = false,
   splitLayout,
   onSplitLayoutChange,
@@ -533,9 +540,6 @@ export default function AnnotationCanvas({
   const selectImage = () => {
     setImageSelected(true);
     setSelectedAnnIds([]);
-    if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-    }
   };
 
   /** 进入剪裁会话（主图 / AI 图 / 贴图均可）；由标题旁「剪裁」触发 */
@@ -923,6 +927,17 @@ export default function AnnotationCanvas({
       return;
     }
 
+    if (imageSelected && tool === "select" && !isPanActive) {
+      const node = stage.findOne("#garment_image");
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+      } else {
+        tr.nodes([]);
+      }
+      return;
+    }
+
     if (primarySelectedAnnId) {
       const ann = normalizedAnnotations.find((a) => a.id === primarySelectedAnnId);
       if (ann && !isLayerVisible(ann, layerVisibility)) {
@@ -944,7 +959,18 @@ export default function AnnotationCanvas({
     }
     tr.nodes([]);
     tr.getLayer()?.batchDraw();
-  }, [primarySelectedAnnId, cropSession, activeArtboardId, annotations, layerVisibility, normalizedAnnotations]);
+  }, [
+    primarySelectedAnnId,
+    cropSession,
+    activeArtboardId,
+    annotations,
+    layerVisibility,
+    normalizedAnnotations,
+    imageSelected,
+    tool,
+    isPanActive,
+    multiArtboards,
+  ]);
 
   useEffect(() => {
     if (selectedAnnIds.length === 0) return;
@@ -1407,7 +1433,10 @@ export default function AnnotationCanvas({
                 if (!ab || !entry) return null;
                 const isActive = ab.id === activeArtboardId;
                 const abOffset = ab.imageOffset ?? { x: 0, y: 0 };
+                const abScale = ab.imageScale ?? { x: 1, y: 1 };
                 const abAnns = normalizeAnnotations(ab.annotations);
+                const displayW = entry.fit.width * abScale.x;
+                const displayH = entry.fit.height * abScale.y;
                 const imgX = entry.fit.x + abOffset.x;
                 const imgY = entry.fit.y + abOffset.y;
                 const labelAbove = 22;
@@ -1422,6 +1451,57 @@ export default function AnnotationCanvas({
                 if (isActive) {
                   imageCoordOriginRef.current = imageAnchor;
                 }
+
+                const handleImageTransformEnd = (
+                  e: Konva.KonvaEventObject<Event>,
+                ) => {
+                  if (!isActive || !onArtboardImageTransformEnd) return;
+                  e.cancelBubble = true;
+                  const node = e.target as Konva.Image;
+                  const sx = node.scaleX();
+                  const sy = node.scaleY();
+                  const dx = node.x();
+                  const dy = node.y();
+                  node.scaleX(1);
+                  node.scaleY(1);
+                  node.position({ x: 0, y: 0 });
+                  const nextScale = {
+                    x: Math.max(0.15, abScale.x * sx),
+                    y: Math.max(0.15, abScale.y * sy),
+                  };
+                  const nextOffset = {
+                    x: abOffset.x + dx,
+                    y: abOffset.y + dy,
+                  };
+                  const shifted = abAnns.map((ann) => {
+                    const scaled = scaleAnnotationAroundOrigin(
+                      ann,
+                      imgX,
+                      imgY,
+                      sx,
+                      sy,
+                    );
+                    return {
+                      ...scaled,
+                      x: scaled.x + dx,
+                      y: scaled.y + dy,
+                      ...(scaled.x2 != null ? { x2: scaled.x2 + dx } : {}),
+                      ...(scaled.y2 != null ? { y2: scaled.y2 + dy } : {}),
+                      ...(scaled.points
+                        ? {
+                            points: scaled.points.map((v, i) =>
+                              i % 2 === 0 ? v + dx : v + dy,
+                            ),
+                          }
+                        : {}),
+                    };
+                  });
+                  onArtboardImageTransformEnd({
+                    imageOffset: nextOffset,
+                    imageScale: nextScale,
+                    annotations: shifted,
+                  });
+                };
 
                 return (
                   <Group key={ab.id} x={slot.origin.x} y={slot.origin.y}>
@@ -1470,13 +1550,14 @@ export default function AnnotationCanvas({
                           image={entry.img}
                           x={0}
                           y={0}
-                          width={entry.fit.width}
-                          height={entry.fit.height}
+                          width={displayW}
+                          height={displayH}
                           listening={!isPanActive && !isDrawingMode}
                           draggable={false}
                           stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
                           strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
                           opacity={isActive ? 1 : 0.92}
+                          onTransformEnd={handleImageTransformEnd}
                           onClick={(e) => {
                             if (tool !== "select" || cropSession) return;
                             e.cancelBubble = true;
@@ -1765,6 +1846,18 @@ export default function AnnotationCanvas({
           <Transformer
             ref={transformerRef}
             rotateEnabled={false}
+            flipEnabled={false}
+            keepRatio={false}
+            enabledAnchors={[
+              "top-left",
+              "top-center",
+              "top-right",
+              "middle-left",
+              "middle-right",
+              "bottom-left",
+              "bottom-center",
+              "bottom-right",
+            ]}
             boundBoxFunc={(oldBox, newBox) => {
               if (newBox.width < 8 || newBox.height < 8) return oldBox;
               return newBox;
@@ -1843,13 +1936,18 @@ export default function AnnotationCanvas({
             Boolean(onCropArtboardImage && ab.imageDataUrl)
           }
           onStartCrop={(artboardId) => {
-            const slot = artboardSlots.find((s) => s.id === artboardId);
             const entry = artboardImages.get(artboardId);
-            if (!slot || !entry || !onCropArtboardImage) return;
+            const ab = multiArtboards.find((a) => a.id === artboardId);
+            if (!entry || !onCropArtboardImage) return;
             if (artboardId !== activeArtboardId) {
               onActiveArtboardChange?.(artboardId);
             }
-            beginImageCrop(artboardId, entry.fit.width, entry.fit.height);
+            const scale = ab?.imageScale ?? { x: 1, y: 1 };
+            beginImageCrop(
+              artboardId,
+              entry.fit.width * scale.x,
+              entry.fit.height * scale.y,
+            );
           }}
           onConfirmCrop={confirmCropSession}
           onCancelCrop={cancelCropSession}

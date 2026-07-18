@@ -35,10 +35,13 @@ export async function matchImageToSourceSize(
   return canvas.toDataURL("image/png");
 }
 
-/** 无图像 API 时在浏览器生成带标签的占位图 */
+/**
+ * 无图像 API 时的占位：复制源图尺寸内容，不再盖「AI · 名称」条
+ *（画板标题已在图上方显示，避免与真实视角混淆）
+ */
 export async function createViewPlaceholderImage(
   sourceUrl: string,
-  label: string,
+  _label?: string,
 ): Promise<string> {
   const img = await loadImage(sourceUrl);
   const w = Math.min(900, img.naturalWidth);
@@ -54,11 +57,5 @@ export async function createViewPlaceholderImage(
   if (!ctx) return sourceUrl;
 
   ctx.drawImage(img, 0, 0, cw, ch);
-  ctx.fillStyle = "rgba(15, 23, 42, 0.55)";
-  ctx.fillRect(0, ch - 48, cw, 48);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "600 18px system-ui, sans-serif";
-  ctx.fillText(`AI · ${label}`, 16, ch - 18);
-
   return canvas.toDataURL("image/png");
 }

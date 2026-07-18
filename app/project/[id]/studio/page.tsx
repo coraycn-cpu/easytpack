@@ -867,15 +867,20 @@ export default function StudioPage() {
           el.onerror = reject;
           el.src = ab.imageDataUrl!;
         });
+        const scale = ab.imageScale ?? { x: 1, y: 1 };
         const srcCrop = displayCropToSourcePixels(
           displayCrop,
-          { width: fit.width, height: fit.height },
+          {
+            width: fit.width * scale.x,
+            height: fit.height * scale.y,
+          },
           { width: img.naturalWidth, height: img.naturalHeight },
         );
         const imageDataUrl = await applyCropToImageDataUrl(ab.imageDataUrl, srcCrop);
         updateArtboard(artboardId, {
           imageDataUrl,
           imageOffset: { x: 0, y: 0 },
+          imageScale: { x: 1, y: 1 },
         });
         setAiMessage(`已剪裁「${ab.name}」`);
       } catch (e) {
@@ -967,15 +972,19 @@ export default function StudioPage() {
       let outcome: "success" | "placeholder" | "error" = "success";
       if (!imageDataUrl) {
         outcome = "placeholder";
-        imageDataUrl = await createViewPlaceholderImage(
-          effectiveSourceUrl,
-          data.artboardName ?? "视角图",
-        );
+        imageDataUrl = await createViewPlaceholderImage(effectiveSourceUrl);
         const err = data.synthesisError as string | undefined;
+        const viewLabel =
+          params.preferredArtboardName ??
+          (params.kind === "back"
+            ? "背面"
+            : params.kind === "line_art"
+              ? "线稿"
+              : "视角图");
         setAiTip(
           err
-            ? `生图失败：${err}。已用占位图，请检查 AI_GATEWAY_API_KEY 或 SILICONFLOW_API_KEY。`
-            : "生图 API 未返回图片，已生成占位图",
+            ? `${viewLabel}生图失败：${err}。当前仅为源图占位（内容可能仍是正面），请检查密钥后重试。`
+            : `${viewLabel} API 未返回图片，已用源图占位（非真实${viewLabel}），请重试。`,
         );
       } else {
         imageDataUrl = await matchImageToSourceSize(
@@ -1091,7 +1100,23 @@ export default function StudioPage() {
       kind === "custom"
         ? customPrompt?.trim().slice(0, 8) || canonicalArtboardNameForKind("custom")
         : canonicalArtboardNameForKind(kind);
-    await runViewImageGeneration({ kind, customPrompt, preferredArtboardName });
+    const primaryId = project
+      ? getPrimaryArtboardId(project.canvas_data.artboards)
+      : undefined;
+    // 优先用当前激活的彩图；否则主款正面作为背面/领口等参考
+    const active = project?.canvas_data.artboards.find(
+      (a) => a.id === activeArtboardId,
+    );
+    const sourceArtboardId =
+      active?.imageDataUrl && active.viewImageMeta?.kind !== "line_art"
+        ? active.id
+        : primaryId;
+    await runViewImageGeneration({
+      kind,
+      customPrompt,
+      preferredArtboardName,
+      sourceArtboardId,
+    });
   };
 
   /** 从指定彩图画板转换线稿（新建画板） */
@@ -1844,6 +1869,13 @@ export default function StudioPage() {
               }
               onArtboardImageDragEnd={({ imageOffset, annotations }) =>
                 updateArtboard(activeArtboard.id, { imageOffset, annotations })
+              }
+              onArtboardImageTransformEnd={({ imageOffset, imageScale, annotations }) =>
+                updateArtboard(activeArtboard.id, {
+                  imageOffset,
+                  imageScale,
+                  annotations,
+                })
               }
               onRegionAiFill={handleRegionAiFill}
               onDimensionAiFill={handleDimensionAiFill}

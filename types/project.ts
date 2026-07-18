@@ -144,6 +144,11 @@ export type Artboard = {
   annotations: Annotation[];
   /** 款式图在画板内的偏移（可拖动） */
   imageOffset?: { x: number; y: number };
+  /**
+   * 相对 computeImageFit 基准尺寸的拉伸比例（角/边拉伸）
+   * 缺省视为 { x: 1, y: 1 }
+   */
+  imageScale?: { x: number; y: number };
   /** 画板在无限画布上的锚点（多图并排） */
   canvasOrigin?: { x: number; y: number };
   /** AI 生成款式图元数据（含主款平铺正面重新生成） */
