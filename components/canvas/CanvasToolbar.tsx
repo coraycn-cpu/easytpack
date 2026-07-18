@@ -96,7 +96,11 @@ export default function CanvasToolbar({
   const pasteFileRef = useRef<HTMLInputElement>(null);
   const light = theme === "light";
   const scale = viewportScale ?? zoom;
-  const setScale = onViewportScaleChange ?? onZoomChange ?? (() => {});
+  const setScale = (next: number) => {
+    const clamped = Math.min(2, Math.max(0.25, Math.round(next * 100) / 100));
+    if (onViewportScaleChange) onViewportScaleChange(clamped);
+    else onZoomChange?.(clamped);
+  };
 
   const manualLocked = interactionLocked ?? false;
 

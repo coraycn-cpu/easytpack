@@ -127,7 +127,7 @@ export default function FixedViewSidebar({
             <textarea
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="如：45°斜侧、口袋细节（线稿请用彩图下方按钮）"
+              placeholder="如：45°斜侧、口袋细节（线稿请用彩图右侧按钮）"
               rows={2}
               disabled={viewGenerating}
               className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"

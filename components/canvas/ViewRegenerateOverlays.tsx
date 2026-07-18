@@ -2,32 +2,94 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
+import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import type { Artboard } from "@/types/project";
+
+export type ArtboardCropUi = {
+  artboardId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null;
 
 type ViewRegenerateOverlaysProps = {
   slots: ArtboardSlot[];
   artboards: Artboard[];
   primaryArtboardId?: string;
+  activeArtboardId?: string;
   contentOffsetX: number;
   contentOffsetY: number;
   fitScale: number;
   regeneratingArtboardId?: string | null;
   interactionLocked?: boolean;
+  toolIsSelect?: boolean;
+  cropSession?: ArtboardCropUi;
+  onStartCrop?: (artboardId: string) => void;
+  onConfirmCrop?: () => void;
+  onCancelCrop?: () => void;
+  canCropArtboard?: (artboard: Artboard) => boolean;
   onRegenerateView?: (artboardId: string, correctionPrompt: string) => void;
   /** 从彩图画板转换线稿 */
   onGenerateLineArt?: (sourceArtboardId: string) => void;
   onDeleteArtboard?: (artboardId: string) => void;
 };
 
+function RailButton({
+  label,
+  title,
+  disabled,
+  onClick,
+  tone = "neutral",
+}: {
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  onClick: () => void;
+  tone?: "neutral" | "primary" | "accent" | "danger" | "success";
+}) {
+  const tones: Record<string, string> = {
+    neutral:
+      "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    primary:
+      "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
+    accent:
+      "border-violet-300 bg-violet-600 text-white hover:bg-violet-700",
+    danger: "border-red-200 bg-red-50 text-red-600 hover:bg-red-100",
+    success:
+      "border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600",
+  };
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title ?? label}
+      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      className={`pointer-events-auto w-full rounded-md border px-2 py-1.5 text-left text-[11px] font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]}`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function ViewRegenerateOverlays({
   slots,
   artboards,
   primaryArtboardId,
+  activeArtboardId,
   contentOffsetX,
   contentOffsetY,
   fitScale,
   regeneratingArtboardId,
   interactionLocked,
+  toolIsSelect = true,
+  cropSession = null,
+  onStartCrop,
+  onConfirmCrop,
+  onCancelCrop,
+  canCropArtboard,
   onRegenerateView,
   onGenerateLineArt,
   onDeleteArtboard,
@@ -41,9 +103,6 @@ export default function ViewRegenerateOverlays({
       const next = { ...prev };
       for (const ab of artboards) {
         if (!ab.viewImageMeta) continue;
-        const isPrimaryFlatFront =
-          ab.id === primaryArtboardId && ab.viewImageMeta.kind === "flat_front";
-        if (ab.id === primaryArtboardId && !isPrimaryFlatFront) continue;
         const saved = ab.viewImageMeta.correctionPrompt;
         if (saved && next[ab.id] === undefined) {
           next[ab.id] = saved;
@@ -51,7 +110,7 @@ export default function ViewRegenerateOverlays({
       }
       return next;
     });
-  }, [artboards, primaryArtboardId]);
+  }, [artboards]);
 
   const setDraft = useCallback((id: string, value: string) => {
     setDrafts((prev) => ({ ...prev, [id]: value }));
@@ -66,18 +125,11 @@ export default function ViewRegenerateOverlays({
     requestAnimationFrame(() => textareaRefs.current[id]?.focus());
   }, []);
 
-  if (!primaryArtboardId) return null;
-  if (!onRegenerateView && !onGenerateLineArt) return null;
-
   return (
     <>
       {slots.map((slot) => {
         const ab = artboards.find((a) => a.id === slot.id);
-        if (!ab || !ab.viewImageMeta) return null;
-
-        const isPrimaryFlatFront =
-          ab.id === primaryArtboardId && ab.viewImageMeta.kind === "flat_front";
-        if (ab.id === primaryArtboardId && !isPrimaryFlatFront) return null;
+        if (!ab?.imageDataUrl) return null;
 
         const offset = ab.imageOffset ?? { x: 0, y: 0 };
         const imageLeft =
@@ -85,22 +137,63 @@ export default function ViewRegenerateOverlays({
         const imageTop =
           (contentOffsetY + slot.origin.y + slot.imageFit.y + offset.y) * fitScale;
         const imageWidth = slot.imageFit.width * fitScale;
-        const imageHeight = slot.imageFit.height * fitScale;
 
-        const bottomLeft = imageLeft;
-        const bottomTop = imageTop + imageHeight + 4 * fitScale;
-        const bottomWidth = Math.max(imageWidth, 120);
+        const railLeft = imageLeft + imageWidth + 6 * Math.max(fitScale, 0.5);
+        const railTop = imageTop;
+        const railWidth = 88;
 
         const busy = regeneratingArtboardId === ab.id;
+        const locked = Boolean(interactionLocked || busy);
+        const isActive = ab.id === activeArtboardId;
+        const meta = ab.viewImageMeta;
+        const kind = meta?.kind;
+        const isLineArt = kind === "line_art";
+        const isPrimaryFlatFront =
+          Boolean(primaryArtboardId) &&
+          ab.id === primaryArtboardId &&
+          kind === "flat_front";
+        const isProtectedPrimary =
+          Boolean(primaryArtboardId) &&
+          ab.id === primaryArtboardId &&
+          !isPrimaryFlatFront;
+
+        const canConvertToLineArt =
+          Boolean(meta) &&
+          !isLineArt &&
+          !isProtectedPrimary &&
+          Boolean(onGenerateLineArt);
+
+        const showRegen =
+          Boolean(meta) &&
+          Boolean(onRegenerateView) &&
+          !isProtectedPrimary;
+
+        const deletable =
+          Boolean(onDeleteArtboard) &&
+          Boolean(primaryArtboardId) &&
+          ab.id !== primaryArtboardId &&
+          !meta &&
+          toolIsSelect &&
+          !interactionLocked &&
+          !cropSession;
+
+        const aiDeletable =
+          Boolean(onDeleteArtboard) &&
+          Boolean(meta) &&
+          !isProtectedPrimary &&
+          ab.id !== primaryArtboardId;
+
+        const croppable =
+          Boolean(canCropArtboard?.(ab)) &&
+          isActive &&
+          toolIsSelect &&
+          !interactionLocked;
+
+        const croppingThis = cropSession?.artboardId === ab.id;
+
         const draft = drafts[ab.id] ?? "";
         const hasDraft = draft.trim().length > 0;
         const isExpanded = expanded[ab.id] ?? false;
-        const locked = interactionLocked || busy;
-
-        const kind = ab.viewImageMeta.kind;
-        const isLineArt = kind === "line_art";
-        const canConvertToLineArt =
-          !isLineArt && Boolean(onGenerateLineArt) && Boolean(ab.imageDataUrl);
 
         const handleDelete = () => {
           if (!onDeleteArtboard || locked) return;
@@ -118,117 +211,117 @@ export default function ViewRegenerateOverlays({
           onRegenerateView(ab.id, draft.trim());
         };
 
-        const isFlatFront = kind === "flat_front";
-        const regenSourceHint = isLineArt
-          ? "基于绑定彩图重新转换线稿"
-          : isFlatFront
-            ? "基于原参考图重新生成主款平铺"
-            : "基于主款平铺图重新生成";
+        const hasAnyAction =
+          canConvertToLineArt ||
+          showRegen ||
+          deletable ||
+          aiDeletable ||
+          croppable ||
+          croppingThis;
+
+        if (!hasAnyAction) return null;
 
         return (
-          <div key={`view-overlay-${ab.id}`}>
-            {canConvertToLineArt && (
-              <div
-                className="pointer-events-none absolute z-[13]"
-                style={{
-                  left: imageLeft,
-                  top: imageTop,
-                  width: imageWidth,
-                  height: imageHeight,
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={locked}
-                  onClick={() => onGenerateLineArt?.(ab.id)}
-                  title="按当前彩图严格转换为线稿"
-                  className="pointer-events-auto absolute right-2 top-2 rounded-md border border-emerald-400 bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  {busy ? "生成中…" : "生成线稿"}
-                </button>
-              </div>
-            )}
-
-            {onRegenerateView && (
-              <div
-                className="absolute z-[12]"
-                style={{
-                  left: bottomLeft,
-                  top: bottomTop,
-                  width: bottomWidth,
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <div className="rounded border border-violet-200/80 bg-white/95 px-1 py-0.5 shadow-sm backdrop-blur-sm">
-                  <p className="mb-0.5 px-0.5 text-[9px] leading-snug text-violet-700/90">
-                    {regenSourceHint}
-                  </p>
-                  {isExpanded && (
-                    <textarea
-                      ref={(el) => {
-                        textareaRefs.current[ab.id] = el;
-                      }}
-                      value={draft}
-                      onChange={(e) => setDraft(ab.id, e.target.value)}
-                      placeholder={
-                        isLineArt
-                          ? "必填：如「花纹线条再清晰」「袖长与彩图一致」"
-                          : "必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
-                      }
-                      rows={2}
+          <div
+            key={`view-rail-${ab.id}`}
+            className="pointer-events-none absolute z-[13]"
+            style={{
+              left: railLeft,
+              top: railTop,
+              width: railWidth,
+            }}
+            data-no-canvas-zoom
+          >
+            <div className="pointer-events-auto flex flex-col gap-1.5 rounded-lg border border-slate-200/90 bg-white/95 p-1.5 shadow-md backdrop-blur-sm">
+              {croppingThis ? (
+                <>
+                  <RailButton
+                    label={ANN_ACTION_LABELS.cropConfirm}
+                    tone="success"
+                    disabled={locked}
+                    onClick={() => onConfirmCrop?.()}
+                  />
+                  <RailButton
+                    label={ANN_ACTION_LABELS.cropCancel}
+                    disabled={locked}
+                    onClick={() => onCancelCrop?.()}
+                  />
+                </>
+              ) : (
+                <>
+                  {croppable && (
+                    <RailButton
+                      label={ANN_ACTION_LABELS.cropImage}
+                      title={ANN_ACTION_LABELS.cropImageHint}
+                      tone="primary"
                       disabled={locked}
-                      className="mb-1 w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
+                      onClick={() => onStartCrop?.(ab.id)}
                     />
                   )}
-                  {!isExpanded && !hasDraft && (
-                    <p className="mb-1 px-0.5 text-[9px] leading-snug text-slate-500">
-                      重新生成前请先填写修正词
-                    </p>
+                  {canConvertToLineArt && (
+                    <RailButton
+                      label={busy ? "生成中…" : "生成线稿"}
+                      title="按当前彩图严格转换为线稿"
+                      tone="success"
+                      disabled={locked}
+                      onClick={() => onGenerateLineArt?.(ab.id)}
+                    />
                   )}
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={locked}
-                      onClick={handleRegenerate}
-                      title={
-                        hasDraft
-                          ? "按修正词重新生成"
-                          : "请先展开并填写修正提示词"
-                      }
-                      className={`min-w-0 flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                        hasDraft
-                          ? "bg-violet-600 text-white hover:bg-violet-700"
-                          : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
-                      }`}
-                    >
-                      {busy ? "生成中…" : hasDraft ? "重新生成" : "填写修正词"}
-                    </button>
-                    {onDeleteArtboard && (
-                      <button
-                        type="button"
+                  {showRegen && (
+                    <>
+                      {isExpanded && (
+                        <textarea
+                          ref={(el) => {
+                            textareaRefs.current[ab.id] = el;
+                          }}
+                          value={draft}
+                          onChange={(e) => setDraft(ab.id, e.target.value)}
+                          placeholder={
+                            isLineArt
+                              ? "修正：花纹更清晰…"
+                              : "修正：领口再清晰…"
+                          }
+                          rows={3}
+                          disabled={locked}
+                          className="w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                      )}
+                      <RailButton
+                        label={
+                          busy
+                            ? "生成中…"
+                            : hasDraft
+                              ? "重新生成"
+                              : "填写修正词"
+                        }
+                        title={
+                          hasDraft
+                            ? "按修正词重新生成"
+                            : "请先展开并填写修正提示词"
+                        }
+                        tone={hasDraft ? "accent" : "neutral"}
                         disabled={locked}
-                        onClick={handleDelete}
-                        className="shrink-0 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        删除
-                      </button>
-                    )}
-                    <button
-                      type="button"
+                        onClick={handleRegenerate}
+                      />
+                      <RailButton
+                        label={isExpanded ? "收起修正" : "展开修正"}
+                        disabled={locked}
+                        onClick={() => toggleExpanded(ab.id)}
+                      />
+                    </>
+                  )}
+                  {(deletable || aiDeletable) && (
+                    <RailButton
+                      label="删除"
+                      tone="danger"
                       disabled={locked}
-                      onClick={() => toggleExpanded(ab.id)}
-                      title={isExpanded ? "收起修正提示词" : "展开修正提示词"}
-                      className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
-                    >
-                      {isExpanded ? "▾" : "▸"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+                      onClick={handleDelete}
+                    />
+                  )}
+                </>
+              )}
+            </div>
           </div>
         );
       })}

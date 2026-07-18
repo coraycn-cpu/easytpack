@@ -21,7 +21,7 @@ export type ViewImagePreset = {
   promptHint: string;
 };
 
-/** 线稿不在侧栏：由各彩图画板下方「生成线稿」从对应彩图转换 */
+/** 线稿不在侧栏：由各彩图画板右侧「生成线稿」从对应彩图转换 */
 export const LINE_ART_VIEW_HINT =
   "将参考彩图转为黑白工艺单线稿：轮廓与花纹位置严格一致，可用线条表现印花图案，禁止重新上色或改款";
 
@@ -70,14 +70,14 @@ export function isViewImageKind(value: string): value is ViewImageKind {
   );
 }
 
-/** 侧栏主说明：只负责彩图；线稿走画板下方按钮 */
+/** 侧栏主说明：只负责彩图；线稿走画板右侧按钮 */
 export const VIEW_IMAGE_AI_GUIDE =
-  "生成背面 / 领口 / 袖口或自定义彩图。线稿请到彩图下方点「生成线稿」。";
+  "生成背面 / 领口 / 袖口或自定义彩图。线稿请到彩图右侧点「生成线稿」。";
 
 /** 侧栏补充：数据来源（模特/拼贴时显示） */
 export const SIDEBAR_AI_SOURCE_HINT =
-  "彩图基于主款正面；修正后可展开重生成。主款平铺重生成用原始参考图。";
+  "彩图基于主款正面；修正后可在右侧重生成。主款平铺重生成用原始参考图。";
 
 /** 自定义里写「线稿」时的引导（不再全局生图） */
 export const LINE_ART_USE_OVERLAY_HINT =
-  "线稿需在对应彩图下方点「生成线稿」，将严格按该彩图转换";
+  "线稿需在对应彩图右侧点「生成线稿」，将严格按该彩图转换";

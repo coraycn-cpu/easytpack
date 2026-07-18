@@ -45,7 +45,6 @@ import type { CanvasTool } from "@/types/canvas";
 import DraggablePanel from "@/components/studio/DraggablePanel";
 import type { PanelPosition } from "@/lib/studio/layout";
 import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
-import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
 import type { ImageCropRect } from "@/lib/canvas/crop-image";
 import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
@@ -1412,78 +1411,12 @@ export default function AnnotationCanvas({
                 const imgX = entry.fit.x + abOffset.x;
                 const imgY = entry.fit.y + abOffset.y;
                 const labelAbove = 22;
-                const nameWidth = ab.name.length * 13;
                 const imageDraggable =
                   isActive &&
                   tool === "select" &&
                   imageSelected &&
                   !isPanActive &&
                   !cropSession;
-                const deletable =
-                  Boolean(onDeleteArtboard && primaryArtboardId) &&
-                  ab.id !== primaryArtboardId &&
-                  !ab.viewImageMeta &&
-                  tool === "select" &&
-                  !interactionLocked &&
-                  !cropSession;
-                const croppable =
-                  Boolean(onCropArtboardImage && ab.imageDataUrl) &&
-                  isActive &&
-                  tool === "select" &&
-                  !interactionLocked;
-
-                const confirmDeleteArtboard = () => {
-                  if (!onDeleteArtboard || !deletable) return;
-                  if (window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) {
-                    onDeleteArtboard(ab.id);
-                  }
-                };
-
-                const startCropSession = () => {
-                  if (!croppable) return;
-                  beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
-                };
-
-                const renderLabelAction = (
-                  x: number,
-                  label: string,
-                  fill: string,
-                  bg: string,
-                  border: string,
-                  onAction: () => void,
-                ) => (
-                  <Group
-                    x={x}
-                    y={-1}
-                    listening
-                    onClick={(e) => {
-                      e.cancelBubble = true;
-                      onAction();
-                    }}
-                    onTap={(e) => {
-                      e.cancelBubble = true;
-                      onAction();
-                    }}
-                  >
-                    <Rect
-                      width={label.length * 11 + 10}
-                      height={18}
-                      fill={bg}
-                      cornerRadius={4}
-                      stroke={border}
-                      strokeWidth={1}
-                    />
-                    <Text
-                      text={label}
-                      x={5}
-                      y={3}
-                      fontSize={10}
-                      fontStyle="600"
-                      fill={fill}
-                      listening={false}
-                    />
-                  </Group>
-                );
 
                 const imageAnchor = { x: imgX, y: imgY };
                 if (isActive) {
@@ -1531,51 +1464,6 @@ export default function AnnotationCanvas({
                             fill={isActive ? "#2563eb" : "#64748b"}
                             listening={false}
                           />
-                          {(croppable || deletable) && (
-                            <Group x={nameWidth + 6} listening>
-                              {cropSession?.artboardId === ab.id ? (
-                                <>
-                                  {renderLabelAction(
-                                    0,
-                                    ANN_ACTION_LABELS.cropConfirm,
-                                    "#166534",
-                                    "#dcfce7",
-                                    "#bbf7d0",
-                                    confirmCropSession,
-                                  )}
-                                  {renderLabelAction(
-                                    58,
-                                    ANN_ACTION_LABELS.cropCancel,
-                                    "#64748b",
-                                    "#f1f5f9",
-                                    "#e2e8f0",
-                                    cancelCropSession,
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {croppable &&
-                                    renderLabelAction(
-                                      0,
-                                      ANN_ACTION_LABELS.cropImage,
-                                      "#1d4ed8",
-                                      "#eff6ff",
-                                      "#bfdbfe",
-                                      startCropSession,
-                                    )}
-                                  {deletable &&
-                                    renderLabelAction(
-                                      croppable ? 38 : 0,
-                                      "×",
-                                      "#dc2626",
-                                      "#fee2e2",
-                                      "#fecaca",
-                                      confirmDeleteArtboard,
-                                    )}
-                                </>
-                              )}
-                            </Group>
-                          )}
                         </Group>
                         <KonvaImage
                           id={isActive ? "garment_image" : undefined}
@@ -1943,11 +1831,28 @@ export default function AnnotationCanvas({
           slots={artboardSlots}
           artboards={multiArtboards}
           primaryArtboardId={primaryArtboardId}
+          activeArtboardId={activeArtboardId}
           contentOffsetX={contentOffsetX}
           contentOffsetY={contentOffsetY}
           fitScale={fitScale}
           regeneratingArtboardId={regeneratingArtboardId}
           interactionLocked={interactionLocked}
+          toolIsSelect={tool === "select"}
+          cropSession={cropSession}
+          canCropArtboard={(ab) =>
+            Boolean(onCropArtboardImage && ab.imageDataUrl)
+          }
+          onStartCrop={(artboardId) => {
+            const slot = artboardSlots.find((s) => s.id === artboardId);
+            const entry = artboardImages.get(artboardId);
+            if (!slot || !entry || !onCropArtboardImage) return;
+            if (artboardId !== activeArtboardId) {
+              onActiveArtboardChange?.(artboardId);
+            }
+            beginImageCrop(artboardId, entry.fit.width, entry.fit.height);
+          }}
+          onConfirmCrop={confirmCropSession}
+          onCancelCrop={cancelCropSession}
           onRegenerateView={onRegenerateView}
           onGenerateLineArt={onGenerateLineArt}
           onDeleteArtboard={onDeleteArtboard}

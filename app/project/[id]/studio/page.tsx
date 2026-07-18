@@ -103,6 +103,32 @@ import {
 } from "@/lib/ai/image-source-hints";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
+import {
+  canonicalArtboardNameForKind,
+  lineArtArtboardNameFromSource,
+} from "@/lib/studio/view-artboard-names";
+
+function normalizeViewArtboardNames(artboards: Artboard[]): {
+  artboards: Artboard[];
+  changed: boolean;
+} {
+  let changed = false;
+  const next = artboards.map((ab) => {
+    const kind = ab.viewImageMeta?.kind;
+    if (!kind) return ab;
+    const desired =
+      kind === "line_art"
+        ? lineArtArtboardNameFromSource(
+            artboards.find((a) => a.id === ab.viewImageMeta?.sourceArtboardId) ??
+              ab,
+          )
+        : canonicalArtboardNameForKind(kind);
+    if (ab.name === desired) return ab;
+    changed = true;
+    return { ...ab, name: desired };
+  });
+  return { artboards: next, changed };
+}
 import { createViewPlaceholderImage, getImageDimensions, matchImageToSourceSize } from "@/lib/studio/view-image-client";
 import {
   appendViewGenRecord,
@@ -179,6 +205,16 @@ export default function StudioPage() {
       setProject(p);
       setActiveArtboardId(p.canvas_data.activeArtboardId);
       setLayout(getStudioLayout(p.canvas_data.studioLayout));
+      const renamed = normalizeViewArtboardNames(p.canvas_data.artboards);
+      if (renamed.changed) {
+        const fixed = {
+          ...p,
+          canvas_data: { ...p.canvas_data, artboards: renamed.artboards },
+        };
+        projectRef.current = fixed;
+        setProject(fixed);
+        void saveProject(fixed);
+      }
       if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
         setAiTip("左侧 AI 生成多视角 · 顶部左手动右 AI · 右上角编辑工艺数据");
       }
@@ -985,8 +1021,7 @@ export default function StudioPage() {
 
       const displayName =
         params.preferredArtboardName ??
-        (data.artboardName as string | undefined) ??
-        "视角图";
+        canonicalArtboardNameForKind(resolvedKind);
 
       if (params.targetArtboardId) {
         const existing = project.canvas_data.artboards.find(
@@ -1052,7 +1087,11 @@ export default function StudioPage() {
   };
 
   const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
-    await runViewImageGeneration({ kind, customPrompt });
+    const preferredArtboardName =
+      kind === "custom"
+        ? customPrompt?.trim().slice(0, 8) || canonicalArtboardNameForKind("custom")
+        : canonicalArtboardNameForKind(kind);
+    await runViewImageGeneration({ kind, customPrompt, preferredArtboardName });
   };
 
   /** 从指定彩图画板转换线稿（新建画板） */
@@ -1069,12 +1108,11 @@ export default function StudioPage() {
       setAiMessage("当前已是线稿，请使用修正词重新生成");
       return;
     }
-    const baseName = source.name?.replace(/-?线稿$/u, "").trim() || "正面";
     await runViewImageGeneration({
       kind: "line_art",
       sourceArtboardId,
       lineArtSourceArtboardId: sourceArtboardId,
-      preferredArtboardName: `${baseName}-线稿`,
+      preferredArtboardName: lineArtArtboardNameFromSource(source),
     });
   };
 
@@ -1112,9 +1150,17 @@ export default function StudioPage() {
     const lineSourceId =
       meta.kind === "line_art" ? meta.sourceArtboardId : undefined;
     if (meta.kind === "line_art" && !lineSourceId) {
-      setAiMessage("该线稿缺少源彩图绑定，请在彩图下方重新生成线稿");
+      setAiMessage("该线稿缺少源彩图绑定，请在彩图右侧重新生成线稿");
       return;
     }
+
+    const lineSource = lineSourceId
+      ? project.canvas_data.artboards.find((a) => a.id === lineSourceId)
+      : undefined;
+    const preferredArtboardName =
+      meta.kind === "line_art"
+        ? lineArtArtboardNameFromSource(lineSource ?? target)
+        : canonicalArtboardNameForKind(meta.kind);
 
     await runViewImageGeneration({
       kind: meta.kind,
@@ -1123,7 +1169,7 @@ export default function StudioPage() {
       targetArtboardId: artboardId,
       sourceArtboardId: lineSourceId,
       lineArtSourceArtboardId: lineSourceId,
-      preferredArtboardName: target.name,
+      preferredArtboardName,
     });
   };
 
@@ -1764,7 +1810,9 @@ export default function StudioPage() {
         <div className="relative min-h-0 min-w-0 flex-1">
           <InfiniteCanvas
             viewport={layout.viewport}
-            onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
+            onViewportChange={(viewport) =>
+              saveLayout({ ...layoutRef.current, viewport })
+            }
             titleLabel={
               project.title?.trim() ||
               project.intake.suggestedTitle?.trim() ||
@@ -1812,14 +1860,23 @@ export default function StudioPage() {
               onEnhanceAll={handleEnhanceAll}
               onExplain={handleStyleReview}
               viewportScale={scale}
-              onViewportScaleChange={(nextScale) =>
-                saveLayout({ ...layout, viewport: { ...layout.viewport, scale: nextScale } })
-              }
+              onViewportScaleChange={(nextScale) => {
+                const vp = layoutRef.current.viewport;
+                saveLayout({
+                  ...layoutRef.current,
+                  viewport: { ...vp, scale: nextScale },
+                });
+              }}
               onResetViewport={() =>
-                saveLayout({ ...layout, viewport: { panX: 0, panY: 0, scale: 1 } })
+                saveLayout({
+                  ...layoutRef.current,
+                  viewport: { panX: 0, panY: 0, scale: 1 },
+                })
               }
               viewport={layout.viewport}
-              onViewportChange={(viewport) => saveLayout({ ...layout, viewport })}
+              onViewportChange={(viewport) =>
+                saveLayout({ ...layoutRef.current, viewport })
+              }
               processItems={project.process_items}
               selectedAnnIds={selectedAnnIds}
               onSelectedAnnIdsChange={handleSelectedAnnIdsChange}
