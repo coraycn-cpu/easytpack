@@ -28,7 +28,7 @@ export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [
     label: "线稿图",
     icon: "✎",
     promptHint:
-      "同一款式的干净线稿平铺图，仅保留轮廓与结构线，版型与正面完全一致，无填色无阴影，工艺单线稿风格",
+      "同一款式的黑白工艺单线稿平铺：仅黑色轮廓与结构线，严禁彩色/填色/阴影/面料质感/照片写实，版型袖长与正面完全一致",
   },
   {
     kind: "back",

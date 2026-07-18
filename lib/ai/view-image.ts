@@ -1,5 +1,3 @@
-import { generateObject } from "ai";
-import { z } from "zod";
 import { getModel } from "@/lib/ai/assist";
 import {
   getImageProvidersConfig,
@@ -7,36 +5,32 @@ import {
   type SynthesizeViewImageResult,
 } from "@/lib/ai/image-providers";
 import {
+  artboardNameForKind,
+  buildRecraftPromptForKind,
+  extractGarmentSpec,
+} from "@/lib/ai/image-providers/recraft-prompt";
+import {
   getViewPresetHint,
   FLAT_FRONT_SET_VIEW_HINT,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
-import {
-  VIEW_IMAGE_FIDELITY_RULES,
-  appendCorrectionToPrompt,
-} from "@/lib/studio/view-image-constraints";
-import { buildGarmentScopeContext, isSetTarget } from "@/lib/ai/garment-scope";
+import { appendCorrectionToPrompt } from "@/lib/studio/view-image-constraints";
+import { isSetTarget } from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
 
 export type { SynthesizeViewImageResult } from "@/lib/ai/image-providers";
 export type { ViewImageKind } from "@/lib/studio/view-types";
 export { VIEW_IMAGE_PRESETS } from "@/lib/studio/view-types";
 
-const ViewPromptSchema = z.object({
-  imagePrompt: z
-    .string()
-    .describe(
-      "英文 image prompt，约 60–100 词：必须点名袖长、领口、裙/衣长、花型方向与主色",
-    ),
-  artboardName: z.string().describe("画板显示名称，中文，2-8字"),
-});
-
-function buildUserContent(text: string, imageDataUrl?: string) {
-  if (!imageDataUrl) return text;
-  return [
-    { type: "text" as const, text },
-    { type: "image" as const, image: imageDataUrl },
-  ];
+function viewHintForKind(
+  kind: ViewImageKind,
+  customPrompt?: string,
+  intake?: GarmentScopeInput,
+): string {
+  if (kind === "flat_front" && intake && isSetTarget(intake)) {
+    return FLAT_FRONT_SET_VIEW_HINT;
+  }
+  return getViewPresetHint(kind, customPrompt);
 }
 
 export async function generateViewImagePrompt(input: {
@@ -50,72 +44,71 @@ export async function generateViewImagePrompt(input: {
   sourceHeight?: number;
   intake?: GarmentScopeInput;
 }) {
-  const viewDesc =
-    input.kind === "flat_front" && input.intake && isSetTarget(input.intake)
-      ? FLAT_FRONT_SET_VIEW_HINT
-      : getViewPresetHint(input.kind, input.customPrompt);
-  const scope = input.intake
-    ? buildGarmentScopeContext(input.intake)
-    : buildGarmentScopeContext({
-        detectedCategory: input.category,
-        description: input.description ?? "",
-      });
-  const modelNote =
-    input.intake?.photoType === "model"
-      ? isSetTarget(input.intake)
-        ? "参考图为模特穿着图：提取整套上下装（或多件套装）一起生成平铺，不得只保留上装或下装，不得混入其他可见服装。"
-        : "参考图为模特穿着图：从穿着状态提取目标单款生成平铺/线稿，不得改变目标款本身，不得混入其他可见服装。"
-      : "";
-  const sizeNote =
-    input.sourceWidth && input.sourceHeight
-      ? `参考主图像素尺寸：${input.sourceWidth}×${input.sourceHeight}，输出须同比例同尺度。`
-      : "输出须与参考主图同比例、同平铺尺度。";
-  const correctionNote = input.correctionPrompt?.trim()
-    ? `\n用户修正要求（生成 prompt 时必须体现）：${input.correctionPrompt.trim()}`
-    : "";
+  const viewDesc = viewHintForKind(input.kind, input.customPrompt, input.intake);
 
-  const { object } = await generateObject({
-    model: getModel(),
-    schema: ViewPromptSchema,
-    schemaName: "ViewImagePrompt",
-    instructions: `你是服装款式图助手。根据正面款式参考图，为指定视角生成图像生成 prompt 与画板名称。
+  // 有参考图：结构化看图 → 按 kind 组装 Recraft prompt（避免线稿被包成产品摄影）
+  if (input.sourceImageUrl) {
+    const spec = await extractGarmentSpec({
+      sourceImageUrl: input.sourceImageUrl,
+      kind: input.kind,
+      category: input.category ?? input.intake?.detectedCategory,
+      description: input.description ?? input.intake?.description,
+      correctionPrompt: input.correctionPrompt,
+    });
 
-${scope}
-${modelNote}
+    const imagePrompt = buildRecraftPromptForKind({
+      kind: input.kind,
+      spec,
+      viewHint: viewDesc,
+      correctionPrompt: input.correctionPrompt,
+    });
 
-${VIEW_IMAGE_FIDELITY_RULES}
+    return {
+      imagePrompt,
+      artboardName: artboardNameForKind(input.kind, spec),
+      garmentSpecJson: JSON.stringify(spec),
+    };
+  }
 
-prompt 要求：
-- 英文，约 60–100 词，描述视角与必须保留的款式细节
-- 必须写明：袖长（short / cap / 3/4 / long）、领口、衣/裙长、花型或条纹方向与主色
-- 明确写出与参考图一致的版型、面料、颜色、工艺，禁止改写印花
-- ${sizeNote}
-- artboardName 用简短中文（2-8 字）`,
-    messages: [
-      {
-        role: "user",
-        content: buildUserContent(
-          `品类：${input.category ?? "服装"}
-描述：${input.description ?? "无"}
-目标视角：${viewDesc}
-${sizeNote}${correctionNote}`,
-          input.sourceImageUrl,
-        ),
-      },
-    ],
+  // 无参考图：仅用视角说明 + kind 模板
+  const imagePrompt = buildRecraftPromptForKind({
+    kind: input.kind,
+    viewHint: [
+      viewDesc,
+      input.category ? `Category: ${input.category}` : "",
+      input.description ? `Description: ${input.description}` : "",
+    ]
+      .filter(Boolean)
+      .join(". "),
+    correctionPrompt: input.correctionPrompt,
   });
 
-  return object;
+  return {
+    imagePrompt,
+    artboardName: artboardNameForKind(input.kind),
+    garmentSpecJson: undefined as string | undefined,
+  };
 }
 
 export async function synthesizeViewImage(
   prompt: string,
-  options?: { sourceImageUrl?: string; correctionPrompt?: string },
+  options?: {
+    sourceImageUrl?: string;
+    correctionPrompt?: string;
+    kind?: ViewImageKind;
+    garmentSpecJson?: string;
+  },
 ): Promise<SynthesizeViewImageResult> {
-  const fullPrompt = appendCorrectionToPrompt(prompt, options?.correctionPrompt);
+  // 已带 garmentSpec 时 prompt 已含修正词，勿再 append 造成重复
+  const fullPrompt = options?.garmentSpecJson
+    ? prompt
+    : appendCorrectionToPrompt(prompt, options?.correctionPrompt);
   return synthesizeViewImageWithProviders({
     prompt: fullPrompt,
     sourceImageUrl: options?.sourceImageUrl,
+    kind: options?.kind,
+    correctionPrompt: options?.correctionPrompt,
+    garmentSpecJson: options?.garmentSpecJson,
   });
 }
 

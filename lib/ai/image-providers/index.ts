@@ -1,6 +1,7 @@
 import { synthesizeViaDashscope, isDashscopeImageConfigured } from "./dashscope";
 import {
   getGatewayImageModel,
+  getGatewayLineArtModel,
   getGatewayReferenceImageModel,
   isGatewayImageConfigured,
   isGatewayMultimodalImage,
@@ -49,8 +50,8 @@ function parseFallbackOrder(hasReference?: boolean): ImageProviderId[] {
       );
     if (ids.length > 0) return ids;
   }
-  // Gateway Recraft 优先；失败再硅基流动
-  return ["gateway", "siliconflow", "dashscope"];
+  // 默认仅 Gateway（Recraft）；硅基流动需显式写入 AI_IMAGE_FALLBACK
+  return ["gateway"];
 }
 
 function isProviderConfigured(id: ImageProviderId): boolean {
@@ -108,6 +109,7 @@ export function getImageProvidersConfig() {
       gateway: {
         configured: isGatewayImageConfigured(),
         model: getGatewayImageModel(),
+        lineArtModel: getGatewayLineArtModel(),
         referenceModel: getGatewayReferenceImageModel(),
         multimodalImage: isGatewayMultimodalImage(),
       },
