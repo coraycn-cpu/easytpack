@@ -23,7 +23,11 @@ export type { ViewImageKind } from "@/lib/studio/view-types";
 export { VIEW_IMAGE_PRESETS } from "@/lib/studio/view-types";
 
 const ViewPromptSchema = z.object({
-  imagePrompt: z.string().describe("用于图像生成的英文 prompt，50词以内"),
+  imagePrompt: z
+    .string()
+    .describe(
+      "英文 image prompt，约 60–100 词：必须点名袖长、领口、裙/衣长、花型方向与主色",
+    ),
   artboardName: z.string().describe("画板显示名称，中文，2-8字"),
 });
 
@@ -82,8 +86,9 @@ ${modelNote}
 ${VIEW_IMAGE_FIDELITY_RULES}
 
 prompt 要求：
-- 英文，50 词以内，描述视角与必须保留的款式细节
-- 明确写出与参考图一致的版型、面料、颜色、工艺
+- 英文，约 60–100 词，描述视角与必须保留的款式细节
+- 必须写明：袖长（short / cap / 3/4 / long）、领口、衣/裙长、花型或条纹方向与主色
+- 明确写出与参考图一致的版型、面料、颜色、工艺，禁止改写印花
 - ${sizeNote}
 - artboardName 用简短中文（2-8 字）`,
     messages: [

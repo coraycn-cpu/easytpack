@@ -1,6 +1,7 @@
 import { synthesizeViaDashscope, isDashscopeImageConfigured } from "./dashscope";
 import {
   getGatewayImageModel,
+  getGatewayReferenceImageModel,
   isGatewayImageConfigured,
   isGatewayMultimodalImage,
   synthesizeViaGateway,
@@ -31,8 +32,13 @@ function resolveImageProviderMode(): ImageProviderMode {
   return "auto";
 }
 
-function parseFallbackOrder(): ImageProviderId[] {
-  const raw = process.env.AI_IMAGE_FALLBACK?.trim();
+function parseFallbackOrder(hasReference?: boolean): ImageProviderId[] {
+  const raw = (
+    hasReference
+      ? process.env.AI_IMAGE_FALLBACK_WITH_REF?.trim() ||
+        process.env.AI_IMAGE_FALLBACK?.trim()
+      : process.env.AI_IMAGE_FALLBACK?.trim()
+  );
   if (raw) {
     const ids = raw
       .split(",")
@@ -43,7 +49,7 @@ function parseFallbackOrder(): ImageProviderId[] {
       );
     if (ids.length > 0) return ids;
   }
-  // Gateway（Recraft 等）优先；硅基流动作备用
+  // Gateway Recraft 优先；失败再硅基流动
   return ["gateway", "siliconflow", "dashscope"];
 }
 
@@ -63,8 +69,9 @@ export async function synthesizeViewImageWithProviders(
   options: SynthesizeViewImageOptions,
 ): Promise<SynthesizeViewImageResult> {
   const mode = resolveImageProviderMode();
+  const hasReference = Boolean(options.sourceImageUrl);
   const order: ImageProviderId[] =
-    mode === "auto" ? parseFallbackOrder() : [mode];
+    mode === "auto" ? parseFallbackOrder(hasReference) : [mode];
 
   let lastResult: SynthesizeViewImageResult = {
     imageDataUrl: null,
@@ -91,7 +98,8 @@ export function getImageProvidersConfig() {
   const mode = resolveImageProviderMode();
   return {
     mode,
-    fallbackOrder: parseFallbackOrder(),
+    fallbackOrder: parseFallbackOrder(false),
+    fallbackOrderWithRef: parseFallbackOrder(true),
     providers: {
       siliconflow: {
         configured: isSiliconflowImageConfigured(),
@@ -100,6 +108,7 @@ export function getImageProvidersConfig() {
       gateway: {
         configured: isGatewayImageConfigured(),
         model: getGatewayImageModel(),
+        referenceModel: getGatewayReferenceImageModel(),
         multimodalImage: isGatewayMultimodalImage(),
       },
       dashscope: {

@@ -26,7 +26,7 @@ export function getModel(): string {
 }
 
 export function getImageModel(): string {
-  // Vercel AI Gateway 内置生图；utility 适合平铺/版房参考图；也可用 recraft/recraft-v4.1
+  // Gateway 生图统一走 Recraft 等文生图；有参考图时由 gateway 先看图再文生图
   return process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility";
 }
 

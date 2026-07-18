@@ -17,7 +17,12 @@ type ViewImageStatus = {
   fallbackOrder?: string[];
   providers?: {
     siliconflow?: { configured: boolean; model: string };
-    gateway?: { configured: boolean; model: string; multimodalImage: boolean };
+    gateway?: {
+      configured: boolean;
+      model: string;
+      referenceModel?: string;
+      multimodalImage: boolean;
+    };
     dashscope?: { configured: boolean; model: string };
   };
   textModel?: string;
@@ -331,10 +336,10 @@ export default function AiDebugPage() {
               )}
               {viewStatus.providers?.gateway?.model && (
                 <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700">
-                  GW: {viewStatus.providers.gateway.model}
+                  GW 生图: {viewStatus.providers.gateway.model}
                   {viewStatus.providers.gateway.multimodalImage
-                    ? " (多模态)"
-                    : ""}
+                    ? " (多模态出图)"
+                    : " (看图→文生图)"}
                 </span>
               )}
             </div>

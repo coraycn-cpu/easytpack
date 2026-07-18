@@ -22,7 +22,7 @@ function isQwenImageEdit(model: string): boolean {
 
 function buildFashionPrompt(prompt: string, hasReference: boolean): string {
   if (hasReference) {
-    return `Professional fashion tech pack flat lay photo. ${prompt}. CRITICAL fidelity: identical garment silhouette, pattern, fabric texture, color, and construction details as the reference image — zero deviation. Same scale, proportions and framing as reference. Clean white or neutral background, no model, studio lighting, high detail.`;
+    return `Professional fashion tech pack flat lay photo. ${prompt}. CRITICAL fidelity: identical garment silhouette, sleeve length, hem length, neckline, pattern/print motif and orientation, fabric texture, color, and construction details as the reference image — zero deviation. Same scale, proportions and framing as reference. Clean white or neutral background, no model, studio lighting, high detail.`;
   }
   return `Professional fashion tech pack flat lay photo. ${prompt}. Clean white or neutral background, no model, studio lighting, high detail.`;
 }
