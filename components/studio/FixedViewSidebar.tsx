@@ -5,6 +5,7 @@ import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
 import { VIEW_IMAGE_PRESETS, VIEW_IMAGE_AI_GUIDE, SIDEBAR_AI_SOURCE_HINT, type ViewImageKind } from "@/lib/studio/view-types";
+import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind";
 import type { PhotoType } from "@/types/project";
 import type { WorkflowStatus } from "@/types/project";
 
@@ -56,7 +57,9 @@ export default function FixedViewSidebar({
   const handleCustomGenerate = () => {
     const prompt = customPrompt.trim();
     if (!prompt) return;
-    onGenerateView("custom", prompt);
+    const mapped = resolveViewKindFromCustomPrompt(prompt);
+    // 「生成正面平铺图」等映射到正式 kind，避免 custom 走偏
+    onGenerateView(mapped ?? "custom", prompt);
   };
 
   return (
@@ -113,7 +116,7 @@ export default function FixedViewSidebar({
             <textarea
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="如：45°斜侧、口袋细节、内里"
+              placeholder="如：45°斜侧、口袋细节；也可写「正面平铺」"
               rows={2}
               disabled={viewGenerating}
               className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"

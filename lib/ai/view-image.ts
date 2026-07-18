@@ -14,6 +14,7 @@ import {
   FLAT_FRONT_SET_VIEW_HINT,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
+import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind";
 import { appendCorrectionToPrompt } from "@/lib/studio/view-image-constraints";
 import { isSetTarget } from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
@@ -44,35 +45,41 @@ export async function generateViewImagePrompt(input: {
   sourceHeight?: number;
   intake?: GarmentScopeInput;
 }) {
-  const viewDesc = viewHintForKind(input.kind, input.customPrompt, input.intake);
+  // 自定义里写「正面平铺/线稿」等 → 映射到正式 kind
+  let kind = input.kind;
+  if (kind === "custom" && input.customPrompt) {
+    const mapped = resolveViewKindFromCustomPrompt(input.customPrompt);
+    if (mapped) kind = mapped;
+  }
 
-  // 有参考图：结构化看图 → 按 kind 组装 Recraft prompt（避免线稿被包成产品摄影）
+  const viewDesc = viewHintForKind(kind, input.customPrompt, input.intake);
+
   if (input.sourceImageUrl) {
     const spec = await extractGarmentSpec({
       sourceImageUrl: input.sourceImageUrl,
-      kind: input.kind,
+      kind,
       category: input.category ?? input.intake?.detectedCategory,
       description: input.description ?? input.intake?.description,
       correctionPrompt: input.correctionPrompt,
     });
 
     const imagePrompt = buildRecraftPromptForKind({
-      kind: input.kind,
+      kind,
       spec,
       viewHint: viewDesc,
       correctionPrompt: input.correctionPrompt,
     });
 
     return {
+      kind,
       imagePrompt,
-      artboardName: artboardNameForKind(input.kind, spec),
+      artboardName: artboardNameForKind(kind, spec),
       garmentSpecJson: JSON.stringify(spec),
     };
   }
 
-  // 无参考图：仅用视角说明 + kind 模板
   const imagePrompt = buildRecraftPromptForKind({
-    kind: input.kind,
+    kind,
     viewHint: [
       viewDesc,
       input.category ? `Category: ${input.category}` : "",
@@ -84,8 +91,9 @@ export async function generateViewImagePrompt(input: {
   });
 
   return {
+    kind,
     imagePrompt,
-    artboardName: artboardNameForKind(input.kind),
+    artboardName: artboardNameForKind(kind),
     garmentSpecJson: undefined as string | undefined,
   };
 }

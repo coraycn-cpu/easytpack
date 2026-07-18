@@ -86,41 +86,58 @@ async function callGenerateImage(input: {
   prompt: string;
   kind: ViewImageKind;
   sourceImageUrl?: string;
+  useRecraftStyle?: boolean;
 }): Promise<SynthesizeViewImageResult> {
-  const { model, prompt, kind, sourceImageUrl } = input;
+  const { model, prompt, kind, sourceImageUrl, useRecraftStyle = true } = input;
 
   const supportsLineArtStyle =
-    kind === "line_art" && /recraft-v3|vector/i.test(model);
+    useRecraftStyle &&
+    kind === "line_art" &&
+    /recraft-v3|vector/i.test(model);
 
-  // Flux Kontext / Seedream 等：用 prompt.images 吃参考图（模特→平铺保真关键）
-  // 线稿 + Kontext：也可带图做「转线稿」；Recraft V3 则纯文 + Line art style
+  // Kontext / Seedream / Imagen：一律可带参考图（线稿=转线稿，平铺=去模特）
   const usePromptImages =
-    Boolean(sourceImageUrl) &&
-    supportsPromptImages(model) &&
-    (kind !== "line_art" || /flux-kontext/i.test(model));
+    Boolean(sourceImageUrl) && supportsPromptImages(model);
 
-  const result = await generateImage({
-    model,
-    prompt: usePromptImages
-      ? { text: prompt, images: [sourceImageUrl as string] }
-      : prompt,
-    aspectRatio: "3:4",
-    ...(supportsLineArtStyle
-      ? { providerOptions: { recraft: { style: "Line art" } } }
-      : {}),
-  });
+  try {
+    const result = await generateImage({
+      model,
+      prompt: usePromptImages
+        ? { text: prompt, images: [sourceImageUrl as string] }
+        : prompt,
+      aspectRatio: "3:4",
+      ...(supportsLineArtStyle
+        ? { providerOptions: { recraft: { style: "Line art" } } }
+        : {}),
+    });
 
-  const img = result.images?.[0];
-  const imageDataUrl = img ? imageResultToDataUrl(img) : null;
-  if (imageDataUrl) {
-    return { imageDataUrl, provider: "gateway", model };
+    const img = result.images?.[0];
+    const imageDataUrl = img ? imageResultToDataUrl(img) : null;
+    if (imageDataUrl) {
+      return { imageDataUrl, provider: "gateway", model };
+    }
+    return {
+      imageDataUrl: null,
+      provider: "gateway",
+      model,
+      error: "生图模型未返回图片",
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Gateway 生图失败";
+    // Recraft Line art style 在 Gateway 上可能不被透传 → 去掉 style 重试
+    if (supportsLineArtStyle) {
+      return callGenerateImage({
+        ...input,
+        useRecraftStyle: false,
+      });
+    }
+    return {
+      imageDataUrl: null,
+      provider: "gateway",
+      model,
+      error: message,
+    };
   }
-  return {
-    imageDataUrl: null,
-    provider: "gateway",
-    model,
-    error: "生图模型未返回图片",
-  };
 }
 
 async function callGenerateImageWithOptionalRef(input: {
@@ -254,10 +271,11 @@ export async function synthesizeViaGateway(
           sourceImageUrl,
         });
         if (result.imageDataUrl) return result;
-        lastError = result.error ?? lastError;
+        lastError = `[${model}] ${result.error ?? "未返回图片"}`;
       } catch (e) {
-        lastError = e instanceof Error ? e.message : "Gateway 生图失败";
-        // 当前候选模型不可用则试下一个（如 vector 未开通）
+        lastError =
+          `[${model}] ` +
+          (e instanceof Error ? e.message : "Gateway 生图失败");
       }
     }
 

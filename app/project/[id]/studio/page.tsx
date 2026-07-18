@@ -947,7 +947,7 @@ export default function StudioPage() {
       );
 
       const viewMeta = {
-        kind: params.kind,
+        kind: (data.kind as ViewImageKind | undefined) ?? params.kind,
         customPrompt: params.customPrompt,
         lastImagePrompt: data.imagePrompt as string | undefined,
         correctionPrompt: params.correctionPrompt,

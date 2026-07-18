@@ -142,7 +142,21 @@ function garmentCoreLineArt(spec: GarmentSpec): string {
   ].join("; ");
 }
 
-/** 按视角生成 Recraft 文生图 prompt（线稿不得包成产品摄影） */
+function removeModelDirective(kind: ViewImageKind): string {
+  if (kind === "line_art") {
+    return "IMAGE EDIT: Convert the garment to monochrome technical LINE ART. Completely remove any human model, face, hair, hands and body. Black ink outlines on pure white only — no color, no photo realism.";
+  }
+  if (kind === "collar" || kind === "cuff") {
+    return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model. Neutral background, product close-up for tech pack.";
+  }
+  if (kind === "back") {
+    return "IMAGE EDIT: Transform into a BACK-VIEW garment flat lay / ghost mannequin. Completely remove the human model. Keep the same garment identity.";
+  }
+  // flat_front + custom-as-flat
+  return "IMAGE EDIT: Transform into a FRONT garment FLAT LAY / ghost mannequin product photo. Completely remove the human model, face, hair, arms and legs. Show ONLY the clothing on a clean white or neutral studio background — not a fashion model shoot.";
+}
+
+/** 按视角生成生图 prompt（适配 Kontext 参考图编辑 + Recraft 文生图） */
 export function buildRecraftPromptForKind(input: {
   kind: ViewImageKind;
   spec?: GarmentSpec | null;
@@ -160,6 +174,7 @@ export function buildRecraftPromptForKind(input: {
   const locks = spec
     ? sleeveAndPrintLocks(spec)
     : "Preserve exact sleeve length and print orientation from the brief.";
+  const removeModel = removeModelDirective(kind);
 
   if (kind === "line_art") {
     const structure = spec ? garmentCoreLineArt(spec) : viewHint;
@@ -167,49 +182,65 @@ export function buildRecraftPromptForKind(input: {
       ? SLEEVE_LOCK[spec.sleeveLength]
       : "match sleeve length from the brief";
     return [
-      "Monochrome technical fashion flat sketch.",
+      removeModel,
+      "Monochrome technical fashion flat sketch / CAD line drawing.",
       "BLACK pen outlines on WHITE background only.",
-      "Absolute rules: zero color, zero fill, zero gradient, zero fabric texture, zero photorealism, zero fashion photo.",
-      "Output must look like a tech-pack CAD line drawing / croquis outline, not a product photo.",
+      "Absolute rules: zero color, zero fill, zero gradient, zero fabric texture, zero photorealism.",
       "Garment structure:",
       structure + ".",
       sleeveLock + ".",
-      "Indicate seams, neckline, sleeve hem, waist tie and hem with thin clean lines.",
-      `Task: technical line art of the same garment.${extra}${fix}`,
+      "Indicate seams, neckline, sleeve hem, waist and hem with thin clean lines.",
+      `Task: ${viewHint}.${extra}${fix}`,
     ].join(" ");
   }
 
   if (kind === "collar" || kind === "cuff") {
     return [
+      removeModel,
       "Close-up product detail photo for fashion tech pack.",
       `Focus: ${viewHint}.`,
       "Garment identity:",
       core + ".",
       locks,
-      "Neutral background, sharp construction detail, no model, no watermark.",
+      "Neutral background, sharp construction detail, no watermark.",
       `${extra}${fix}`,
     ].join(" ");
   }
 
   if (kind === "back") {
     return [
+      removeModel,
       "Professional fashion tech-pack BACK VIEW flat lay product photo.",
       "Same garment as front:",
       core + ".",
       locks,
-      "Show back construction clearly. White/neutral studio background, no model, no watermark.",
+      "Show back construction clearly. White/neutral studio background, no watermark.",
       `Task: ${viewHint}.${extra}${fix}`,
     ].join(" ");
   }
 
-  // flat_front + custom
+  if (kind === "custom") {
+    return [
+      "Professional fashion tech-pack product image.",
+      "Completely remove any human model if present.",
+      "Garment identity:",
+      core + ".",
+      locks,
+      `Custom view request: ${viewHint}.`,
+      "Clean studio background, no watermark, no text.",
+      `${extra}${fix}`,
+    ].join(" ");
+  }
+
+  // flat_front
   return [
-    "Professional fashion tech-pack FRONT flat lay product photo.",
+    removeModel,
+    "Professional fashion tech-pack FRONT flat lay / ghost mannequin product photo.",
     "Exact same garment:",
     core + ".",
     locks,
     "IMPORTANT: if sleeves are short/cap, do NOT lengthen them toward the elbow.",
-    "White/neutral studio background, no model, no mannequin, no watermark, no text.",
+    "White/neutral studio background, no watermark, no text.",
     `Task: ${viewHint}.${extra}${fix}`,
   ].join(" ");
 }
@@ -224,17 +255,17 @@ export function artboardNameForKind(
 }
 
 /**
- * 线稿：优先 Recraft V3（支持 Line art style，且在 Gateway 可用列表中）。
- * Utility 栅格会出彩图，不适合线稿。
+ * 线稿：优先 Flux Kontext（带参考图转线稿，成功率更高）；
+ * Recraft V3 作备选（Line art style，纯文生图）。
  */
 export function lineArtModelCandidates(): string[] {
   const preferred = process.env.AI_MODEL_GATEWAY_IMAGE_LINE_ART?.trim();
   const candidates = [
     preferred,
-    "recraft/recraft-v3",
-    "recraft/recraft-v3-vector",
     "bfl/flux-kontext-pro",
-    "recraft/recraft-v4.1-utility-vector",
+    "recraft/recraft-v3",
+    "bytedance/seedream-4.5",
+    "xai/grok-imagine-image",
   ].filter((m): m is string => Boolean(m));
   return [...new Set(candidates)];
 }

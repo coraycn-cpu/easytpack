@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "无效的视角类型" }, { status: 400 });
     }
 
-    const { imagePrompt, artboardName, garmentSpecJson } =
+    const { imagePrompt, artboardName, garmentSpecJson, kind: resolvedKind } =
       await generateViewImagePrompt({
         kind,
         customPrompt: body.customPrompt,
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const synthesis = await synthesizeViewImage(imagePrompt, {
       sourceImageUrl: body.sourceImageUrl,
       correctionPrompt: body.correctionPrompt,
-      kind,
+      kind: resolvedKind ?? kind,
       garmentSpecJson,
     });
 
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       imageDataUrl: synthesis.imageDataUrl,
       artboardName,
       imagePrompt,
+      kind: resolvedKind ?? kind,
       needsClientPlaceholder: !synthesis.imageDataUrl,
       provider: synthesis.provider,
       model: synthesis.model,
