@@ -48,7 +48,7 @@ import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
 import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import { isAnnotationLocked } from "@/lib/canvas/annotation-helpers";
 import type { ImageCropRect } from "@/lib/canvas/crop-image";
-import { isPasteArtboard, readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
+import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
 import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
 
 type Snapshot = { annotations: Annotation[] };
@@ -539,6 +539,34 @@ export default function AnnotationCanvas({
     }
   };
 
+  /** 进入剪裁会话（主图 / AI 图 / 贴图均可）；取消后 imageSelected 便于拖动 */
+  const beginImageCrop = useCallback(
+    (artboardId: string, width: number, height: number) => {
+      if (!onCropArtboardImage || interactionLocked || width <= 0 || height <= 0) {
+        selectImage();
+        return;
+      }
+      setSelectedAnnIds([]);
+      setImageSelected(false);
+      setCropSession({
+        artboardId,
+        x: 0,
+        y: 0,
+        width,
+        height,
+      });
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+      }
+    },
+    [onCropArtboardImage, interactionLocked],
+  );
+
+  const cancelCropSession = useCallback(() => {
+    setCropSession(null);
+    setImageSelected(true);
+  }, []);
+
   const handleAnnClick = (
     e: Konva.KonvaEventObject<MouseEvent | TouchEvent>,
     id: string,
@@ -565,6 +593,7 @@ export default function AnnotationCanvas({
       if (isEmptyTarget(e)) {
         setSelectedAnnIds([]);
         setImageSelected(false);
+        setCropSession(null);
       }
       return;
     }
@@ -825,6 +854,7 @@ export default function AnnotationCanvas({
       height: cropSession.height,
     });
     setCropSession(null);
+    setImageSelected(false);
   }, [cropSession, onCropArtboardImage]);
 
   useEffect(() => {
@@ -842,7 +872,7 @@ export default function AnnotationCanvas({
       if (cropSession) {
         if (e.key === "Escape") {
           e.preventDefault();
-          setCropSession(null);
+          cancelCropSession();
         }
         if (e.key === "Enter") {
           e.preventDefault();
@@ -860,7 +890,7 @@ export default function AnnotationCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelected, tryDeleteActiveArtboard, undo, redo, cropSession, confirmCropSession]);
+  }, [deleteSelected, tryDeleteActiveArtboard, undo, redo, cropSession, confirmCropSession, cancelCropSession]);
 
   useEffect(() => {
     if (!onPasteImage) return;
@@ -1398,7 +1428,6 @@ export default function AnnotationCanvas({
                   !cropSession;
                 const croppable =
                   Boolean(onCropArtboardImage && ab.imageDataUrl) &&
-                  isPasteArtboard(ab.name) &&
                   isActive &&
                   tool === "select" &&
                   !interactionLocked;
@@ -1411,16 +1440,8 @@ export default function AnnotationCanvas({
                 };
 
                 const startCropSession = () => {
-                  if (!croppable || cropSession) return;
-                  setCropSession({
-                    artboardId: ab.id,
-                    x: 0,
-                    y: 0,
-                    width: entry.fit.width,
-                    height: entry.fit.height,
-                  });
-                  setImageSelected(false);
-                  setSelectedAnnIds([]);
+                  if (!croppable) return;
+                  beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
                 };
 
                 const renderLabelAction = (
@@ -1528,7 +1549,7 @@ export default function AnnotationCanvas({
                                     "#64748b",
                                     "#f1f5f9",
                                     "#e2e8f0",
-                                    () => setCropSession(null),
+                                    cancelCropSession,
                                   )}
                                 </>
                               ) : (
@@ -1573,18 +1594,24 @@ export default function AnnotationCanvas({
                             e.cancelBubble = true;
                             if (!isActive) {
                               onActiveArtboardChange?.(ab.id);
-                              return;
                             }
-                            selectImage();
+                            if (onCropArtboardImage && ab.imageDataUrl && !interactionLocked) {
+                              beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
+                            } else {
+                              selectImage();
+                            }
                           }}
                           onTap={(e) => {
                             e.cancelBubble = true;
+                            if (tool !== "select" || cropSession) return;
                             if (!isActive) {
                               onActiveArtboardChange?.(ab.id);
-                              return;
                             }
-                            if (tool !== "select" || cropSession) return;
-                            selectImage();
+                            if (onCropArtboardImage && ab.imageDataUrl && !interactionLocked) {
+                              beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
+                            } else {
+                              selectImage();
+                            }
                           }}
                         />
                         {cropSession?.artboardId === ab.id && (
@@ -1749,14 +1776,40 @@ export default function AnnotationCanvas({
                     stroke={imageSelected ? "#2563eb" : undefined}
                     strokeWidth={imageSelected ? 2 : 0}
                     onClick={(e) => {
-                      if (tool !== "select") return;
+                      if (tool !== "select" || cropSession) return;
                       e.cancelBubble = true;
-                      selectImage();
+                      if (
+                        onCropArtboardImage &&
+                        activeArtboardId &&
+                        imageUrl &&
+                        !interactionLocked
+                      ) {
+                        beginImageCrop(
+                          activeArtboardId,
+                          imageFit.width,
+                          imageFit.height,
+                        );
+                      } else {
+                        selectImage();
+                      }
                     }}
                     onTap={(e) => {
-                      if (tool !== "select") return;
+                      if (tool !== "select" || cropSession) return;
                       e.cancelBubble = true;
-                      selectImage();
+                      if (
+                        onCropArtboardImage &&
+                        activeArtboardId &&
+                        imageUrl &&
+                        !interactionLocked
+                      ) {
+                        beginImageCrop(
+                          activeArtboardId,
+                          imageFit.width,
+                          imageFit.height,
+                        );
+                      } else {
+                        selectImage();
+                      }
                     }}
                   />
                 </Group>
