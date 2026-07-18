@@ -166,19 +166,19 @@ function removeModelDirective(
     return "IMAGE EDIT: Convert THIS exact reference image into a technical fashion LINE DRAWING. Trace the same silhouette, sleeve length, seams and print/pattern placement with black lines. Keep motif outlines where prints exist. Completely remove any human model. No recoloring, no restyling, no inventing new patterns.";
   }
   if (kind === "collar" || kind === "cuff") {
-    return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model. Neutral background, product close-up for tech pack.";
+    return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model, mannequin, and dress form. Neutral background, product close-up for tech pack.";
   }
   if (kind === "back") {
-    return "IMAGE EDIT: Transform into a BACK-VIEW garment flat lay / ghost mannequin. Completely remove the human model. Keep the same garment identity.";
+    return "IMAGE EDIT: Transform into a BACK-VIEW true FLAT LAY — garment laid flat on a surface. Completely remove the human model AND any ghost mannequin, invisible mannequin, dress form, or white torso. Keep the same garment identity.";
   }
   if (kind === "custom") {
-    return "IMAGE EDIT: Produce a fashion tech-pack product image of the requested view. Completely remove any human model, face, hair, arms and body. Keep garment identity; clean studio background.";
+    return "IMAGE EDIT: Produce a fashion tech-pack product image of the requested view. Completely remove any human model, face, hair, arms, body, ghost mannequin, and dress form. Keep garment identity; clean studio background.";
   }
-  // flat_front
+  // flat_front — 真平铺，禁止幽灵人台/假模特
   const scope = scopeNote?.trim()
     ? ` ${scopeNote.trim()}`
     : " Show ONLY the target garment.";
-  return `IMAGE EDIT: Transform into a FRONT garment FLAT LAY / ghost mannequin product photo. Completely remove the human model, face, hair, arms and legs.${scope} Clean white or neutral studio background — not a fashion model shoot, not a full coordinated outfit unless the target is explicitly a set.`;
+  return `IMAGE EDIT: Transform into a FRONT true FLAT LAY product photo — the garment spread flat on a white/neutral surface (top-down or slight angle). Completely remove the human model, face, hair, arms, legs, AND any ghost mannequin, invisible mannequin, dress form, white torso, or 3D body form.${scope} NOT a mannequin shoot. Clean white or neutral studio background — not a fashion model shoot, not a full coordinated outfit unless the target is explicitly a set.`;
 }
 
 /** 按视角生成生图 prompt（适配 Kontext 参考图编辑 + Recraft 文生图） */
@@ -242,7 +242,7 @@ export function buildRecraftPromptForKind(input: {
     return [
       scope,
       removeModel,
-      "Professional fashion tech-pack BACK VIEW flat lay product photo.",
+      "Professional fashion tech-pack BACK VIEW true flat lay — garment laid flat on a surface, NO ghost mannequin, NO dress form, NO white torso.",
       "Same garment as front:",
       core + ".",
       locks,
@@ -255,7 +255,7 @@ export function buildRecraftPromptForKind(input: {
     return [
       scope,
       removeModel,
-      "Professional fashion tech-pack product image.",
+      "Professional fashion tech-pack product image. Prefer flat lay on surface; no ghost mannequin or dress form.",
       "Garment identity:",
       core + ".",
       locks,
@@ -269,7 +269,9 @@ export function buildRecraftPromptForKind(input: {
   return [
     scope,
     removeModel,
-    "Professional fashion tech-pack FRONT flat lay / ghost mannequin product photo.",
+    "Professional fashion tech-pack FRONT true FLAT LAY product photo: garment spread flat on white/neutral surface.",
+    "FORBIDDEN: ghost mannequin, invisible mannequin, dress form, white torso, 3D body form, worn-on-form presentation.",
+    "REQUIRED: flat product photography as if the dress is laid on a table — hollow interior ok, but no mannequin body.",
     "Exact same garment:",
     core + ".",
     locks,
