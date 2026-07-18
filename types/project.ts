@@ -133,6 +133,8 @@ export type ArtboardViewImageMeta = {
   lastImagePrompt?: string;
   /** 最近一次修正提示词（重新生成用） */
   correctionPrompt?: string;
+  /** 线稿绑定的源彩图画板 id（重新生成时仍用该彩图转换） */
+  sourceArtboardId?: string;
 };
 
 export type Artboard = {

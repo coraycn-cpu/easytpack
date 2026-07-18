@@ -14,6 +14,8 @@ type ViewRegenerateOverlaysProps = {
   regeneratingArtboardId?: string | null;
   interactionLocked?: boolean;
   onRegenerateView?: (artboardId: string, correctionPrompt: string) => void;
+  /** 从彩图画板转换线稿 */
+  onGenerateLineArt?: (sourceArtboardId: string) => void;
   onDeleteArtboard?: (artboardId: string) => void;
 };
 
@@ -27,6 +29,7 @@ export default function ViewRegenerateOverlays({
   regeneratingArtboardId,
   interactionLocked,
   onRegenerateView,
+  onGenerateLineArt,
   onDeleteArtboard,
 }: ViewRegenerateOverlaysProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -93,6 +96,11 @@ export default function ViewRegenerateOverlays({
         const isExpanded = expanded[ab.id] ?? false;
         const locked = interactionLocked || busy;
 
+        const kind = ab.viewImageMeta.kind;
+        const isLineArt = kind === "line_art";
+        const canConvertToLineArt =
+          !isLineArt && Boolean(onGenerateLineArt) && Boolean(ab.imageDataUrl);
+
         const handleDelete = () => {
           if (!onDeleteArtboard || locked) return;
           if (window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) {
@@ -109,10 +117,12 @@ export default function ViewRegenerateOverlays({
           onRegenerateView(ab.id, draft.trim());
         };
 
-        const isFlatFront = ab.viewImageMeta?.kind === "flat_front";
-        const regenSourceHint = isFlatFront
-          ? "基于原参考图重新生成主款平铺"
-          : "基于主款平铺图重新生成";
+        const isFlatFront = kind === "flat_front";
+        const regenSourceHint = isLineArt
+          ? "基于绑定彩图重新转换线稿"
+          : isFlatFront
+            ? "基于原参考图重新生成主款平铺"
+            : "基于主款平铺图重新生成";
 
         return (
           <div
@@ -133,7 +143,11 @@ export default function ViewRegenerateOverlays({
                   }}
                   value={draft}
                   onChange={(e) => setDraft(ab.id, e.target.value)}
-                  placeholder="必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
+                  placeholder={
+                    isLineArt
+                      ? "必填：如「花纹线条再清晰」「袖长与彩图一致」"
+                      : "必填：说明要修正什么，如「领口罗纹再清晰」「颜色偏深」"
+                  }
                   rows={2}
                   disabled={locked}
                   className="mb-1 w-full resize-none rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
@@ -144,7 +158,18 @@ export default function ViewRegenerateOverlays({
                   重新生成前请先填写修正词
                 </p>
               )}
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1">
+                {canConvertToLineArt && (
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => onGenerateLineArt?.(ab.id)}
+                    title="按当前彩图严格转换为线稿"
+                    className="min-w-0 flex-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busy ? "生成中…" : "生成线稿"}
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={locked}

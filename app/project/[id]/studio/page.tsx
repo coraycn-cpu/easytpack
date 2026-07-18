@@ -867,27 +867,47 @@ export default function StudioPage() {
     customPrompt?: string;
     correctionPrompt?: string;
     targetArtboardId?: string;
+    /** 线稿/视角的参考图来源画板；缺省为主款正面 */
+    sourceArtboardId?: string;
+    /** 新建线稿时绑定的源彩图画板（写入 meta） */
+    lineArtSourceArtboardId?: string;
+    preferredArtboardName?: string;
   }) => {
     if (aiBusy) return;
-    if (!project || !sourceImageUrl) {
+    if (!project) {
       setAiMessage("请先上传正面款式图");
       return;
     }
+
+    const sourceBoard = params.sourceArtboardId
+      ? project.canvas_data.artboards.find((a) => a.id === params.sourceArtboardId)
+      : undefined;
+    const effectiveSourceUrl =
+      sourceBoard?.imageDataUrl ?? sourceImageUrl;
+    if (!effectiveSourceUrl) {
+      setAiMessage("请先上传正面款式图");
+      return;
+    }
+
     const isRegen = Boolean(params.targetArtboardId);
     if (isRegen) {
       setRegeneratingArtboardId(params.targetArtboardId!);
+    } else if (params.sourceArtboardId && params.kind === "line_art") {
+      // 在源彩图下方显示「生成中」
+      setRegeneratingArtboardId(params.sourceArtboardId);
+      setViewGenerating(true);
     } else {
       setViewGenerating(true);
     }
     setAiMessage(null);
     try {
-      const imageForAi = await resolveImageDataUrlForAi(sourceImageUrl);
+      const imageForAi = await resolveImageDataUrlForAi(effectiveSourceUrl);
       if (!imageForAi) {
-        setAiMessage("正面图过大，请换一张较小的图片后重试");
+        setAiMessage("参考图过大，请换一张较小的图片后重试");
         return;
       }
       const { width: sourceWidth, height: sourceHeight } =
-        await getImageDimensions(sourceImageUrl);
+        await getImageDimensions(effectiveSourceUrl);
 
       const res = await fetch("/api/ai/view-image", {
         method: "POST",
@@ -912,7 +932,7 @@ export default function StudioPage() {
       if (!imageDataUrl) {
         outcome = "placeholder";
         imageDataUrl = await createViewPlaceholderImage(
-          sourceImageUrl,
+          effectiveSourceUrl,
           data.artboardName ?? "视角图",
         );
         const err = data.synthesisError as string | undefined;
@@ -922,9 +942,12 @@ export default function StudioPage() {
             : "生图 API 未返回图片，已生成占位图",
         );
       } else {
-        imageDataUrl = await matchImageToSourceSize(imageDataUrl, sourceImageUrl);
+        imageDataUrl = await matchImageToSourceSize(
+          imageDataUrl,
+          effectiveSourceUrl,
+        );
         setAiTip(
-          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图（尺寸已与主图对齐）`,
+          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图（尺寸已与源图对齐）`,
         );
       }
 
@@ -946,21 +969,41 @@ export default function StudioPage() {
         }),
       );
 
+      const resolvedKind =
+        (data.kind as ViewImageKind | undefined) ?? params.kind;
+      const boundSourceId =
+        params.lineArtSourceArtboardId ??
+        (resolvedKind === "line_art" ? params.sourceArtboardId : undefined);
+
       const viewMeta = {
-        kind: (data.kind as ViewImageKind | undefined) ?? params.kind,
+        kind: resolvedKind,
         customPrompt: params.customPrompt,
         lastImagePrompt: data.imagePrompt as string | undefined,
         correctionPrompt: params.correctionPrompt,
+        ...(boundSourceId ? { sourceArtboardId: boundSourceId } : {}),
       };
 
+      const displayName =
+        params.preferredArtboardName ??
+        (data.artboardName as string | undefined) ??
+        "视角图";
+
       if (params.targetArtboardId) {
+        const existing = project.canvas_data.artboards.find(
+          (a) => a.id === params.targetArtboardId,
+        );
         const artboards = project.canvas_data.artboards.map((ab) =>
           ab.id === params.targetArtboardId
             ? {
                 ...ab,
                 imageDataUrl,
-                name: data.artboardName ?? ab.name,
-                viewImageMeta: viewMeta,
+                name: displayName || ab.name,
+                viewImageMeta: {
+                  ...viewMeta,
+                  sourceArtboardId:
+                    boundSourceId ??
+                    existing?.viewImageMeta?.sourceArtboardId,
+                },
               }
             : ab,
         );
@@ -968,11 +1011,11 @@ export default function StudioPage() {
           ...project,
           canvas_data: { ...project.canvas_data, artboards },
         });
-        setAiMessage(`已重新生成「${data.artboardName ?? "视角图"}」`);
+        setAiMessage(`已重新生成「${displayName}」`);
       } else {
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
         const origin = nextArtboardOrigin(slots);
-        const newBoard = createArtboard(data.artboardName ?? "视角图", imageDataUrl);
+        const newBoard = createArtboard(displayName, imageDataUrl);
         newBoard.canvasOrigin = origin;
         newBoard.viewImageMeta = viewMeta;
 
@@ -996,7 +1039,7 @@ export default function StudioPage() {
           customPrompt: params.customPrompt,
           category: project.intake.detectedCategory,
           description: project.intake.description,
-          sourceImageUrl,
+          sourceImageUrl: effectiveSourceUrl,
           outcome: "error",
           synthesisError: e instanceof Error ? e.message : "视角图生成失败",
         }),
@@ -1010,6 +1053,29 @@ export default function StudioPage() {
 
   const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
     await runViewImageGeneration({ kind, customPrompt });
+  };
+
+  /** 从指定彩图画板转换线稿（新建画板） */
+  const handleGenerateLineArtFromArtboard = async (sourceArtboardId: string) => {
+    if (!project) return;
+    const source = project.canvas_data.artboards.find(
+      (a) => a.id === sourceArtboardId,
+    );
+    if (!source?.imageDataUrl) {
+      setAiMessage("该画板没有可转换的彩图");
+      return;
+    }
+    if (source.viewImageMeta?.kind === "line_art") {
+      setAiMessage("当前已是线稿，请使用修正词重新生成");
+      return;
+    }
+    const baseName = source.name?.replace(/-?线稿$/u, "").trim() || "正面";
+    await runViewImageGeneration({
+      kind: "line_art",
+      sourceArtboardId,
+      lineArtSourceArtboardId: sourceArtboardId,
+      preferredArtboardName: `${baseName}-线稿`,
+    });
   };
 
   const handleRegenerateView = async (artboardId: string, correctionPrompt: string) => {
@@ -1042,11 +1108,22 @@ export default function StudioPage() {
       return;
     }
 
+    // 线稿重生成：必须用绑定的源彩图，而不是主款正面
+    const lineSourceId =
+      meta.kind === "line_art" ? meta.sourceArtboardId : undefined;
+    if (meta.kind === "line_art" && !lineSourceId) {
+      setAiMessage("该线稿缺少源彩图绑定，请在彩图下方重新生成线稿");
+      return;
+    }
+
     await runViewImageGeneration({
       kind: meta.kind,
       customPrompt: meta.customPrompt,
       correctionPrompt: correctionPrompt || undefined,
       targetArtboardId: artboardId,
+      sourceArtboardId: lineSourceId,
+      lineArtSourceArtboardId: lineSourceId,
+      preferredArtboardName: target.name,
     });
   };
 
@@ -1659,6 +1736,10 @@ export default function StudioPage() {
             }
           }}
           onGenerateView={handleGenerateView}
+          onLineArtHint={(message) => {
+            setAiMessage(message);
+            setAiTip(message);
+          }}
           viewGenerating={viewGenerating || regeneratingArtboardId !== null}
           aiBusy={aiBusy}
           compliance={compliance}
@@ -1702,6 +1783,7 @@ export default function StudioPage() {
               primaryArtboardId={primaryArtboardId}
               onDeleteArtboard={handleDeleteArtboard}
               onRegenerateView={handleRegenerateView}
+              onGenerateLineArt={handleGenerateLineArtFromArtboard}
               regeneratingArtboardId={regeneratingArtboardId}
               imageUrl={activeArtboard.imageDataUrl ?? project.intake.imageDataUrl}
               annotations={normalizeAnnotations(activeArtboard.annotations)}

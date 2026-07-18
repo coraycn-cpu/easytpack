@@ -15,21 +15,18 @@ export const FLAT_FRONT_SET_VIEW_HINT =
   "从参考图中提取目标套装（上装与下装一起），生成完整正面平铺图，上下装比例与穿着关系与参考一致，无模特、白底或中性背景，专业服装摄影平铺风格";
 
 export type ViewImagePreset = {
-  kind: Exclude<ViewImageKind, "custom" | "flat_front">;
+  kind: Exclude<ViewImageKind, "custom" | "flat_front" | "line_art">;
   label: string;
   icon: string;
   promptHint: string;
 };
 
-/** B 区 AI 生图：线稿 / 背面 / 领口 / 袖口 + 自定义视角 */
+/** 线稿不在侧栏：由各彩图画板下方「生成线稿」从对应彩图转换 */
+export const LINE_ART_VIEW_HINT =
+  "将参考彩图转为黑白工艺单线稿：轮廓与花纹位置严格一致，可用线条表现印花图案，禁止重新上色或改款";
+
+/** B 区 AI 生图：背面 / 领口 / 袖口 + 自定义视角（线稿在彩图上转换） */
 export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [
-  {
-    kind: "line_art",
-    label: "线稿图",
-    icon: "✎",
-    promptHint:
-      "同一款式的黑白工艺单线稿平铺：仅黑色轮廓与结构线，严禁彩色/填色/阴影/面料质感/照片写实，版型袖长与正面完全一致",
-  },
   {
     kind: "back",
     label: "背面图",
@@ -55,26 +52,32 @@ export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [
 
 export const VIEW_IMAGE_PRESET_MAP = Object.fromEntries(
   VIEW_IMAGE_PRESETS.map((p) => [p.kind, p]),
-) as Record<Exclude<ViewImageKind, "custom">, ViewImagePreset>;
+) as Record<Exclude<ViewImageKind, "custom" | "flat_front" | "line_art">, ViewImagePreset>;
 
 export function getViewPresetHint(kind: ViewImageKind, customPrompt?: string): string {
   if (kind === "custom") return customPrompt?.trim() ?? "自定义视角";
   if (kind === "flat_front") return FLAT_FRONT_VIEW_HINT;
-  return VIEW_IMAGE_PRESET_MAP[kind as Exclude<ViewImageKind, "custom" | "flat_front">]?.promptHint ?? kind;
+  if (kind === "line_art") return LINE_ART_VIEW_HINT;
+  return VIEW_IMAGE_PRESET_MAP[kind]?.promptHint ?? kind;
 }
 
 export function isViewImageKind(value: string): value is ViewImageKind {
   return (
     value === "custom" ||
     value === "flat_front" ||
+    value === "line_art" ||
     VIEW_IMAGE_PRESETS.some((p) => p.kind === value)
   );
 }
 
 /** 侧栏 AI 使用说明（单行紧凑） */
 export const VIEW_IMAGE_AI_GUIDE =
-  "基于正面主图生成 · 版型/面料/颜色与主图一致 · 偏差可展开修正后重生成";
+  "基于正面主图生成彩图 · 线稿请在对应彩图下方转换 · 偏差可展开修正后重生成";
 
 /** 侧栏补充：各 AI 生图的数据来源 */
 export const SIDEBAR_AI_SOURCE_HINT =
-  "侧栏视角图基于主款平铺图；主款平铺重生成基于原参考图（模特/拼贴）";
+  "侧栏生成背面/领口/袖口彩图；线稿在彩图下方一键转换；主款平铺重生成基于原参考图";
+
+/** 自定义里写「线稿」时的引导（不再全局生图） */
+export const LINE_ART_USE_OVERLAY_HINT =
+  "请在对应彩图画板下方点击「生成线稿」，线稿将严格按该彩图转换";

@@ -45,11 +45,11 @@ export async function generateViewImagePrompt(input: {
   sourceHeight?: number;
   intake?: GarmentScopeInput;
 }) {
-  // 自定义里写「正面平铺/线稿」等 → 映射到正式 kind
+  // 自定义里写「正面平铺」等 → 映射到正式 kind（线稿不再从此入口生成）
   let kind = input.kind;
   if (kind === "custom" && input.customPrompt) {
     const mapped = resolveViewKindFromCustomPrompt(input.customPrompt);
-    if (mapped) kind = mapped;
+    if (mapped && "kind" in mapped) kind = mapped.kind;
   }
 
   const viewDesc = viewHintForKind(kind, input.customPrompt, input.intake);

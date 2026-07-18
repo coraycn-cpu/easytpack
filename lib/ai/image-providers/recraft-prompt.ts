@@ -144,7 +144,7 @@ function garmentCoreLineArt(spec: GarmentSpec): string {
 
 function removeModelDirective(kind: ViewImageKind): string {
   if (kind === "line_art") {
-    return "IMAGE EDIT: Convert the garment to monochrome technical LINE ART. Completely remove any human model, face, hair, hands and body. Black ink outlines on pure white only — no color, no photo realism.";
+    return "IMAGE EDIT: Convert THIS exact reference image into a technical fashion LINE DRAWING. Trace the same silhouette, sleeve length, seams and print/pattern placement with black lines. Keep motif outlines where prints exist. Completely remove any human model. No recoloring, no restyling, no inventing new patterns.";
   }
   if (kind === "collar" || kind === "cuff") {
     return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model. Neutral background, product close-up for tech pack.";
@@ -152,7 +152,10 @@ function removeModelDirective(kind: ViewImageKind): string {
   if (kind === "back") {
     return "IMAGE EDIT: Transform into a BACK-VIEW garment flat lay / ghost mannequin. Completely remove the human model. Keep the same garment identity.";
   }
-  // flat_front + custom-as-flat
+  if (kind === "custom") {
+    return "IMAGE EDIT: Produce a fashion tech-pack product image of the requested view. Completely remove any human model, face, hair, arms and body. Keep garment identity; clean studio background.";
+  }
+  // flat_front
   return "IMAGE EDIT: Transform into a FRONT garment FLAT LAY / ghost mannequin product photo. Completely remove the human model, face, hair, arms and legs. Show ONLY the clothing on a clean white or neutral studio background — not a fashion model shoot.";
 }
 
@@ -183,13 +186,13 @@ export function buildRecraftPromptForKind(input: {
       : "match sleeve length from the brief";
     return [
       removeModel,
-      "Monochrome technical fashion flat sketch / CAD line drawing.",
-      "BLACK pen outlines on WHITE background only.",
-      "Absolute rules: zero color, zero fill, zero gradient, zero fabric texture, zero photorealism.",
+      "Output: black-and-white tech-pack CAD line drawing on pure white.",
+      "Fidelity: every contour and print motif position must match the reference image exactly.",
+      "Allowed: thin black lines for seams, edges, and pattern/print outlines.",
+      "Forbidden: color fills, shading, photoreal fabric, new motifs, changed sleeve/hem length.",
       "Garment structure:",
       structure + ".",
       sleeveLock + ".",
-      "Indicate seams, neckline, sleeve hem, waist and hem with thin clean lines.",
       `Task: ${viewHint}.${extra}${fix}`,
     ].join(" ");
   }
@@ -221,8 +224,8 @@ export function buildRecraftPromptForKind(input: {
 
   if (kind === "custom") {
     return [
+      removeModel,
       "Professional fashion tech-pack product image.",
-      "Completely remove any human model if present.",
       "Garment identity:",
       core + ".",
       locks,

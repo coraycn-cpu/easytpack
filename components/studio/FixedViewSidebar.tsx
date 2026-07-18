@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
-import { VIEW_IMAGE_PRESETS, VIEW_IMAGE_AI_GUIDE, SIDEBAR_AI_SOURCE_HINT, type ViewImageKind } from "@/lib/studio/view-types";
+import {
+  VIEW_IMAGE_PRESETS,
+  VIEW_IMAGE_AI_GUIDE,
+  SIDEBAR_AI_SOURCE_HINT,
+  LINE_ART_USE_OVERLAY_HINT,
+  type ViewImageKind,
+} from "@/lib/studio/view-types";
 import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind";
 import type { PhotoType } from "@/types/project";
 import type { WorkflowStatus } from "@/types/project";
@@ -13,6 +19,8 @@ type FixedViewSidebarProps = {
   onNewStyle?: () => void;
   onReplaceImage: (dataUrl: string) => void;
   onGenerateView: (kind: ViewImageKind, customPrompt?: string) => void;
+  /** 自定义里写「线稿」时的提示（引导到彩图下方按钮） */
+  onLineArtHint?: (message: string) => void;
   viewGenerating: boolean;
   /** AI 处理中锁定侧栏操作 */
   aiBusy?: boolean;
@@ -33,6 +41,7 @@ export default function FixedViewSidebar({
   onNewStyle,
   onReplaceImage,
   onGenerateView,
+  onLineArtHint,
   viewGenerating,
   aiBusy = false,
   compliance,
@@ -58,8 +67,12 @@ export default function FixedViewSidebar({
     const prompt = customPrompt.trim();
     if (!prompt) return;
     const mapped = resolveViewKindFromCustomPrompt(prompt);
+    if (mapped && "blocked" in mapped) {
+      onLineArtHint?.(LINE_ART_USE_OVERLAY_HINT);
+      return;
+    }
     // 「生成正面平铺图」等映射到正式 kind，避免 custom 走偏
-    onGenerateView(mapped ?? "custom", prompt);
+    onGenerateView(mapped?.kind ?? "custom", prompt);
   };
 
   return (
@@ -85,7 +98,7 @@ export default function FixedViewSidebar({
         <div className="border-b border-violet-50 bg-violet-50/40 px-3 py-2">
           <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
           <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
-            线稿 / 背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
+            背面 / 领口 / 袖口 + 自定义 · {VIEW_IMAGE_AI_GUIDE}
           </p>
           {(flatFrontGenerated || photoType === "model" || photoType === "collage") && (
             <p className="mt-1 text-[9px] leading-snug text-slate-500">

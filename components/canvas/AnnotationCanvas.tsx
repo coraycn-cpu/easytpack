@@ -99,6 +99,8 @@ type AnnotationCanvasProps = {
   onDeleteArtboard?: (artboardId: string) => void;
   /** AI 生成图：修正提示词后重新生成 */
   onRegenerateView?: (artboardId: string, correctionPrompt: string) => void;
+  /** 从彩图画板转换线稿 */
+  onGenerateLineArt?: (sourceArtboardId: string) => void;
   regeneratingArtboardId?: string | null;
   viewportScale?: number;
   onViewportScaleChange?: (scale: number) => void;
@@ -168,6 +170,7 @@ export default function AnnotationCanvas({
   primaryArtboardId,
   onDeleteArtboard,
   onRegenerateView,
+  onGenerateLineArt,
   regeneratingArtboardId,
   viewportScale,
   onViewportScaleChange,
@@ -1925,6 +1928,7 @@ export default function AnnotationCanvas({
           regeneratingArtboardId={regeneratingArtboardId}
           interactionLocked={interactionLocked}
           onRegenerateView={onRegenerateView}
+          onGenerateLineArt={onGenerateLineArt}
           onDeleteArtboard={onDeleteArtboard}
         />
       )}
