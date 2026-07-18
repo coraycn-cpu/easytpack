@@ -163,7 +163,7 @@ function removeModelDirective(
   scopeNote?: string,
 ): string {
   if (kind === "line_art") {
-    return "IMAGE EDIT: Convert THIS exact reference image into a technical fashion LINE DRAWING. Trace the same silhouette, sleeve length, seams and print/pattern placement with black lines. Keep motif outlines where prints exist. Completely remove any human model. No recoloring, no restyling, no inventing new patterns.";
+    return "IMAGE EDIT / TRACE ONLY: Convert THE ATTACHED reference garment photo into a technical fashion LINE DRAWING of that SAME image. Do not invent a new garment from text. Trace exact silhouette, seams, sleeve length, hem, neckline, ties/belts/pockets, and print motif positions. Completely remove any human model. No recoloring, no restyling, no new patterns.";
   }
   if (kind === "collar" || kind === "cuff") {
     return "IMAGE EDIT: Crop to the garment detail only. Completely remove the human model, mannequin, and dress form. Neutral background, product close-up for tech pack.";
@@ -206,22 +206,30 @@ export function buildRecraftPromptForKind(input: {
   const removeModel = removeModelDirective(kind, scopeNote);
 
   if (kind === "line_art") {
-    const structure = spec ? garmentCoreLineArt(spec) : viewHint;
-    const sleeveLock = spec
+    // 有源图时禁止用 LLM 结构摘要主导构图，避免「按描述重画」偏离源图
+    const sleeveHint = spec
       ? SLEEVE_LOCK[spec.sleeveLength]
-      : "match sleeve length from the brief";
+      : "match sleeve length from the reference photo";
     return [
-      scope,
+      "PRIORITY 1 — REFERENCE IMAGE IS THE ONLY SOURCE OF TRUTH.",
+      "Convert / TRACE the attached color garment photo into a black-and-white tech-pack line drawing.",
+      "Match the reference pixel-for-pixel in structure: silhouette, proportions, sleeve length, hem length, neckline, waist, seams, openings, and every print/pattern motif position, scale, and orientation.",
+      "If any text brief conflicts with the reference photo, IGNORE the text and FOLLOW THE PHOTO.",
+      "DO NOT redesign, reinterpret, restyle, or generate a different dress from a written description.",
       removeModel,
-      "Output: black-and-white tech-pack CAD line drawing on pure white.",
-      "Fidelity: every contour and print motif position must match the reference image exactly.",
-      "Allowed: thin black lines for seams, edges, and pattern/print outlines.",
-      "Forbidden: color fills, shading, photoreal fabric, new motifs, changed sleeve/hem length.",
-      "Garment structure:",
-      structure + ".",
-      sleeveLock + ".",
-      `Task: ${viewHint}.${extra}${fix}`,
-    ].join(" ");
+      "Output: pure white background; thin clean black contour lines only.",
+      "Allowed: outline strokes for prints/embroidery exactly where they appear in the photo.",
+      "Forbidden: color fills, shading, photoreal fabric, inventing motifs, changing sleeve/hem/neckline, moving belts/ties, adding or removing panels.",
+      spec
+        ? `Secondary identity check only (never override the photo): ${garmentCoreLineArt(spec)}.`
+        : "",
+      sleeveHint + ".",
+      fix ? `User correction (apply without changing unrelated geometry):${fix}` : "",
+      extra ? `Note:${extra}` : "",
+      `Task: ${viewHint}.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   if (kind === "collar" || kind === "cuff") {
@@ -291,19 +299,23 @@ export function artboardNameForKind(
 }
 
 /**
- * 线稿：优先 Flux Kontext（带参考图转线稿，成功率更高）；
- * Recraft V3 作备选（Line art style，纯文生图）。
+ * 线稿：只使用能吃参考图的模型（Kontext / Seedream 等）。
+ * 有源图时不把 Recraft V3 纯文生列入候选，避免「按描述另画一张」。
  */
-export function lineArtModelCandidates(): string[] {
+export function lineArtModelCandidates(opts?: {
+  requireReferenceImage?: boolean;
+}): string[] {
   const preferred = process.env.AI_MODEL_GATEWAY_IMAGE_LINE_ART?.trim();
-  const candidates = [
+  const withRef = [
     preferred,
     "bfl/flux-kontext-pro",
-    "recraft/recraft-v3",
     "bytedance/seedream-4.5",
-    "xai/grok-imagine-image",
   ].filter((m): m is string => Boolean(m));
-  return [...new Set(candidates)];
+  if (opts?.requireReferenceImage) {
+    return [...new Set(withRef)];
+  }
+  const textFallback = ["recraft/recraft-v3", "xai/grok-imagine-image"];
+  return [...new Set([...withRef, ...textFallback])];
 }
 
 /** 平铺/背面等：优先能吃参考图的编辑模型 */

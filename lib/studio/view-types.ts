@@ -23,7 +23,7 @@ export type ViewImagePreset = {
 
 /** 线稿不在侧栏：由各彩图画板右侧「生成线稿」从对应彩图转换 */
 export const LINE_ART_VIEW_HINT =
-  "将参考彩图转为黑白工艺单线稿：轮廓与花纹位置严格一致，可用线条表现印花图案，禁止重新上色或改款";
+  "严格按参考彩图像素描摹为黑白工艺单线稿：轮廓、袖长、裙长、领型、腰带/口袋位置与印花纹样位置必须与源图一致，禁止按文字另画新款或改版型";
 
 /** B 区 AI 生图：背面 / 领口 / 袖口 + 自定义视角（线稿在彩图上转换） */
 export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [

@@ -89,6 +89,21 @@ export async function generateViewImagePrompt(input: {
   const description = hints.description ?? input.description;
 
   if (input.sourceImageUrl) {
+    // 线稿：不抽 GarmentSpec 主导构图，强制「描摹源图」提示词
+    if (kind === "line_art") {
+      const imagePrompt = buildRecraftPromptForKind({
+        kind: "line_art",
+        viewHint: viewDesc,
+        correctionPrompt: input.correctionPrompt,
+        scopeNote,
+      });
+      return {
+        kind,
+        imagePrompt,
+        artboardName: artboardNameForKind("line_art"),
+      };
+    }
+
     const spec = await extractGarmentSpec({
       sourceImageUrl: input.sourceImageUrl,
       kind,

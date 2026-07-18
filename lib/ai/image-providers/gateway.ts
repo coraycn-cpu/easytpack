@@ -38,6 +38,14 @@ CRITICAL fidelity:
 
 Follow the view instruction below.`;
 
+const LINE_ART_TRACE_INSTRUCTION = `TRACE the attached garment PHOTO into a black-and-white technical line drawing of THAT SAME garment.
+
+CRITICAL:
+- Do not invent or redesign — follow the photo exactly
+- Keep silhouette, sleeve/hem length, seams, and print motif positions identical
+- White background, black outlines only
+- If text conflicts with the photo, follow the photo`;
+
 function parseGarmentSpec(json?: string): GarmentSpec | null {
   if (!json?.trim()) return null;
   try {
@@ -55,6 +63,8 @@ async function resolveSpec(
   const cached = parseGarmentSpec(options.garmentSpecJson);
   if (cached) return cached;
   if (!options.sourceImageUrl) return null;
+  // 线稿以源图像素为准，不再二次抽 spec（避免文字结构带偏）
+  if (kind === "line_art") return null;
   try {
     return await extractGarmentSpec({
       sourceImageUrl: options.sourceImageUrl,
@@ -193,6 +203,16 @@ async function callGenerateImageWithOptionalRef(input: {
     }
   }
 
+  // 线稿有源图时绝不回退到无参考文生图（会另画一张）
+  if (kind === "line_art" && sourceImageUrl) {
+    return {
+      imageDataUrl: null,
+      provider: "gateway",
+      model,
+      error: "线稿参考图编辑失败，已跳过无参考回退",
+    };
+  }
+
   return callGenerateImage({ model, prompt, kind });
 }
 
@@ -211,8 +231,23 @@ export async function synthesizeViaGateway(
   const { prompt, sourceImageUrl } = options;
   const models =
     kind === "line_art"
-      ? lineArtModelCandidates()
+      ? lineArtModelCandidates({
+          requireReferenceImage: Boolean(sourceImageUrl),
+        }).filter(
+          (m) =>
+            !sourceImageUrl ||
+            supportsPromptImages(m) ||
+            isMultimodalImageModel(m),
+        )
       : viewImageModelCandidates();
+
+  if (kind === "line_art" && sourceImageUrl && models.length === 0) {
+    return {
+      imageDataUrl: null,
+      provider: "gateway",
+      error: "线稿需要支持参考图的模型（如 flux-kontext / seedream）",
+    };
+  }
 
   let lastError = "Gateway 生图失败";
   let lastModel = models[0];
@@ -236,7 +271,11 @@ export async function synthesizeViaGateway(
       // 仅当主模型本身就是多模态生图模型时才走该路径
       if (isMultimodalImageModel(model) && sourceImageUrl) {
         try {
-          const instruction = `${REF_FIDELITY_INSTRUCTION}\n\nView / task: ${prompt}`;
+          const instruction = `${
+            kind === "line_art"
+              ? LINE_ART_TRACE_INSTRUCTION
+              : REF_FIDELITY_INSTRUCTION
+          }\n\nView / task: ${prompt}`;
           const result = await generateText({
             model,
             messages: [
@@ -264,6 +303,10 @@ export async function synthesizeViaGateway(
       }
 
       try {
+        if (kind === "line_art" && sourceImageUrl && !supportsPromptImages(model)) {
+          lastError = `[${model}] 不支持参考图，已跳过`;
+          continue;
+        }
         const result = await callGenerateImageWithOptionalRef({
           model,
           prompt: imagePrompt,
