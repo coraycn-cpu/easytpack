@@ -539,7 +539,7 @@ export default function AnnotationCanvas({
     }
   };
 
-  /** 进入剪裁会话（主图 / AI 图 / 贴图均可）；取消后 imageSelected 便于拖动 */
+  /** 进入剪裁会话（主图 / AI 图 / 贴图均可）；由标题旁「剪裁」触发 */
   const beginImageCrop = useCallback(
     (artboardId: string, width: number, height: number) => {
       if (!onCropArtboardImage || interactionLocked || width <= 0 || height <= 0) {
@@ -1594,24 +1594,18 @@ export default function AnnotationCanvas({
                             e.cancelBubble = true;
                             if (!isActive) {
                               onActiveArtboardChange?.(ab.id);
+                              return;
                             }
-                            if (onCropArtboardImage && ab.imageDataUrl && !interactionLocked) {
-                              beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
-                            } else {
-                              selectImage();
-                            }
+                            selectImage();
                           }}
                           onTap={(e) => {
                             e.cancelBubble = true;
                             if (tool !== "select" || cropSession) return;
                             if (!isActive) {
                               onActiveArtboardChange?.(ab.id);
+                              return;
                             }
-                            if (onCropArtboardImage && ab.imageDataUrl && !interactionLocked) {
-                              beginImageCrop(ab.id, entry.fit.width, entry.fit.height);
-                            } else {
-                              selectImage();
-                            }
+                            selectImage();
                           }}
                         />
                         {cropSession?.artboardId === ab.id && (
@@ -1778,38 +1772,12 @@ export default function AnnotationCanvas({
                     onClick={(e) => {
                       if (tool !== "select" || cropSession) return;
                       e.cancelBubble = true;
-                      if (
-                        onCropArtboardImage &&
-                        activeArtboardId &&
-                        imageUrl &&
-                        !interactionLocked
-                      ) {
-                        beginImageCrop(
-                          activeArtboardId,
-                          imageFit.width,
-                          imageFit.height,
-                        );
-                      } else {
-                        selectImage();
-                      }
+                      selectImage();
                     }}
                     onTap={(e) => {
                       if (tool !== "select" || cropSession) return;
                       e.cancelBubble = true;
-                      if (
-                        onCropArtboardImage &&
-                        activeArtboardId &&
-                        imageUrl &&
-                        !interactionLocked
-                      ) {
-                        beginImageCrop(
-                          activeArtboardId,
-                          imageFit.width,
-                          imageFit.height,
-                        );
-                      } else {
-                        selectImage();
-                      }
+                      selectImage();
                     }}
                   />
                 </Group>
