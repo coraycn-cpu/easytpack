@@ -62,3 +62,26 @@ export function isModelPhoto(photoType?: GarmentScopeInput["photoType"]): boolea
 export function isSetTarget(intake: GarmentScopeInput): boolean {
   return isTargetSet(intake.targetGarment);
 }
+
+/**
+ * 生图英文隔离指令：单款时明确排除同框其他可见服装（解决「选马甲却出整套」）
+ */
+export function buildTargetIsolationPrompt(intake: GarmentScopeInput): string {
+  const target = intake.targetGarment;
+  if (!target) return "";
+
+  if (isTargetSet(target)) {
+    const parts = componentLabels(intake, target.componentIds);
+    return `TARGET SCOPE: Generate the COMPLETE SET "${target.label}" (${target.category}) including ${parts} together as one flat lay. Do not omit set components; do not add unrelated garments.`;
+  }
+
+  const others = (intake.visibleGarments ?? [])
+    .filter((g) => g.id !== target.id && g.kind !== "set")
+    .map((g) => `${g.label} (${g.category})`);
+  const exclude =
+    others.length > 0
+      ? `STRICTLY EXCLUDE these other garments also visible in the photo: ${others.join("; ")}. Do not show them, crop them out, or invent matching bottoms/tops.`
+      : `STRICTLY EXCLUDE any other garments, bottoms, tops, or accessories that are not "${target.label}".`;
+
+  return `TARGET SCOPE: Generate ONLY this single garment — "${target.label}" (${target.category}). ${exclude} Output one isolated product flat lay of that piece alone.`;
+}

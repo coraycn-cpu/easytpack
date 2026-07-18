@@ -8,11 +8,11 @@ export type ViewImageKind =
 
 /** 选款后自动生成的平铺正面（不在侧栏展示） */
 export const FLAT_FRONT_VIEW_HINT =
-  "从参考图中提取目标单款，生成完整正面平铺图，无模特、白底或中性背景，版型颜色面料与目标款一致，专业服装摄影平铺风格";
+  "从参考图中仅提取用户选定的目标单款，生成该件完整正面平铺图；同框其他服装一律不出现；无模特、白底或中性背景，版型颜色面料与目标款一致";
 
 /** 套装选款时的平铺正面 */
 export const FLAT_FRONT_SET_VIEW_HINT =
-  "从参考图中提取目标套装（上装与下装一起），生成完整正面平铺图，上下装比例与穿着关系与参考一致，无模特、白底或中性背景，专业服装摄影平铺风格";
+  "从参考图中提取用户选定的整套目标套装（上装与下装一起），生成完整正面平铺图，上下装比例与穿着关系与参考一致，无模特、白底或中性背景";
 
 export type ViewImagePreset = {
   kind: Exclude<ViewImageKind, "custom" | "flat_front" | "line_art">;

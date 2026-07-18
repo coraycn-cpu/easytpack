@@ -57,8 +57,12 @@ export async function generateFlatFrontForPrimary(
     body: JSON.stringify({
       kind: "flat_front",
       correctionPrompt: options?.correctionPrompt,
-      category: project.intake.detectedCategory,
-      description: project.intake.description,
+      category:
+        project.intake.targetGarment?.category ??
+        project.intake.detectedCategory,
+      description:
+        project.intake.targetGarment?.label ??
+        project.intake.description,
       sourceImageUrl: imageForAi,
       sourceWidth,
       sourceHeight,

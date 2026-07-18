@@ -16,7 +16,10 @@ import {
 } from "@/lib/studio/view-types";
 import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind";
 import { appendCorrectionToPrompt } from "@/lib/studio/view-image-constraints";
-import { isSetTarget } from "@/lib/ai/garment-scope";
+import {
+  buildTargetIsolationPrompt,
+  isSetTarget,
+} from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
 
 export type { SynthesizeViewImageResult } from "@/lib/ai/image-providers";
@@ -32,6 +35,31 @@ function viewHintForKind(
     return FLAT_FRONT_SET_VIEW_HINT;
   }
   return getViewPresetHint(kind, customPrompt);
+}
+
+function targetSpecHints(intake?: GarmentScopeInput) {
+  const target = intake?.targetGarment;
+  if (!target) {
+    return {
+      category: intake?.detectedCategory,
+      description: intake?.description,
+      targetLabel: undefined as string | undefined,
+      targetCategory: undefined as string | undefined,
+      excludeLabels: undefined as string[] | undefined,
+      isSet: false,
+    };
+  }
+  const excludeLabels = (intake?.visibleGarments ?? [])
+    .filter((g) => g.id !== target.id && g.kind !== "set")
+    .map((g) => g.label);
+  return {
+    category: target.category || intake?.detectedCategory,
+    description: target.label || intake?.description,
+    targetLabel: target.label,
+    targetCategory: target.category,
+    excludeLabels,
+    isSet: isSetTarget(intake!),
+  };
 }
 
 export async function generateViewImagePrompt(input: {
@@ -53,14 +81,24 @@ export async function generateViewImagePrompt(input: {
   }
 
   const viewDesc = viewHintForKind(kind, input.customPrompt, input.intake);
+  const hints = targetSpecHints(input.intake);
+  const scopeNote = input.intake
+    ? buildTargetIsolationPrompt(input.intake)
+    : "";
+  const category = hints.category ?? input.category;
+  const description = hints.description ?? input.description;
 
   if (input.sourceImageUrl) {
     const spec = await extractGarmentSpec({
       sourceImageUrl: input.sourceImageUrl,
       kind,
-      category: input.category ?? input.intake?.detectedCategory,
-      description: input.description ?? input.intake?.description,
+      category,
+      description,
       correctionPrompt: input.correctionPrompt,
+      targetLabel: hints.targetLabel,
+      targetCategory: hints.targetCategory,
+      excludeLabels: hints.excludeLabels,
+      isSet: hints.isSet,
     });
 
     const imagePrompt = buildRecraftPromptForKind({
@@ -68,6 +106,7 @@ export async function generateViewImagePrompt(input: {
       spec,
       viewHint: viewDesc,
       correctionPrompt: input.correctionPrompt,
+      scopeNote,
     });
 
     return {
@@ -82,12 +121,13 @@ export async function generateViewImagePrompt(input: {
     kind,
     viewHint: [
       viewDesc,
-      input.category ? `Category: ${input.category}` : "",
-      input.description ? `Description: ${input.description}` : "",
+      category ? `Category: ${category}` : "",
+      description ? `Description: ${description}` : "",
     ]
       .filter(Boolean)
       .join(". "),
     correctionPrompt: input.correctionPrompt,
+    scopeNote,
   });
 
   return {

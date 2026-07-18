@@ -73,18 +73,34 @@ export async function extractGarmentSpec(input: {
   category?: string;
   description?: string;
   correctionPrompt?: string;
+  /** 目标款锁定；多件同框时必须只分析目标款 */
+  targetLabel?: string;
+  targetCategory?: string;
+  excludeLabels?: string[];
+  isSet?: boolean;
 }): Promise<GarmentSpec> {
   const correction = input.correctionPrompt?.trim()
     ? `\n用户修正（必须写入 sleeve/print 相关字段）：${input.correctionPrompt.trim()}`
+    : "";
+
+  const targetNote = input.targetLabel
+    ? input.isSet
+      ? `\n目标范围：套装「${input.targetLabel}」（${input.targetCategory ?? ""}），上下装一并分析。`
+      : `\n目标范围：仅「${input.targetLabel}」（${input.targetCategory ?? ""}）。画面中其他服装${
+          input.excludeLabels?.length
+            ? `（${input.excludeLabels.join("、")}）`
+            : ""
+        }一律忽略，字段只描述这一件。`
     : "";
 
   const { object } = await generateObject({
     model: getModel(),
     schema: GarmentSpecSchema,
     schemaName: "GarmentSpec",
-    instructions: `你是服装工艺单视觉分析员。只根据参考图可见内容填写结构化字段，禁止臆造。
+    instructions: `你是服装工艺单视觉分析员。只根据参考图中【目标款】填写结构化字段，禁止臆造。
 
 规则：
+- 若指定了目标单款，严禁把同框其他服装的特征写入字段（例如目标是马甲时不要写短裤）
 - sleeveLength：短袖若明显止于肘上，必须 short 或 cap，绝不要标成 elbow/three_quarter
 - printOrientation：横向色带/民族条带选 horizontal_bands；竖条选 vertical
 - artboardName：中文 2-8 字，贴合任务（线稿/背面/正面等）
@@ -97,8 +113,8 @@ export async function extractGarmentSpec(input: {
             type: "text" as const,
             text: `品类提示：${input.category ?? "服装"}
 描述提示：${input.description ?? "无"}
-任务类型：${input.kind}${correction}
-请分析图中目标服装。`,
+任务类型：${input.kind}${targetNote}${correction}
+请只分析目标服装。`,
           },
           { type: "image" as const, image: input.sourceImageUrl },
         ],
@@ -142,7 +158,10 @@ function garmentCoreLineArt(spec: GarmentSpec): string {
   ].join("; ");
 }
 
-function removeModelDirective(kind: ViewImageKind): string {
+function removeModelDirective(
+  kind: ViewImageKind,
+  scopeNote?: string,
+): string {
   if (kind === "line_art") {
     return "IMAGE EDIT: Convert THIS exact reference image into a technical fashion LINE DRAWING. Trace the same silhouette, sleeve length, seams and print/pattern placement with black lines. Keep motif outlines where prints exist. Completely remove any human model. No recoloring, no restyling, no inventing new patterns.";
   }
@@ -156,7 +175,10 @@ function removeModelDirective(kind: ViewImageKind): string {
     return "IMAGE EDIT: Produce a fashion tech-pack product image of the requested view. Completely remove any human model, face, hair, arms and body. Keep garment identity; clean studio background.";
   }
   // flat_front
-  return "IMAGE EDIT: Transform into a FRONT garment FLAT LAY / ghost mannequin product photo. Completely remove the human model, face, hair, arms and legs. Show ONLY the clothing on a clean white or neutral studio background — not a fashion model shoot.";
+  const scope = scopeNote?.trim()
+    ? ` ${scopeNote.trim()}`
+    : " Show ONLY the target garment.";
+  return `IMAGE EDIT: Transform into a FRONT garment FLAT LAY / ghost mannequin product photo. Completely remove the human model, face, hair, arms and legs.${scope} Clean white or neutral studio background — not a fashion model shoot, not a full coordinated outfit unless the target is explicitly a set.`;
 }
 
 /** 按视角生成生图 prompt（适配 Kontext 参考图编辑 + Recraft 文生图） */
@@ -167,17 +189,21 @@ export function buildRecraftPromptForKind(input: {
   correctionPrompt?: string;
   /** LLM 额外英文补充，可选 */
   extraPrompt?: string;
+  /** 目标款隔离（单款/套装），放在最前 */
+  scopeNote?: string;
 }): string {
-  const { kind, spec, viewHint, correctionPrompt, extraPrompt } = input;
+  const { kind, spec, viewHint, correctionPrompt, extraPrompt, scopeNote } =
+    input;
   const fix = correctionPrompt?.trim()
     ? ` User correction (priority): ${correctionPrompt.trim()}.`
     : "";
   const extra = extraPrompt?.trim() ? ` ${extraPrompt.trim()}` : "";
+  const scope = scopeNote?.trim() ? `${scopeNote.trim()} ` : "";
   const core = spec ? garmentCore(spec) : viewHint;
   const locks = spec
     ? sleeveAndPrintLocks(spec)
     : "Preserve exact sleeve length and print orientation from the brief.";
-  const removeModel = removeModelDirective(kind);
+  const removeModel = removeModelDirective(kind, scopeNote);
 
   if (kind === "line_art") {
     const structure = spec ? garmentCoreLineArt(spec) : viewHint;
@@ -185,6 +211,7 @@ export function buildRecraftPromptForKind(input: {
       ? SLEEVE_LOCK[spec.sleeveLength]
       : "match sleeve length from the brief";
     return [
+      scope,
       removeModel,
       "Output: black-and-white tech-pack CAD line drawing on pure white.",
       "Fidelity: every contour and print motif position must match the reference image exactly.",
@@ -199,6 +226,7 @@ export function buildRecraftPromptForKind(input: {
 
   if (kind === "collar" || kind === "cuff") {
     return [
+      scope,
       removeModel,
       "Close-up product detail photo for fashion tech pack.",
       `Focus: ${viewHint}.`,
@@ -212,6 +240,7 @@ export function buildRecraftPromptForKind(input: {
 
   if (kind === "back") {
     return [
+      scope,
       removeModel,
       "Professional fashion tech-pack BACK VIEW flat lay product photo.",
       "Same garment as front:",
@@ -224,6 +253,7 @@ export function buildRecraftPromptForKind(input: {
 
   if (kind === "custom") {
     return [
+      scope,
       removeModel,
       "Professional fashion tech-pack product image.",
       "Garment identity:",
@@ -237,6 +267,7 @@ export function buildRecraftPromptForKind(input: {
 
   // flat_front
   return [
+    scope,
     removeModel,
     "Professional fashion tech-pack FRONT flat lay / ghost mannequin product photo.",
     "Exact same garment:",
