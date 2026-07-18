@@ -46,8 +46,6 @@ type CanvasToolbarProps = {
   interactionLocked?: boolean;
   layerVisibility?: LayerVisibility;
   onLayerVisibilityChange?: (layers: LayerVisibility) => void;
-  onInsertPartTemplates?: () => void;
-  insertTemplatesLoading?: boolean;
   onPasteImage?: (dataUrl: string) => void;
   pasteImageDisabled?: boolean;
 };
@@ -92,8 +90,6 @@ export default function CanvasToolbar({
   interactionLocked,
   layerVisibility,
   onLayerVisibilityChange,
-  onInsertPartTemplates,
-  insertTemplatesLoading,
   onPasteImage,
   pasteImageDisabled,
 }: CanvasToolbarProps) {
@@ -181,6 +177,37 @@ export default function CanvasToolbar({
                 <span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}
+            {onPasteImage && (
+              <>
+                <button
+                  type="button"
+                  disabled={manualLocked || pasteImageDisabled}
+                  onClick={() => pasteFileRef.current?.click()}
+                  className={`${toolBtn(false)} disabled:cursor-not-allowed disabled:opacity-40`}
+                  title={ANN_ACTION_LABELS.pasteImageHint}
+                >
+                  <span className="text-sm leading-none">⧉</span>
+                  <span className="hidden sm:inline">{ANN_ACTION_LABELS.pasteImage}</span>
+                </button>
+                <input
+                  ref={pasteFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file || manualLocked || pasteImageDisabled) return;
+                    try {
+                      const dataUrl = await readImageDataUrlFromFile(file);
+                      onPasteImage(dataUrl);
+                    } catch {
+                      /* ignore read errors */
+                    }
+                  }}
+                />
+              </>
+            )}
           </div>
 
           <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
@@ -203,53 +230,6 @@ export default function CanvasToolbar({
               />
             ))}
           </div>
-
-          {onInsertPartTemplates && (
-            <>
-              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-              <button
-                type="button"
-                disabled={manualLocked || insertTemplatesLoading}
-                onClick={onInsertPartTemplates}
-                className={actionBtn(manualLocked || Boolean(insertTemplatesLoading))}
-                title={ANN_ACTION_LABELS.insertTemplatesHint}
-              >
-                {insertTemplatesLoading ? "插入中…" : ANN_ACTION_LABELS.insertTemplates}
-              </button>
-            </>
-          )}
-
-          {onPasteImage && (
-            <>
-              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-              <button
-                type="button"
-                disabled={manualLocked || pasteImageDisabled}
-                onClick={() => pasteFileRef.current?.click()}
-                className={actionBtn(manualLocked || Boolean(pasteImageDisabled))}
-                title={ANN_ACTION_LABELS.pasteImageHint}
-              >
-                {ANN_ACTION_LABELS.pasteImage}
-              </button>
-              <input
-                ref={pasteFileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file || manualLocked || pasteImageDisabled) return;
-                  try {
-                    const dataUrl = await readImageDataUrlFromFile(file);
-                    onPasteImage(dataUrl);
-                  } catch {
-                    /* ignore read errors */
-                  }
-                }}
-              />
-            </>
-          )}
 
           <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
 

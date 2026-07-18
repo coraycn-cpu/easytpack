@@ -69,7 +69,6 @@ import {
   removeAnnotationsByIds,
   isAnnotationLocked,
 } from "@/lib/canvas/annotation-helpers";
-import { buildPartTemplateAnnotations } from "@/lib/canvas/insert-part-templates";
 import {
   nextPasteArtboardName,
   prepareImageDataUrlForCanvas,
@@ -143,7 +142,6 @@ export default function StudioPage() {
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
   const [selectedAnnIds, setSelectedAnnIds] = useState<string[]>([]);
-  const [insertTemplatesLoading, setInsertTemplatesLoading] = useState(false);
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
   const [highlightedSizePart, setHighlightedSizePart] = useState<string>("");
@@ -780,42 +778,6 @@ export default function StudioPage() {
     setHighlightedProcessIds([]);
     setHighlightedSizePart("");
   }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations]);
-
-  const handleInsertPartTemplates = useCallback(async () => {
-    if (aiBusy || !project || !activeArtboard) return;
-    setInsertTemplatesLoading(true);
-    setAiMessage(null);
-    try {
-      const imgUrl = activeArtboard.imageDataUrl ?? project.intake.imageDataUrl;
-      const templates = await buildPartTemplateAnnotations({
-        category: project.intake.detectedCategory,
-        photoType: project.intake.photoType,
-        intake: project.intake,
-        imageDataUrl: imgUrl,
-        imageOffset: activeArtboard.imageOffset ?? { x: 0, y: 0 },
-      });
-      if (templates.length === 0) {
-        setAiMessage("暂无该品类标准框模板");
-        return;
-      }
-      const artboards = project.canvas_data.artboards.map((ab) =>
-        ab.id === activeArtboard.id
-          ? { ...ab, annotations: [...ab.annotations, ...templates] }
-          : ab,
-      );
-      persist({
-        ...project,
-        canvas_data: { ...project.canvas_data, artboards },
-      });
-      setSelectedAnnIds(templates.map((t) => t.id));
-      focusTab("process");
-      setAiMessage(`已插入 ${templates.length} 个标准部位框，可拖动调整后 AI 识别或手动关联`);
-    } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "插入标准框失败");
-    } finally {
-      setInsertTemplatesLoading(false);
-    }
-  }, [aiBusy, project, activeArtboard, persist, focusTab]);
 
   const handlePasteImageToCanvas = useCallback(
     async (rawDataUrl: string) => {
@@ -1780,8 +1742,6 @@ export default function StudioPage() {
               selectedAnnIds={selectedAnnIds}
               onSelectedAnnIdsChange={handleSelectedAnnIdsChange}
               linkedHighlightAnnIds={linkedHighlightAnnIds}
-              onInsertPartTemplates={handleInsertPartTemplates}
-              insertTemplatesLoading={insertTemplatesLoading}
               onPasteImage={handlePasteImageToCanvas}
               pasteImageDisabled={aiBusy}
               onCropArtboardImage={handleCropArtboardImage}

@@ -116,8 +116,6 @@ type AnnotationCanvasProps = {
   selectedAnnIds?: string[];
   onSelectedAnnIdsChange?: (ids: string[]) => void;
   linkedHighlightAnnIds?: string[];
-  onInsertPartTemplates?: () => void;
-  insertTemplatesLoading?: boolean;
   onPasteImage?: (dataUrl: string) => void;
   pasteImageDisabled?: boolean;
   onCropArtboardImage?: (artboardId: string, crop: ImageCropRect) => void;
@@ -187,8 +185,6 @@ export default function AnnotationCanvas({
   selectedAnnIds: controlledSelectedAnnIds,
   onSelectedAnnIdsChange,
   linkedHighlightAnnIds = [],
-  onInsertPartTemplates,
-  insertTemplatesLoading,
   onPasteImage,
   pasteImageDisabled,
   onCropArtboardImage,
@@ -1292,8 +1288,6 @@ export default function AnnotationCanvas({
       interactionLocked={interactionLocked}
       layerVisibility={layerVisibility}
       onLayerVisibilityChange={onLayerVisibilityChange}
-      onInsertPartTemplates={onInsertPartTemplates}
-      insertTemplatesLoading={insertTemplatesLoading}
       onPasteImage={onPasteImage}
       pasteImageDisabled={pasteImageDisabled ?? interactionLocked}
     />

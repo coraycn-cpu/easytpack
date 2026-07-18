@@ -13,8 +13,6 @@ export const ANN_ACTION_LABELS = {
   toggleLock: "锁定",
   toggleUnlock: "解锁",
   deleteSelected: "删除选中",
-  insertTemplates: "插入标准部位框",
-  insertTemplatesHint: "按品类插入常用工艺框，可拖动调整",
   pasteImage: "贴图",
   pasteImageHint: "粘贴图片到画布（Ctrl+V）· 空画板设主图 · 有图则新建贴图画板",
   cropImage: "剪裁",
