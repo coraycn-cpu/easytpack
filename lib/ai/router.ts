@@ -203,7 +203,7 @@ export function getAiConfigStatus() {
     models: {
       gateway: getGatewayModel(),
       gatewayImage:
-        process.env.AI_MODEL_GATEWAY_IMAGE || "google/gemini-2.5-flash-image",
+        process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility",
       dashscope: getDashscopeModel(),
       zhipu: getZhipuModel(),
     },

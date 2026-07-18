@@ -43,7 +43,8 @@ function parseFallbackOrder(): ImageProviderId[] {
       );
     if (ids.length > 0) return ids;
   }
-  return ["siliconflow", "gateway", "dashscope"];
+  // Gateway（Recraft 等）优先；硅基流动作备用
+  return ["gateway", "siliconflow", "dashscope"];
 }
 
 function isProviderConfigured(id: ImageProviderId): boolean {
@@ -80,7 +81,7 @@ export async function synthesizeViewImageWithProviders(
 
   if (!lastResult.error) {
     lastResult.error =
-      "所有已配置的生图 Provider 均未成功出图，请检查 SILICONFLOW_API_KEY 或 AI_GATEWAY_API_KEY";
+      "所有已配置的生图 Provider 均未成功出图，请检查 AI_GATEWAY_API_KEY 或 SILICONFLOW_API_KEY";
   }
 
   return lastResult;

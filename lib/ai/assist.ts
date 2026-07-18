@@ -26,7 +26,8 @@ export function getModel(): string {
 }
 
 export function getImageModel(): string {
-  return process.env.AI_MODEL_GATEWAY_IMAGE || "google/gemini-2.5-flash-image";
+  // Vercel AI Gateway 内置生图；utility 适合平铺/版房参考图；也可用 recraft/recraft-v4.1
+  return process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility";
 }
 
 export function isGatewayConfigured(): boolean {

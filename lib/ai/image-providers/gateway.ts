@@ -65,9 +65,14 @@ export async function synthesizeViaGateway(
       };
     }
 
+    // Recraft 等专用生图模型走 generateImage（无参考图输入时 prompt 需自带款式描述）
+    const imagePrompt = sourceImageUrl
+      ? `${prompt}\n\nMatch the garment style, colorway, and construction from the described reference; professional fashion flat / tech-pack view, clean background, no model, no watermark.`
+      : prompt;
+
     const result = await generateImage({
       model,
-      prompt,
+      prompt: imagePrompt,
       aspectRatio: "3:4",
     });
 

@@ -298,7 +298,7 @@ export default function AiDebugPage() {
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">视角图生图测试</h2>
             <p className="mt-1 text-sm text-zinc-500">
-              验证 B 区同款链路（硅基流动 / Gateway / 通义 fallback）
+              验证 B 区同款链路（Gateway Recraft 优先 · 硅基流动备用 · 通义）
             </p>
           </div>
 

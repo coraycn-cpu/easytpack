@@ -918,7 +918,7 @@ export default function StudioPage() {
         const err = data.synthesisError as string | undefined;
         setAiTip(
           err
-            ? `生图失败：${err}。已用占位图，请检查 SILICONFLOW_API_KEY 或 AI Gateway 配置。`
+            ? `生图失败：${err}。已用占位图，请检查 AI_GATEWAY_API_KEY 或 SILICONFLOW_API_KEY。`
             : "生图 API 未返回图片，已生成占位图",
         );
       } else {
