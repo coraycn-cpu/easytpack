@@ -1,6 +1,10 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModel } from "@/lib/ai/assist";
+import {
+  inferGarmentBodyZone,
+  type GarmentBodyZone,
+} from "@/lib/ai/garment-scope";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 
 const SleeveLengthSchema = z.enum([
@@ -67,6 +71,49 @@ const ARTBOARD_FALLBACK: Record<ViewImageKind, string> = {
   custom: "自定义视角",
 };
 
+function zoneExtractRules(zone: GarmentBodyZone): string {
+  switch (zone) {
+    case "bottom":
+      return `- 目标是下装：garmentType 必须是 shorts/pants/skirt 等下装，禁止写成 vest/jacket/top
+- neckline 填 "n/a (bottom garment)"；sleeveLength 填 sleeveless；sleeveNote 写 "n/a — bottom garment, no sleeves"
+- hemLength / construction 只写下装腰头、裤长/裙长、口袋、门襟等
+- 严禁把同框马甲、背心、外套的颜色或结构写入任何字段`;
+    case "top":
+      return `- 目标是上装：garmentType 必须是 vest/top/jacket 等上装，禁止写成 shorts/pants
+- 只描述上身单件；严禁把同框短裤、长裤、半身裙写入字段`;
+    case "full":
+      return `- 目标是连衣裙/连体：整件分析，不要拆成上下装`;
+    case "set":
+      return `- 目标是套装：上下装特征都要写入，但标明为 coordinated set`;
+    default:
+      return `- 只描述用户指定的那一件，同框其他服装一律忽略`;
+  }
+}
+
+/** 下装 spec 清洗：避免袖/领字段把生图带向上装 */
+export function sanitizeGarmentSpecForZone(
+  spec: GarmentSpec,
+  zone: GarmentBodyZone,
+  targetLabel?: string,
+  targetCategory?: string,
+): GarmentSpec {
+  if (zone !== "bottom") return spec;
+  const typeHint = (targetCategory || targetLabel || "shorts").toLowerCase();
+  let garmentType = spec.garmentType;
+  if (/vest|jacket|coat|blouse|shirt|top|sweater|cardigan|tee/i.test(garmentType)) {
+    if (/裙|skirt/.test(typeHint)) garmentType = "skirt";
+    else if (/长裤|裤|pant|trouser/.test(typeHint)) garmentType = "pants";
+    else garmentType = "shorts";
+  }
+  return {
+    ...spec,
+    garmentType,
+    neckline: "n/a (bottom garment)",
+    sleeveLength: "sleeveless",
+    sleeveNote: "n/a — bottom garment, no sleeves",
+  };
+}
+
 export async function extractGarmentSpec(input: {
   sourceImageUrl: string;
   kind: ViewImageKind;
@@ -78,15 +125,22 @@ export async function extractGarmentSpec(input: {
   targetCategory?: string;
   excludeLabels?: string[];
   isSet?: boolean;
+  bodyZone?: GarmentBodyZone;
 }): Promise<GarmentSpec> {
   const correction = input.correctionPrompt?.trim()
     ? `\n用户修正（必须写入 sleeve/print 相关字段）：${input.correctionPrompt.trim()}`
     : "";
 
+  const zone =
+    input.bodyZone ??
+    (input.isSet
+      ? "set"
+      : inferGarmentBodyZone(input.targetLabel, input.targetCategory));
+
   const targetNote = input.targetLabel
     ? input.isSet
       ? `\n目标范围：套装「${input.targetLabel}」（${input.targetCategory ?? ""}），上下装一并分析。`
-      : `\n目标范围：仅「${input.targetLabel}」（${input.targetCategory ?? ""}）。画面中其他服装${
+      : `\n目标范围：仅「${input.targetLabel}」（${input.targetCategory ?? ""}），区域=${zone}。画面中其他服装${
           input.excludeLabels?.length
             ? `（${input.excludeLabels.join("、")}）`
             : ""
@@ -97,13 +151,15 @@ export async function extractGarmentSpec(input: {
     model: getModel(),
     schema: GarmentSpecSchema,
     schemaName: "GarmentSpec",
-    instructions: `你是服装工艺单视觉分析员。只根据参考图中【目标款】填写结构化字段，禁止臆造。
+    instructions: `你是服装工艺单视觉分析员。只根据参考图中【用户选定的目标款】填写结构化字段，禁止臆造，禁止把同框其他服装当成目标。
 
 规则：
-- 若指定了目标单款，严禁把同框其他服装的特征写入字段（例如目标是马甲时不要写短裤）
+- 用户选定的目标款优先级最高；模特图里更抢眼的上装/下装若不是目标，必须完全忽略
+- 若指定了目标单款，严禁把同框其他服装的特征写入字段（例如目标是短裤时不要写马甲领型；目标是马甲时不要写短裤）
+${zoneExtractRules(zone)}
 - sleeveLength：短袖若明显止于肘上，必须 short 或 cap，绝不要标成 elbow/three_quarter
 - printOrientation：横向色带/民族条带选 horizontal_bands；竖条选 vertical
-- artboardName：中文 2-8 字，贴合任务（线稿/背面/正面等）
+- artboardName：中文 2-8 字，贴合目标款品类（不要用同框其他件的名字）
 - 输出英文描述字段；不要写摄影棚套话`,
     messages: [
       {
@@ -114,7 +170,7 @@ export async function extractGarmentSpec(input: {
             text: `品类提示：${input.category ?? "服装"}
 描述提示：${input.description ?? "无"}
 任务类型：${input.kind}${targetNote}${correction}
-请只分析目标服装。`,
+请只分析目标服装「${input.targetLabel ?? input.description ?? "目标款"}」，不要分析同框其他件。`,
           },
           { type: "image" as const, image: input.sourceImageUrl },
         ],
@@ -122,14 +178,30 @@ export async function extractGarmentSpec(input: {
     ],
   });
 
-  return object;
+  return sanitizeGarmentSpecForZone(
+    object,
+    zone,
+    input.targetLabel,
+    input.targetCategory,
+  );
 }
 
 function sleeveAndPrintLocks(spec: GarmentSpec): string {
   return `${SLEEVE_LOCK[spec.sleeveLength]}. ${PRINT_LOCK[spec.printOrientation]}.`;
 }
 
-function garmentCore(spec: GarmentSpec): string {
+function garmentCore(spec: GarmentSpec, zone?: GarmentBodyZone): string {
+  if (zone === "bottom") {
+    return [
+      `${spec.garmentType} (BOTTOM GARMENT ONLY — no top attached)`,
+      `${spec.silhouette} silhouette`,
+      `${spec.hemLength} length`,
+      `${spec.fabric} fabric`,
+      `colors: ${spec.mainColors.join(", ") || "as described"}`,
+      `print: ${spec.printDetail}`,
+      spec.construction,
+    ].join("; ");
+  }
   return [
     `${spec.garmentType}, ${spec.silhouette} silhouette`,
     `${spec.neckline} neckline`,
@@ -178,7 +250,7 @@ function removeModelDirective(
   const scope = scopeNote?.trim()
     ? ` ${scopeNote.trim()}`
     : " Show ONLY the target garment.";
-  return `IMAGE EDIT: Transform into a FRONT true FLAT LAY product photo — the garment spread flat on a white/neutral surface (top-down or slight angle). Completely remove the human model, face, hair, arms, legs, AND any ghost mannequin, invisible mannequin, dress form, white torso, or 3D body form.${scope} NOT a mannequin shoot. Clean white or neutral studio background — not a fashion model shoot, not a full coordinated outfit unless the target is explicitly a set.`;
+  return `IMAGE EDIT: Transform into a FRONT true FLAT LAY product photo — THIS SINGLE TARGET GARMENT spread flat on a white/neutral surface (top-down or slight angle). Completely remove the human model, face, hair, arms, legs, AND any ghost mannequin, invisible mannequin, dress form, white torso, or 3D body form.${scope} NOT a mannequin shoot. NOT a full outfit collage. Clean white or neutral studio background.`;
 }
 
 /** 按视角生成生图 prompt（适配 Kontext 参考图编辑 + Recraft 文生图） */
@@ -191,17 +263,27 @@ export function buildRecraftPromptForKind(input: {
   extraPrompt?: string;
   /** 目标款隔离（单款/套装），放在最前 */
   scopeNote?: string;
+  bodyZone?: GarmentBodyZone;
 }): string {
-  const { kind, spec, viewHint, correctionPrompt, extraPrompt, scopeNote } =
-    input;
+  const {
+    kind,
+    spec,
+    viewHint,
+    correctionPrompt,
+    extraPrompt,
+    scopeNote,
+    bodyZone,
+  } = input;
   const fix = correctionPrompt?.trim()
     ? ` User correction (priority): ${correctionPrompt.trim()}.`
     : "";
   const extra = extraPrompt?.trim() ? ` ${extraPrompt.trim()}` : "";
   const scope = scopeNote?.trim() ? `${scopeNote.trim()} ` : "";
-  const core = spec ? garmentCore(spec) : viewHint;
+  const core = spec ? garmentCore(spec, bodyZone) : viewHint;
   const locks = spec
-    ? sleeveAndPrintLocks(spec)
+    ? bodyZone === "bottom"
+      ? PRINT_LOCK[spec.printOrientation] + "."
+      : sleeveAndPrintLocks(spec)
     : "Preserve exact sleeve length and print orientation from the brief.";
   const removeModel = removeModelDirective(kind, scopeNote);
 
@@ -279,16 +361,25 @@ export function buildRecraftPromptForKind(input: {
   return [
     scope,
     removeModel,
-    "Professional fashion tech-pack FRONT true FLAT LAY product photo: garment spread flat on white/neutral surface.",
-    "FORBIDDEN: ghost mannequin, invisible mannequin, dress form, white torso, 3D body form, worn-on-form presentation.",
-    "REQUIRED: flat product photography as if the dress is laid on a table — hollow interior ok, but no mannequin body.",
+    "Professional fashion tech-pack FRONT true FLAT LAY product photo: the SINGLE target garment spread flat on white/neutral surface.",
+    "FORBIDDEN: ghost mannequin, invisible mannequin, dress form, white torso, 3D body form, worn-on-form presentation, full coordinated outfit when target is a single piece.",
+    "REQUIRED: flat product photography as if THIS ONE garment is laid on a table — hollow interior ok, but no mannequin body.",
+    bodyZone === "bottom"
+      ? "BOTTOM ONLY: show shorts/pants/skirt alone; no vest, top, or jacket in frame."
+      : bodyZone === "top"
+        ? "TOP ONLY: show the upper garment alone; no shorts, pants, or skirt in frame."
+        : "",
     "Exact same garment:",
     core + ".",
     locks,
-    "IMPORTANT: if sleeves are short/cap, do NOT lengthen them toward the elbow.",
+    bodyZone === "bottom"
+      ? ""
+      : "IMPORTANT: if sleeves are short/cap, do NOT lengthen them toward the elbow.",
     "White/neutral studio background, no watermark, no text.",
     `Task: ${viewHint}.${extra}${fix}`,
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function artboardNameForKind(

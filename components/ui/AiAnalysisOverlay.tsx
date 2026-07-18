@@ -11,6 +11,8 @@ type AiAnalysisOverlayProps = {
   imagePreview?: string | null;
   /** 本次 AI 使用的图片来源说明 */
   imageSourceHint?: string | null;
+  /** 用户修正/自定义词摘要（可选，已含在 hint 时可省略） */
+  userNote?: string | null;
   /** @deprecated 优先使用 preset */
   title?: string;
   preset?: AiLoadingPresetId;
@@ -22,6 +24,7 @@ type AiAnalysisOverlayProps = {
 export default function AiAnalysisOverlay({
   imagePreview,
   imageSourceHint,
+  userNote,
   title,
   preset = "default",
   steps: stepsOverride,
@@ -56,6 +59,11 @@ export default function AiAnalysisOverlay({
   }, [steps.length, tips.length]);
 
   const step = steps[stepIndex];
+  const noteShort = userNote?.trim()
+    ? userNote.trim().length > 48
+      ? `${userNote.trim().slice(0, 48)}…`
+      : userNote.trim()
+    : null;
 
   return (
     <>
@@ -85,6 +93,11 @@ export default function AiAnalysisOverlay({
                 {imageSourceHint && (
                   <p className="mt-1 text-xs text-blue-200/90">{imageSourceHint}</p>
                 )}
+                {noteShort && !imageSourceHint?.includes(noteShort.slice(0, 12)) && (
+                  <p className="mt-0.5 text-xs text-blue-100/80">
+                    修正/自定义：{noteShort}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -95,12 +108,12 @@ export default function AiAnalysisOverlay({
                 <div className="relative">
                   <img
                     src={imagePreview}
-                    alt="分析中"
+                    alt="本次参考图"
                     className="h-32 w-32 rounded-xl object-cover shadow-lg ring-2 ring-blue-100"
                   />
                   <div className="absolute inset-0 animate-pulse rounded-xl bg-blue-400/20" />
                   <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-medium text-white">
-                    分析中
+                    参考图
                   </div>
                 </div>
               </div>

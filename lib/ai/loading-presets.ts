@@ -128,11 +128,11 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
     title: "AI 正在生成款式视角图",
     subtitle: "生图可能需要 30–90 秒，请耐心等待",
     steps: [
-      { icon: "🖼", title: "理解正面图", desc: "分析款式结构与细节" },
-      { icon: "🎨", title: "生成视角", desc: "绘制背面/侧面/细节图" },
+      { icon: "🖼", title: "理解参考图", desc: "分析本次选定的参考款式图结构与细节" },
+      { icon: "🎨", title: "生成视角", desc: "绘制背面/线稿/细节等目标图" },
       { icon: "📌", title: "排列画布", desc: "自动添加到画板区域" },
     ],
-    tips: ["生图较慢，请勿重复点击", "完成后新画板会出现在画布上"],
+    tips: ["生图较慢，请勿重复点击", "完成后新画板会出现在画布上", "提示页预览图即为本次送入 AI 的参考图"],
   },
   chat: {
     title: "AI 助手正在回复",
@@ -150,4 +150,13 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
 
 export function getAiLoadingPreset(id?: AiLoadingPresetId | null): AiLoadingPreset {
   return AI_LOADING_PRESETS[id ?? "default"];
+}
+
+/** 按任务标签微调生图 overlay 副标题 */
+export function viewImageSubtitleForTask(taskLabel?: string): string | undefined {
+  const t = taskLabel?.trim();
+  if (!t) return undefined;
+  if (/平铺/.test(t)) return `正在生成「${t}」，约 30–90 秒 · 参考原上传图`;
+  if (/线稿/.test(t)) return `正在生成「${t}」，约 30–90 秒 · 描摹选定彩图`;
+  return `正在生成「${t}」，约 30–90 秒，请耐心等待`;
 }

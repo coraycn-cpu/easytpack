@@ -19,6 +19,7 @@ import {
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { runFullTechPackAnnotation } from "@/lib/studio/run-full-annotation";
+import { FULL_COLLECT_SOURCE_HINT } from "@/lib/ai/image-source-hints";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 export default function CollectPage() {
@@ -283,6 +284,7 @@ export default function CollectPage() {
         <AiAnalysisOverlay
           preset="draft"
           imagePreview={project.intake.imageDataUrl}
+          imageSourceHint={FULL_COLLECT_SOURCE_HINT}
         />
       )}
       <AppHeader />

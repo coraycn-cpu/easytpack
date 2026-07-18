@@ -18,6 +18,7 @@ import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind"
 import { appendCorrectionToPrompt } from "@/lib/studio/view-image-constraints";
 import {
   buildTargetIsolationPrompt,
+  inferGarmentBodyZone,
   isSetTarget,
 } from "@/lib/ai/garment-scope";
 import type { GarmentScopeInput } from "@/lib/ai/assist";
@@ -47,11 +48,15 @@ function targetSpecHints(intake?: GarmentScopeInput) {
       targetCategory: undefined as string | undefined,
       excludeLabels: undefined as string[] | undefined,
       isSet: false,
+      bodyZone: "unknown" as const,
     };
   }
   const excludeLabels = (intake?.visibleGarments ?? [])
     .filter((g) => g.id !== target.id && g.kind !== "set")
     .map((g) => g.label);
+  const bodyZone = isSetTarget(intake!)
+    ? ("set" as const)
+    : inferGarmentBodyZone(target.label, target.category, target.kind);
   return {
     category: target.category || intake?.detectedCategory,
     description: target.label || intake?.description,
@@ -59,6 +64,7 @@ function targetSpecHints(intake?: GarmentScopeInput) {
     targetCategory: target.category,
     excludeLabels,
     isSet: isSetTarget(intake!),
+    bodyZone,
   };
 }
 
@@ -96,6 +102,7 @@ export async function generateViewImagePrompt(input: {
         viewHint: viewDesc,
         correctionPrompt: input.correctionPrompt,
         scopeNote,
+        bodyZone: hints.bodyZone,
       });
       return {
         kind,
@@ -114,6 +121,7 @@ export async function generateViewImagePrompt(input: {
       targetCategory: hints.targetCategory,
       excludeLabels: hints.excludeLabels,
       isSet: hints.isSet,
+      bodyZone: hints.bodyZone,
     });
 
     const imagePrompt = buildRecraftPromptForKind({
@@ -122,6 +130,7 @@ export async function generateViewImagePrompt(input: {
       viewHint: viewDesc,
       correctionPrompt: input.correctionPrompt,
       scopeNote,
+      bodyZone: hints.bodyZone,
     });
 
     return {
@@ -143,6 +152,7 @@ export async function generateViewImagePrompt(input: {
       .join(". "),
     correctionPrompt: input.correctionPrompt,
     scopeNote,
+    bodyZone: hints.bodyZone,
   });
 
   return {

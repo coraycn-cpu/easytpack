@@ -29,12 +29,13 @@ function filePartToDataUrl(file: {
   return `data:${mime};base64,${Buffer.from(file.uint8Array).toString("base64")}`;
 }
 
-const REF_FIDELITY_INSTRUCTION = `Based on the reference garment image, generate a professional fashion tech-pack image of THE SAME garment.
+const REF_FIDELITY_INSTRUCTION = `Based on the reference garment image, generate a professional fashion tech-pack image of THE SAME TARGET garment only.
 
 CRITICAL fidelity:
-- Exact sleeve length (short stays short)
+- Follow TARGET SCOPE in the view instruction — if the user selected a bottom, output ONLY that bottom (no vest/top); if a top, output ONLY that top (no shorts/pants)
+- Exact sleeve length (short stays short) when applicable
 - Exact print/pattern motif and orientation
-- Remove model; clean background; no watermark
+- Remove model; clean background; no watermark; never output the full outfit unless target is a set
 
 Follow the view instruction below.`;
 

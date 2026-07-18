@@ -86,7 +86,8 @@ export default function GarmentPickerStep({
         {willNeedFlatFront && (
           <span className="mt-1 block text-violet-700">
             确认后可生成平铺正面主款图，或暂不生成直接进入画布；
-            {photoTypeLabel(intake.photoType)}原图会保留在参考画板
+            {photoTypeLabel(intake.photoType)}原图会保留在参考画板。
+            选单件时只会提取该件（例如选短裤不会带上马甲），选整套才会上下装一起生成。
           </span>
         )}
       </p>

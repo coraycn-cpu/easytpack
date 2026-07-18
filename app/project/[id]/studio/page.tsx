@@ -96,10 +96,13 @@ import {
 } from "@/lib/studio/layout";
 import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-chart/apply-assist";
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
+import { viewImageSubtitleForTask } from "@/lib/ai/loading-presets";
 import {
   aiPresetToActionId,
   getAiActionImageSource,
   resolveAiImagePreviewUrl,
+  resolveAiImageSourceFromContext,
+  type AiImageContext,
 } from "@/lib/ai/image-source-hints";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { ViewImageKind } from "@/lib/studio/view-types";
@@ -153,6 +156,8 @@ export default function StudioPage() {
   const [aiTask, setAiTask] = useState<AiLoadingPresetId | null>(null);
   const [viewGenerating, setViewGenerating] = useState(false);
   const [regeneratingArtboardId, setRegeneratingArtboardId] = useState<string | null>(null);
+  /** 与真实 API 取图对齐的短生命周期上下文 */
+  const [aiImageContext, setAiImageContext] = useState<AiImageContext | null>(null);
   const garmentBlocked = Boolean(
     project && needsGarmentConfirmation(project.intake),
   );
@@ -304,6 +309,11 @@ export default function StudioPage() {
       if (!needsFlatFrontAfterGarmentPick(baseProject.intake)) return baseProject;
       if (flatFrontRunningRef.current) return baseProject;
       flatFrontRunningRef.current = true;
+      setAiImageContext({
+        action: "flat-front-regen",
+        preferIntake: true,
+        taskLabel: "平铺正面",
+      });
       setViewGenerating(true);
       try {
         const result = await generateFlatFrontForPrimary(baseProject);
@@ -322,6 +332,7 @@ export default function StudioPage() {
         return baseProject;
       } finally {
         setViewGenerating(false);
+        setAiImageContext(null);
         flatFrontRunningRef.current = false;
       }
     },
@@ -621,6 +632,11 @@ export default function StudioPage() {
   const handleDimensionAiFill = async () => {
     if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
     if (!isDimensionAnnotation(selectedAnn)) return;
+    setAiImageContext({
+      action: "size-dimension",
+      sourceArtboardId: activeArtboard.id,
+      taskLabel: "尺寸线识别",
+    });
     setAiTask("size-dimension");
     setAiMessage(null);
     try {
@@ -709,6 +725,7 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "尺寸识别失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
@@ -727,19 +744,35 @@ export default function StudioPage() {
   );
 
   const flatFrontRegenerating = useMemo(() => {
+    if (aiImageContext?.preferIntake && aiImageContext.action === "flat-front-regen") {
+      return true;
+    }
     if (!regeneratingArtboardId || !project) return false;
     const ab = project.canvas_data.artboards.find((a) => a.id === regeneratingArtboardId);
     return ab?.viewImageMeta?.kind === "flat_front";
-  }, [regeneratingArtboardId, project]);
+  }, [regeneratingArtboardId, project, aiImageContext]);
 
   const activeAiImageSource = useMemo(() => {
     if (!project || !activeAiPreset) return null;
+    if (aiImageContext) {
+      return resolveAiImageSourceFromContext(
+        project,
+        aiImageContext,
+        activeArtboardId,
+      );
+    }
     const actionId = aiPresetToActionId(activeAiPreset, {
       isFlatFrontRegen: flatFrontRegenerating,
     });
     if (!actionId) return null;
     return getAiActionImageSource(actionId, project, activeArtboardId);
-  }, [project, activeAiPreset, activeArtboardId, flatFrontRegenerating]);
+  }, [
+    project,
+    activeAiPreset,
+    activeArtboardId,
+    flatFrontRegenerating,
+    aiImageContext,
+  ]);
 
   const handleDeleteArtboard = useCallback(
     (artboardId: string) => {
@@ -923,12 +956,33 @@ export default function StudioPage() {
     const sourceBoard = params.sourceArtboardId
       ? project.canvas_data.artboards.find((a) => a.id === params.sourceArtboardId)
       : undefined;
+    const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+    const resolvedSourceArtboardId = sourceBoard?.id ?? primaryId;
     const effectiveSourceUrl =
       sourceBoard?.imageDataUrl ?? sourceImageUrl;
     if (!effectiveSourceUrl) {
       setAiMessage("请先上传正面款式图");
       return;
     }
+
+    const taskLabel =
+      params.preferredArtboardName ??
+      (params.kind === "line_art"
+        ? "线稿"
+        : params.kind === "back"
+          ? "背面"
+          : params.kind === "flat_front"
+            ? "平铺正面"
+            : canonicalArtboardNameForKind(params.kind));
+    const userNote =
+      params.correctionPrompt?.trim() || params.customPrompt?.trim() || undefined;
+
+    setAiImageContext({
+      action: "view-image",
+      sourceArtboardId: resolvedSourceArtboardId,
+      taskLabel,
+      userNote,
+    });
 
     const isRegen = Boolean(params.targetArtboardId);
     if (isRegen) {
@@ -1092,6 +1146,7 @@ export default function StudioPage() {
     } finally {
       setViewGenerating(false);
       setRegeneratingArtboardId(null);
+      setAiImageContext(null);
     }
   };
 
@@ -1151,6 +1206,12 @@ export default function StudioPage() {
     }
 
     if (meta.kind === "flat_front") {
+      setAiImageContext({
+        action: "flat-front-regen",
+        preferIntake: true,
+        taskLabel: "平铺正面",
+        userNote: correctionPrompt.trim() || undefined,
+      });
       setRegeneratingArtboardId(artboardId);
       setAiMessage(null);
       try {
@@ -1167,6 +1228,7 @@ export default function StudioPage() {
         setAiMessage(e instanceof Error ? e.message : "平铺正面重新生成失败");
       } finally {
         setRegeneratingArtboardId(null);
+        setAiImageContext(null);
       }
       return;
     }
@@ -1192,7 +1254,7 @@ export default function StudioPage() {
       customPrompt: meta.customPrompt,
       correctionPrompt: correctionPrompt || undefined,
       targetArtboardId: artboardId,
-      sourceArtboardId: lineSourceId,
+      sourceArtboardId: lineSourceId ?? primaryArtboardId,
       lineArtSourceArtboardId: lineSourceId,
       preferredArtboardName,
     });
@@ -1201,6 +1263,11 @@ export default function StudioPage() {
   const handleBatchAnnotate = async () => {
     if (aiBusy || !project || !activeArtboard) return;
     focusTab("process");
+    setAiImageContext({
+      action: "annotate-process",
+      sourceArtboardId: activeArtboard.id,
+      taskLabel: "标工艺",
+    });
     setAiTask("annotate-process");
     setAiMessage(null);
     try {
@@ -1315,12 +1382,18 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "标工艺失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
   const handleFillBom = async () => {
     if (aiBusy || !project) return;
     focusTab("bom");
+    setAiImageContext({
+      action: "fill-bom",
+      preferIntake: true,
+      taskLabel: "填物料",
+    });
     setAiTask("fill-bom");
     setAiMessage(null);
     try {
@@ -1355,11 +1428,17 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "填物料失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
   const handleRegionAiFill = async () => {
     if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
+    setAiImageContext({
+      action: "region-annotate",
+      sourceArtboardId: activeArtboard.id,
+      taskLabel: "区域识别",
+    });
     setAiTask("region-annotate");
     setAiMessage(null);
     try {
@@ -1458,6 +1537,7 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "区域识别失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
@@ -1473,6 +1553,11 @@ export default function StudioPage() {
   }) => {
     if (!project) return;
     setSizeAiDialogOpen(false);
+    setAiImageContext({
+      action: "fill-size",
+      sourceArtboardId: activeArtboard?.id ?? primaryArtboardId,
+      taskLabel: "填尺寸",
+    });
     setAiTask("fill-size");
     setAiMessage(null);
     try {
@@ -1638,11 +1723,17 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
   const handleEnhanceAll = async () => {
     if (aiBusy || !project) return;
+    setAiImageContext({
+      action: "enhance",
+      preferIntake: true,
+      taskLabel: "一键补全",
+    });
     setAiTask("enhance");
     setAiMessage(null);
     try {
@@ -1693,11 +1784,17 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "补全失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
   const handleStyleReview = async () => {
     if (aiBusy || !project) return;
+    setAiImageContext({
+      action: "explain",
+      sourceArtboardId: primaryArtboardId ?? activeArtboard?.id,
+      taskLabel: "款式评语",
+    });
     setAiTask("explain");
     setAiMessage(null);
     try {
@@ -1742,6 +1839,7 @@ export default function StudioPage() {
       setAiMessage(e instanceof Error ? e.message : "评语生成失败");
     } finally {
       setAiTask(null);
+      setAiImageContext(null);
     }
   };
 
@@ -1960,19 +2058,30 @@ export default function StudioPage() {
             <AiAnalysisOverlay
               preset={activeAiPreset}
               imageSourceHint={activeAiImageSource?.hint}
-              imagePreview={(() => {
-                const actionId = aiPresetToActionId(activeAiPreset, {
-                  isFlatFrontRegen: flatFrontRegenerating,
-                });
-                if (actionId) {
-                  return resolveAiImagePreviewUrl(
-                    project,
-                    actionId,
-                    activeArtboardId,
-                  );
-                }
-                return project.intake.imageDataUrl;
-              })()}
+              userNote={aiImageContext?.userNote}
+              subtitle={
+                activeAiPreset === "view-image"
+                  ? viewImageSubtitleForTask(aiImageContext?.taskLabel)
+                  : undefined
+              }
+              imagePreview={
+                activeAiImageSource?.previewUrl ??
+                (() => {
+                  const actionId = aiPresetToActionId(activeAiPreset, {
+                    isFlatFrontRegen: flatFrontRegenerating,
+                    preferIntake: aiImageContext?.preferIntake,
+                  });
+                  if (actionId) {
+                    return resolveAiImagePreviewUrl(
+                      project,
+                      actionId,
+                      activeArtboardId,
+                      aiImageContext,
+                    );
+                  }
+                  return project.intake.imageDataUrl;
+                })()
+              }
             />
           )}
 
