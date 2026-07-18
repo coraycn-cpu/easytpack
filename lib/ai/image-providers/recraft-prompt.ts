@@ -126,6 +126,22 @@ function garmentCore(spec: GarmentSpec): string {
   ].join("; ");
 }
 
+/** 线稿只用结构信息，禁止写入颜色/花型色值（否则 Recraft 会出彩平铺） */
+function garmentCoreLineArt(spec: GarmentSpec): string {
+  const printStructure =
+    spec.printOrientation === "solid"
+      ? "no print motifs"
+      : `suggest ${spec.printOrientation.replace(/_/g, " ")} motif placement with outline strokes only`;
+  return [
+    `${spec.garmentType}, ${spec.silhouette} silhouette`,
+    `${spec.neckline} neckline`,
+    spec.sleeveNote || SLEEVE_LOCK[spec.sleeveLength],
+    `${spec.hemLength} length`,
+    spec.construction,
+    printStructure,
+  ].join("; ");
+}
+
 /** 按视角生成 Recraft 文生图 prompt（线稿不得包成产品摄影） */
 export function buildRecraftPromptForKind(input: {
   kind: ViewImageKind;
@@ -146,15 +162,20 @@ export function buildRecraftPromptForKind(input: {
     : "Preserve exact sleeve length and print orientation from the brief.";
 
   if (kind === "line_art") {
+    const structure = spec ? garmentCoreLineArt(spec) : viewHint;
+    const sleeveLock = spec
+      ? SLEEVE_LOCK[spec.sleeveLength]
+      : "match sleeve length from the brief";
     return [
-      "Black and white technical fashion FLAT SKETCH / tech-pack LINE ART only.",
-      "Clean black ink outlines on pure white background.",
-      "NO color, NO fill, NO shading, NO fabric texture, NO photoreal photo, NO model.",
-      "Same garment construction as:",
-      core + ".",
-      locks,
-      `Task: ${viewHint}.${extra}${fix}`,
-      "Fashion design CAD / pattern-making line drawing style.",
+      "Monochrome technical fashion flat sketch.",
+      "BLACK pen outlines on WHITE background only.",
+      "Absolute rules: zero color, zero fill, zero gradient, zero fabric texture, zero photorealism, zero fashion photo.",
+      "Output must look like a tech-pack CAD line drawing / croquis outline, not a product photo.",
+      "Garment structure:",
+      structure + ".",
+      sleeveLock + ".",
+      "Indicate seams, neckline, sleeve hem, waist tie and hem with thin clean lines.",
+      `Task: technical line art of the same garment.${extra}${fix}`,
     ].join(" ");
   }
 
@@ -202,16 +223,47 @@ export function artboardNameForKind(
   return ARTBOARD_FALLBACK[kind];
 }
 
+/**
+ * 线稿：优先 Recraft V3（支持 Line art style，且在 Gateway 可用列表中）。
+ * Utility 栅格会出彩图，不适合线稿。
+ */
+export function lineArtModelCandidates(): string[] {
+  const preferred = process.env.AI_MODEL_GATEWAY_IMAGE_LINE_ART?.trim();
+  const candidates = [
+    preferred,
+    "recraft/recraft-v3",
+    "recraft/recraft-v3-vector",
+    "bfl/flux-kontext-pro",
+    "recraft/recraft-v4.1-utility-vector",
+  ].filter((m): m is string => Boolean(m));
+  return [...new Set(candidates)];
+}
+
+/** 平铺/背面等：优先能吃参考图的编辑模型 */
+export function viewImageModelCandidates(): string[] {
+  const preferred = process.env.AI_MODEL_GATEWAY_IMAGE?.trim();
+  const candidates = [
+    preferred,
+    "bfl/flux-kontext-pro",
+    "bytedance/seedream-4.5",
+    "recraft/recraft-v4.1-utility",
+    "xai/grok-imagine-image",
+  ].filter((m): m is string => Boolean(m));
+  return [...new Set(candidates)];
+}
+
 export function resolveRecraftModelForKind(kind: ViewImageKind): string {
-  const base =
-    process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility";
   if (kind === "line_art") {
-    // 线稿优先向量/线稿向模型；不可用时仍回退主模型
-    return (
-      process.env.AI_MODEL_GATEWAY_IMAGE_LINE_ART ||
-      process.env.AI_MODEL_GATEWAY_IMAGE ||
-      "recraft/recraft-v4.1-utility"
-    );
+    return lineArtModelCandidates()[0] ?? "recraft/recraft-v3";
   }
-  return base;
+  return viewImageModelCandidates()[0] ?? "bfl/flux-kontext-pro";
+}
+
+export function isRasterUtilityModel(modelId: string): boolean {
+  return /recraft-v4(\.1)?-utility$/i.test(modelId) && !/vector/i.test(modelId);
+}
+
+/** 支持 prompt.images 参考图编辑的 Gateway 模型 */
+export function supportsPromptImages(modelId: string): boolean {
+  return /flux-kontext|gpt-image|seedream|imagen/i.test(modelId);
 }

@@ -203,7 +203,9 @@ export function getAiConfigStatus() {
     models: {
       gateway: getGatewayModel(),
       gatewayImage:
-        process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility",
+        process.env.AI_MODEL_GATEWAY_IMAGE || "bfl/flux-kontext-pro",
+      gatewayImageLineArt:
+        process.env.AI_MODEL_GATEWAY_IMAGE_LINE_ART || "recraft/recraft-v3",
       dashscope: getDashscopeModel(),
       zhipu: getZhipuModel(),
     },

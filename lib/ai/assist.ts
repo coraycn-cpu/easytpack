@@ -26,8 +26,8 @@ export function getModel(): string {
 }
 
 export function getImageModel(): string {
-  // Gateway 生图统一走 Recraft 等文生图；有参考图时由 gateway 先看图再文生图
-  return process.env.AI_MODEL_GATEWAY_IMAGE || "recraft/recraft-v4.1-utility";
+  // 平铺/视角：优先 Flux Kontext（参考图编辑）；线稿见 AI_MODEL_GATEWAY_IMAGE_LINE_ART
+  return process.env.AI_MODEL_GATEWAY_IMAGE || "bfl/flux-kontext-pro";
 }
 
 export function isGatewayConfigured(): boolean {
