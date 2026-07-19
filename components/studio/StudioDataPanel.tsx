@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import SizeChartEditor from "@/components/studio/SizeChartEditor";
 import AnnotationActionBar from "@/components/studio/AnnotationActionBar";
+import BomExpandDialog from "@/components/studio/BomExpandDialog";
+import ProcessExpandDialog from "@/components/studio/ProcessExpandDialog";
+import ReviewExpandDialog from "@/components/studio/ReviewExpandDialog";
+import SizeChartEditor from "@/components/studio/SizeChartEditor";
 import { resolveSelectionMode } from "@/lib/studio/annotation-ux";
 import {
   clearProcessIdFromAnnotations,
@@ -102,6 +105,9 @@ export default function StudioDataPanel({
   interactionLocked,
 }: StudioDataPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [processExpandOpen, setProcessExpandOpen] = useState(false);
+  const [bomExpandOpen, setBomExpandOpen] = useState(false);
+  const [reviewExpandOpen, setReviewExpandOpen] = useState(false);
   const primaryAnn = selectedAnns.length === 1 ? selectedAnns[0] : null;
   const selectionMode = resolveSelectionMode(selectedAnns);
   const shapeLinkable = primaryAnn ? isLinkableShape(primaryAnn.type) : false;
@@ -129,7 +135,13 @@ export default function StudioDataPanel({
 
   const removeProcess = (index: number) => {
     const item = project.process_items[index];
-    if (!item?.id) return;
+    if (!item?.id) {
+      onPersist({
+        ...project,
+        process_items: project.process_items.filter((_, i) => i !== index),
+      });
+      return;
+    }
     const artboards = project.canvas_data.artboards.map((ab) => ({
       ...ab,
       annotations: clearProcessIdFromAnnotations(ab.annotations, item.id!),
@@ -137,6 +149,26 @@ export default function StudioDataPanel({
     onPersist({
       ...project,
       process_items: project.process_items.filter((_, i) => i !== index),
+      canvas_data: { ...project.canvas_data, artboards },
+    });
+  };
+
+  const persistProcessItems = (items: ProcessItem[]) => {
+    const keptIds = new Set(
+      items.map((p) => p.id).filter((id): id is string => Boolean(id)),
+    );
+    let artboards = project.canvas_data.artboards;
+    for (const prev of project.process_items) {
+      if (prev.id && !keptIds.has(prev.id)) {
+        artboards = artboards.map((ab) => ({
+          ...ab,
+          annotations: clearProcessIdFromAnnotations(ab.annotations, prev.id!),
+        }));
+      }
+    }
+    onPersist({
+      ...project,
+      process_items: items,
       canvas_data: { ...project.canvas_data, artboards },
     });
   };
@@ -230,6 +262,19 @@ export default function StudioDataPanel({
 
           {activeTab === "process" && (
             <div className="space-y-1.5">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-[10px] text-slate-400">
+                  侧栏可快速改；大面板便于通览编辑
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProcessExpandOpen(true)}
+                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  title="打开大面板编辑工艺"
+                >
+                  展开编辑
+                </button>
+              </div>
               {project.process_items.map((item, i) => {
                 const processId = item.id;
                 const isHighlighted = processId
@@ -344,6 +389,19 @@ export default function StudioDataPanel({
 
           {activeTab === "bom" && (
             <div className="space-y-1.5">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-[10px] text-slate-400">
+                  侧栏可快速改；大面板表格更易填写
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBomExpandOpen(true)}
+                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  title="打开大面板编辑物料"
+                >
+                  展开编辑
+                </button>
+              </div>
               {project.bom_items.map((item, i) => (
                 <div
                   key={i}
@@ -458,10 +516,20 @@ export default function StudioDataPanel({
 
           {activeTab === "review" && (
             <div className="space-y-2">
-              <p className="text-[10px] leading-relaxed text-slate-500">
-                面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段（≤{REVIEW_MAX}字）。可点工具栏「款式评语」由
-                AI 生成。
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] leading-relaxed text-slate-500">
+                  面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段（≤{REVIEW_MAX}字）。可点工具栏「款式评语」由
+                  AI 生成。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReviewExpandOpen(true)}
+                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  title="打开大面板编辑评语"
+                >
+                  展开编辑
+                </button>
+              </div>
               <textarea
                 value={project.style_review ?? ""}
                 onChange={(e) =>
@@ -482,6 +550,25 @@ export default function StudioDataPanel({
           )}
         </div>
       )}
+
+      <ProcessExpandDialog
+        open={processExpandOpen}
+        onClose={() => setProcessExpandOpen(false)}
+        items={project.process_items}
+        onChange={persistProcessItems}
+      />
+      <BomExpandDialog
+        open={bomExpandOpen}
+        onClose={() => setBomExpandOpen(false)}
+        items={project.bom_items}
+        onChange={(bom_items) => onPersist({ ...project, bom_items })}
+      />
+      <ReviewExpandDialog
+        open={reviewExpandOpen}
+        onClose={() => setReviewExpandOpen(false)}
+        value={project.style_review ?? ""}
+        onChange={(style_review) => onPersist({ ...project, style_review })}
+      />
     </div>
   );
 }
