@@ -189,6 +189,14 @@ export type TechPackProject = {
     /** 标注图稿：合并一张或工艺/尺寸各一张 */
     annotatedImageMode?: "merged" | "split";
   };
+  /** 导出记录（轻量沉淀） */
+  exportHistory?: Array<{
+    at: string;
+    kind: "pdf" | "xlsx" | "composite";
+    basename: string;
+    pageCount?: number;
+    imageMode?: "merged" | "split";
+  }>;
 };
 
 export const DEFAULT_ARTBOARD_NAMES = ["正面", "背面", "细节"];

@@ -202,6 +202,8 @@ export async function renderAllArtboards(
 
 const STAGE_EXPORT_PAD = 48;
 const STAGE_MAX_PIXELS = 16_000_000;
+/** 微信转发友好：合拼大图长边上限 */
+const SHARE_MAX_EDGE = 4096;
 
 function mergeRect(a: RectBounds, b: RectBounds): RectBounds {
   return {
@@ -255,16 +257,44 @@ function computeStageExportBounds(
   };
 }
 
-function canvasToExportDataUrl(canvas: HTMLCanvasElement): string {
+function canvasToExportDataUrl(
+  canvas: HTMLCanvasElement,
+  options?: { preferJpeg?: boolean },
+): string {
   try {
+    if (options?.preferJpeg) {
+      return canvas.toDataURL("image/jpeg", 0.88);
+    }
     const png = canvas.toDataURL("image/png");
-    if (png.length > 12_000_000) {
-      return canvas.toDataURL("image/jpeg", 0.92);
+    if (png.length > 8_000_000) {
+      return canvas.toDataURL("image/jpeg", 0.88);
     }
     return png;
   } catch {
     return canvas.toDataURL("image/jpeg", 0.85);
   }
+}
+
+/** 将画布缩放到适合微信转发的长边，优先 JPEG */
+function canvasToShareDataUrl(source: HTMLCanvasElement): string {
+  const maxEdge = Math.max(source.width, source.height);
+  let canvas = source;
+  if (maxEdge > SHARE_MAX_EDGE) {
+    const scale = SHARE_MAX_EDGE / maxEdge;
+    const w = Math.max(1, Math.floor(source.width * scale));
+    const h = Math.max(1, Math.floor(source.height * scale));
+    const scaled = document.createElement("canvas");
+    scaled.width = w;
+    scaled.height = h;
+    const ctx = scaled.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(source, 0, 0, w, h);
+      canvas = scaled;
+    }
+  }
+  return canvasToExportDataUrl(canvas, { preferJpeg: true });
 }
 
 /**
@@ -353,11 +383,14 @@ async function renderStudioStageToCanvas(
 
 /**
  * 画布摆放图 + 有数据的工艺 / BOM / 尺寸 / 备注，合成一张完整导出图。
+ * 默认按微信转发友好尺寸/JPEG 输出。
  */
 export async function renderTechPackSheetToDataUrl(
   project: TechPackProject,
   mode: AnnotatedImageMode = "merged",
+  options?: { forShare?: boolean },
 ): Promise<string | null> {
+  const forShare = options?.forShare !== false;
   const stage = await renderStudioStageToCanvas(
     project.canvas_data.artboards,
     project.process_items,
@@ -432,5 +465,5 @@ export async function renderTechPackSheetToDataUrl(
     drawSheetSections(ctx, sections, tableX, y, sheetWidth);
   }
 
-  return canvasToExportDataUrl(canvas);
+  return forShare ? canvasToShareDataUrl(canvas) : canvasToExportDataUrl(canvas);
 }

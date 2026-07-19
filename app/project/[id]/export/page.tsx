@@ -1,28 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
-import { exportBomCsv, exportProcessCsv, exportSizeChartCsv } from "@/lib/export/excel";
 import {
   renderAllArtboards,
   renderTechPackSheetToDataUrl,
   type AnnotatedImageMode,
 } from "@/lib/export/canvas-render";
+import {
+  downloadDataUrl,
+  exportFilename,
+  styleExportBasename,
+} from "@/lib/export/filename";
+import {
+  buildTechPackDocument,
+} from "@/lib/export/techpack-document";
+import { exportTechPackXlsx } from "@/lib/export/xlsx";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
-
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,9 +29,12 @@ export default function ExportPage() {
   const [annotatedImages, setAnnotatedImages] = useState<
     Array<{ name: string; dataUrl: string }>
   >([]);
-  const [stageCompositeUrl, setStageCompositeUrl] = useState<string | null>(null);
+  const [stageCompositeUrl, setStageCompositeUrl] = useState<string | null>(
+    null,
+  );
   const [imageMode, setImageMode] = useState<AnnotatedImageMode>("merged");
   const [rendering, setRendering] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +72,7 @@ export default function ExportPage() {
         project.process_items,
         imageMode,
       ),
-      renderTechPackSheetToDataUrl(project, "merged"),
+      renderTechPackSheetToDataUrl(project, imageMode, { forShare: true }),
     ])
       .then(([images, stageUrl]) => {
         if (cancelled) return;
@@ -87,6 +88,29 @@ export default function ExportPage() {
     };
   }, [project, imageMode]);
 
+  const pageCount = useMemo(() => {
+    if (!project) return 0;
+    return buildTechPackDocument(project, annotatedImages).length;
+  }, [project, annotatedImages]);
+
+  const persistHistory = async (
+    kind: "pdf" | "xlsx" | "composite",
+    extra?: { pageCount?: number },
+  ) => {
+    if (!project) return;
+    const entry = {
+      at: new Date().toISOString(),
+      kind,
+      basename: styleExportBasename(project),
+      pageCount: extra?.pageCount,
+      imageMode,
+    };
+    const history = [...(project.exportHistory ?? []), entry].slice(-20);
+    const updated = { ...project, exportHistory: history };
+    await saveProject(updated);
+    setProject(updated);
+  };
+
   const handleImageModeChange = (mode: AnnotatedImageMode) => {
     setImageMode(mode);
     if (!project) return;
@@ -98,19 +122,43 @@ export default function ExportPage() {
     setProject(updated);
   };
 
-  const handlePrint = () => window.print();
+  const handleExportPdf = () => {
+    if (!project) return;
+    setBusy("pdf");
+    void persistHistory("pdf", { pageCount }).finally(() => {
+      // 打印另存为 PDF；文件名由系统对话框决定，预填提示用款式名
+      document.title = exportFilename(project, "工艺包");
+      window.print();
+      setBusy(null);
+    });
+  };
 
-  const handleDownloadStage = () => {
+  const handleExportXlsx = () => {
+    if (!project) return;
+    setBusy("xlsx");
+    try {
+      exportTechPackXlsx(project);
+      void persistHistory("xlsx");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDownloadComposite = () => {
     if (!stageCompositeUrl || !project) return;
+    setBusy("composite");
     const ext = stageCompositeUrl.startsWith("data:image/jpeg") ? "jpg" : "png";
-    const safeTitle = (project.title || "techpack").replace(/[\\/:*?"<>|]+/g, "_");
-    downloadDataUrl(stageCompositeUrl, `${safeTitle}-工艺包大图.${ext}`);
+    downloadDataUrl(
+      stageCompositeUrl,
+      exportFilename(project, `合拼大图.${ext}`),
+    );
+    void persistHistory("composite").finally(() => setBusy(null));
   };
 
   if (!project) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
-        加载预览...
+        加载中…
       </div>
     );
   }
@@ -121,7 +169,7 @@ export default function ExportPage() {
     <>
       <div className="print:hidden">
         <header className="border-b border-zinc-200 bg-white px-4 py-3">
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
             <div>
               <Link
                 href={`/project/${id}/studio`}
@@ -129,10 +177,13 @@ export default function ExportPage() {
               >
                 ← 返回画板
               </Link>
-              <h1 className="text-lg font-semibold text-zinc-900">Tech Pack 预览</h1>
+              <h1 className="text-lg font-semibold text-zinc-900">
+                导出工艺包
+              </h1>
               <p className="text-xs text-zinc-500">
-                完成度 {progress}%
-                {rendering ? " · 正在生成画布大图…" : ""}
+                {styleExportBasename(project)} · 完成度 {progress}%
+                {rendering ? " · 正在生成图…" : ""}
+                {pageCount ? ` · ${pageCount} 页` : ""}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -162,53 +213,40 @@ export default function ExportPage() {
               </div>
               <button
                 type="button"
-                disabled={!stageCompositeUrl || rendering}
-                onClick={handleDownloadStage}
+                disabled={rendering || busy !== null}
+                onClick={handleExportPdf}
+                className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+              >
+                {busy === "pdf" ? "…" : "导出 PDF"}
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={handleExportXlsx}
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50 disabled:opacity-40"
+              >
+                {busy === "xlsx" ? "…" : "导出 Excel"}
+              </button>
+              <button
+                type="button"
+                disabled={!stageCompositeUrl || rendering || busy !== null}
+                onClick={handleDownloadComposite}
                 className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
               >
-                下载工艺包大图
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  exportProcessCsv(project.process_items, `${project.title}-工艺表.csv`)
-                }
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
-              >
-                导出工艺表
-              </button>
-              <button
-                type="button"
-                onClick={() => exportBomCsv(project.bom_items, `${project.title}-BOM.csv`)}
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
-              >
-                导出 BOM
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  exportSizeChartCsv(project.size_chart, `${project.title}-尺寸表.csv`)
-                }
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
-              >
-                导出尺寸表
-              </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-              >
-                打印 / 保存 PDF
+                {busy === "composite" ? "…" : "下载合拼大图"}
               </button>
             </div>
           </div>
         </header>
 
-        <main className="mx-auto max-w-4xl px-4 py-8">
+        <main className="mx-auto max-w-5xl px-4 py-6">
+          <p className="mb-3 text-[11px] text-zinc-400">
+            PDF：打印对话框选「另存为 PDF / A4 横向」。Excel：一个文件多
+            Sheet。合拼大图：适合微信转发，按款式名保存。
+          </p>
           <TechPackPreview
             project={project}
             annotatedImages={annotatedImages}
-            stageCompositeUrl={stageCompositeUrl}
           />
         </main>
       </div>
@@ -217,15 +255,33 @@ export default function ExportPage() {
         <TechPackPreview
           project={project}
           annotatedImages={annotatedImages}
-          stageCompositeUrl={stageCompositeUrl}
           printMode
         />
       </div>
 
       <style jsx global>{`
         @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
+          }
+          html,
           body {
             background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .a4-landscape-page {
+            width: 277mm !important;
+            height: 194mm !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            page-break-after: always;
+            break-after: page;
+          }
+          .a4-landscape-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
         }
       `}</style>
