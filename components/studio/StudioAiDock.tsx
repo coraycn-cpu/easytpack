@@ -12,6 +12,7 @@ import {
   isBoardScopedChatAction,
   resolveChatImageMode,
 } from "@/lib/ai/chat-image-intent";
+import { buildChatQuickChips } from "@/lib/ai/chat-quick-chips";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import type { AiChatResponse, AiChatSuggestedAction } from "@/types/process";
 import type { TechPackProject } from "@/types/project";
@@ -25,16 +26,6 @@ type ChatMessage = {
 };
 
 const DEFAULT_STATUS = "版房 AI 助手 · 点击对话";
-
-const QUICK_CHIPS: Array<{ label: string; text: string }> = [
-  { label: "推荐面料", text: "这个款推荐什么面料？要注意什么？" },
-  { label: "工艺要点", text: "这个款工艺上要注意什么？" },
-  { label: "袖长建议", text: "这个袖子长度多少合适？怎么做？" },
-  { label: "领口做法", text: "这个领口怎么做比较合适？" },
-  { label: "补全缺失", text: "帮我看看工艺包还缺什么，并建议一键补全" },
-  { label: "按图填物料", text: "根据当前款式图补充面辅料清单" },
-  { label: "标工艺", text: "请在当前画板上标出主要工艺区域" },
-];
 
 const ACTION_LABELS: Record<AiChatSuggestedAction, string> = {
   "annotate-process": "标工艺",
@@ -329,7 +320,16 @@ export default function StudioAiDock({
 
   const send = () => void sendText(input);
 
-  const chips = useMemo(() => QUICK_CHIPS, []);
+  const chips = useMemo(
+    () => buildChatQuickChips(project),
+    [
+      project.intake.targetGarment?.label,
+      project.intake.targetGarment?.category,
+      project.intake.targetGarment?.kind,
+      project.intake.detectedCategory,
+      project.intake.detectedFeatures,
+    ],
+  );
 
   return (
     <div className="pointer-events-none absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center">
@@ -344,9 +344,7 @@ export default function StudioAiDock({
         <div className="flex shrink-0 items-center justify-between border-b border-[#2563eb] bg-[#2563eb] px-3 py-2 text-white">
           <div>
             <p className="text-xs font-semibold">版房 AI 助手</p>
-            <p className="text-[10px] opacity-80">
-              问款式用原图 · 改文字看工艺包 · 标注生图用选中板
-            </p>
+            <p className="text-[10px] opacity-80">本款答疑 · 改工艺包</p>
           </div>
           <button
             type="button"

@@ -197,20 +197,16 @@ ${scope}
 }
 
 const FALLBACK_WELCOME =
-  "你好！我是本款的版房 AI 助手。问款式（面料/领口等）以你上传的原始参考图为准；改工艺说明/物料/尺码看工艺包文字；点「标工艺/生图」等建议时按当前选中画板执行。";
+  "你好！我是本款的版房 AI 助手。可以问我面料、工艺、尺寸，或让我帮你改工艺包。";
 
 /**
- * 用原始建款识图结果生成开场白（不含初稿说明等后加内容）。
+ * 面向用户的开场白：用建款识图要点打招呼，不暴露内部数据源规则。
  */
 export function buildChatWelcomeMessage(
   project: Pick<TechPackProject, "title" | "intake">,
 ): string {
   const { intake, title } = project;
   const analysis = originalIntentAnalysis(intake.aiIntentAnalysis);
-  const category =
-    intake.targetGarment?.category ||
-    intake.detectedCategory ||
-    "服装";
   const label =
     intake.targetGarment?.label ||
     intake.suggestedTitle ||
@@ -220,31 +216,19 @@ export function buildChatWelcomeMessage(
     .map((f) => f.trim())
     .filter(Boolean)
     .slice(0, 6);
-  const photo = photoTypeLabel(intake.photoType);
 
   if (!analysis && features.length === 0 && !intake.detectedCategory) {
     return FALLBACK_WELCOME;
   }
 
-  const lines: string[] = [
-    `你好！我是「${label}」的版房 AI 助手。`,
-    `问款式用你上传的原始${photo}（建款识图），不以后续背面/线稿为准；改工艺说明/物料/尺码看工艺包文字；标工艺或生图则按当前选中画板。`,
-  ];
-
-  if (intake.garmentConfirmed && intake.targetGarment) {
-    lines.push(
-      `当前 Tech Pack 目标款：${intake.targetGarment.label}（${intake.targetGarment.category}）。`,
-    );
-  }
+  const lines: string[] = [`你好！我是「${label}」的版房 AI 助手。`];
 
   if (analysis) {
-    lines.push(`建款识图摘要：${analysis}`);
+    lines.push(analysis);
   }
   if (features.length > 0) {
-    lines.push(`识别特征：${features.join("、")}。`);
+    lines.push(`主要特征：${features.join("、")}。`);
   }
-  lines.push(
-    "可问面料、工艺、袖长、领口等本款问题；也可改工艺包。与本款无关的问题我会婉拒。",
-  );
+  lines.push("有面料、工艺、尺寸方面的问题，或想改工艺包，直接跟我说就行。");
   return lines.join("\n\n");
 }
