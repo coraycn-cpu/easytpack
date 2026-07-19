@@ -1940,6 +1940,12 @@ export default function StudioPage() {
             onViewportChange={(viewport) =>
               saveLayout({ ...layoutRef.current, viewport })
             }
+            titleLabel={
+              project.title?.trim() ||
+              project.intake.suggestedTitle?.trim() ||
+              project.intake.targetGarment?.label?.trim() ||
+              undefined
+            }
           >
             <AnnotationCanvas
               fixedChrome
