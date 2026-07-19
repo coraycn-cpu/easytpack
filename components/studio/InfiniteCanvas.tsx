@@ -6,8 +6,6 @@ import type { StudioLayout } from "@/lib/studio/layout";
 type InfiniteCanvasProps = {
   viewport: StudioLayout["viewport"];
   onViewportChange: (viewport: StudioLayout["viewport"]) => void;
-  /** 画布正上方居中显示，不随缩放/平移变化 */
-  titleLabel?: string;
   children: React.ReactNode;
 };
 
@@ -17,7 +15,6 @@ const MAX_SCALE = 2;
 export default function InfiniteCanvas({
   viewport,
   onViewportChange,
-  titleLabel,
   children,
 }: InfiniteCanvasProps) {
   const [isPanning, setIsPanning] = useState(false);
@@ -146,15 +143,6 @@ export default function InfiniteCanvas({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
     >
-      {titleLabel?.trim() ? (
-        <div
-          className="pointer-events-none absolute left-1/2 top-3 z-10 max-w-[min(480px,calc(100%-2rem))] -translate-x-1/2 truncate rounded-md bg-white/90 px-3 py-1 text-sm font-semibold tracking-wide text-slate-700 shadow-sm backdrop-blur-sm"
-          title={titleLabel.trim()}
-        >
-          {titleLabel.trim()}
-        </div>
-      ) : null}
-
       <div
         className="absolute left-0 top-0 origin-top-left will-change-transform"
         style={{

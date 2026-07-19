@@ -1439,7 +1439,6 @@ export default function AnnotationCanvas({
                 const displayH = entry.fit.height * abScale.y;
                 const imgX = entry.fit.x + abOffset.x;
                 const imgY = entry.fit.y + abOffset.y;
-                const labelAbove = 22;
                 const imageDraggable =
                   isActive &&
                   tool === "select" &&
@@ -1534,17 +1533,6 @@ export default function AnnotationCanvas({
                           commitImageDrag(dx, dy, abOffset, abAnns);
                         }}
                       >
-                        <Group y={-labelAbove}>
-                          <Text
-                            text={ab.name}
-                            x={0}
-                            y={0}
-                            fontSize={13}
-                            fontStyle="600"
-                            fill={isActive ? "#2563eb" : "#64748b"}
-                            listening={false}
-                          />
-                        </Group>
                         <KonvaImage
                           id={isActive ? "garment_image" : undefined}
                           image={entry.img}

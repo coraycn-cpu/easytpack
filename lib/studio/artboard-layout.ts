@@ -2,7 +2,8 @@ import { computeImagePlacement, loadImagePlacement } from "@/lib/canvas/bounds";
 import type { Artboard } from "@/types/project";
 
 export const ARTBOARD_GAP = 80;
-export const ARTBOARD_LABEL_HEIGHT = 28;
+/** 画板上方不再预留标题条高度（名称改由侧栏展示） */
+export const ARTBOARD_LABEL_HEIGHT = 0;
 
 export type ArtboardSlot = {
   id: string;
