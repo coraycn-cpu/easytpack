@@ -225,13 +225,52 @@ export const EnhanceTechPackSchema = z.object({
   summary: z.string().describe("本次补全了什么，用户还需要确认什么"),
 });
 
+export const AiChatSuggestedActionSchema = z.enum([
+  "annotate-process",
+  "fill-bom",
+  "fill-size",
+  "enhance",
+  "explain",
+  "view-back",
+  "view-line-art",
+]);
+
 export const AiChatResponseSchema = z.object({
   reply: z.string().describe("给用户的友好回复"),
-  process_items: z.array(ProcessItemSchema).optional().describe("新增或修改的工艺条目"),
-  bom_items: z.array(BomItemSchema).optional().describe("新增或修改的物料"),
+  process_items: z
+    .array(ProcessItemSchema)
+    .optional()
+    .describe("新增或修改的工艺条目（按 part 合并；新建可省略 id）"),
+  bom_items: z
+    .array(BomItemSchema)
+    .optional()
+    .describe("新增或修改的物料（按 name 合并，可改规格/用量）"),
+  remove_process_parts: z
+    .array(z.string())
+    .optional()
+    .describe("仅当用户明确要求删除时，列出要删除的工艺部位名"),
+  remove_bom_names: z
+    .array(z.string())
+    .optional()
+    .describe("仅当用户明确要求删除时，列出要删除的物料名称"),
   size_chart: SizeChartAssistSchema.optional().describe("更新后的尺码表"),
   title: z.string().optional().describe("更新款式标题"),
+  suggested_actions: z
+    .array(
+      z.object({
+        action: AiChatSuggestedActionSchema,
+        reason: z.string().describe("为何建议该操作，一句话"),
+      }),
+    )
+    .max(3)
+    .optional()
+    .describe(
+      "需要调度 Studio 已有 AI 能力时给出建议（标工艺/填物料/生图等），不要假装已执行",
+    ),
 });
+
+export type AiChatSuggestedAction = z.infer<typeof AiChatSuggestedActionSchema>;
+export type AiChatResponse = z.infer<typeof AiChatResponseSchema>;
 
 export type ProcessItem = z.infer<typeof ProcessItemSchema>;
 export type ProcessList = z.infer<typeof ProcessListSchema>;

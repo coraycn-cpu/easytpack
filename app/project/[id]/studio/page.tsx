@@ -2023,9 +2023,43 @@ export default function StudioPage() {
 
           <StudioAiDock
             project={project}
+            activeArtboardId={activeArtboardId}
             onProjectUpdate={persist}
             disabled={aiBusy}
             statusText={aiMessage ?? aiTip}
+            onRunSuggestedAction={(action) => {
+              switch (action) {
+                case "annotate-process":
+                  void handleBatchAnnotate();
+                  break;
+                case "fill-bom":
+                  void handleFillBom();
+                  break;
+                case "fill-size":
+                  handleGenerateSize();
+                  break;
+                case "enhance":
+                  void handleEnhanceAll();
+                  break;
+                case "explain":
+                  void handleStyleReview();
+                  break;
+                case "view-back":
+                  void handleGenerateView("back");
+                  break;
+                case "view-line-art": {
+                  const sourceId =
+                    activeArtboard?.viewImageMeta?.kind === "line_art"
+                      ? primaryArtboardId
+                      : activeArtboardId || primaryArtboardId;
+                  if (sourceId) void handleGenerateLineArtFromArtboard(sourceId);
+                  else setAiMessage("请先选中一张彩图画板再生成线稿");
+                  break;
+                }
+                default:
+                  break;
+              }
+            }}
           />
 
           <div className="pointer-events-none fixed top-14 right-4 z-30 w-[min(100vw-1.5rem,340px)]">

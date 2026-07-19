@@ -244,12 +244,11 @@ export default function CollectPage() {
           answers,
           isComplete: true,
         },
-        intake: {
-          ...annotated.intake,
-          aiIntentAnalysis: summary
-            ? `${project.intake.aiIntentAnalysis ?? ""}\n\n初稿说明：${summary}`.trim()
-            : project.intake.aiIntentAnalysis,
-        },
+        // 不把初稿说明拼进建款识图字段，避免污染「原始款式分析」来源
+        intake: annotated.intake,
+        ...(summary && !annotated.style_review?.trim()
+          ? { style_review: `初稿说明：${summary}`.slice(0, 280) }
+          : {}),
       };
 
       await saveProject(updated);
