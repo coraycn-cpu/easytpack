@@ -85,13 +85,15 @@ function PageByKind({
                     {board.name}
                   </p>
                 )}
-                <div className="flex min-h-0 flex-1 items-center justify-center p-1.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={board.dataUrl}
-                    alt={board.name}
-                    className="max-h-full max-w-full object-contain"
-                  />
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center p-1.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={board.dataUrl}
+                      alt={board.name}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -424,14 +426,16 @@ function CoverOverviewPage({
 
         <div className="flex min-h-0 flex-1 gap-1.5">
           <div className="flex min-w-0 flex-[1.15] flex-col gap-1.5">
-            <div className="min-h-0 flex-1 overflow-hidden border border-black bg-white p-1">
+            <div className="relative min-h-0 flex-1 overflow-hidden border border-black bg-white">
               {o.heroUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={o.heroUrl}
-                  alt={o.heroLabel}
-                  className="h-full w-full object-contain"
-                />
+                <div className="absolute inset-0 flex items-center justify-center p-1.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={o.heroUrl}
+                    alt={o.heroLabel}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
               ) : (
                 <p className="flex h-full items-center justify-center text-zinc-400">
                   暂无款式图

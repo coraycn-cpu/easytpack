@@ -120,12 +120,9 @@ export default function ExportPage() {
   const handleExportXlsx = () => {
     if (!project) return;
     setBusy("xlsx");
-    try {
-      exportTechPackXlsx(project);
-      void persistHistory("xlsx");
-    } finally {
-      setBusy(null);
-    }
+    void exportTechPackXlsx(project, annotatedImages)
+      .then(() => persistHistory("xlsx"))
+      .finally(() => setBusy(null));
   };
 
   const handleDownloadComposite = () => {
@@ -201,8 +198,8 @@ export default function ExportPage() {
 
         <main className="mx-auto max-w-5xl px-4 py-6">
           <p className="mb-3 text-[11px] text-zinc-400">
-            首页为协作总览（下单数量可手填）。PDF 请选 A4
-            横向另存；Excel 为多 Sheet；合拼大图适合微信转发。
+                首页为协作总览（下单数量可手填）。PDF 请选 A4
+                横向另存；Excel 含「视图」Sheet 附图；合拼大图适合微信转发。
           </p>
           <TechPackPreview
             project={project}

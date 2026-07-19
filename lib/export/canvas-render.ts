@@ -6,7 +6,6 @@ import {
   type ExportLayerFilter,
 } from "@/lib/canvas/annotation-layers";
 import { computeSequenceBadges } from "@/lib/canvas/sequence-badges";
-import { CANVAS_H, CANVAS_W } from "@/lib/canvas/constants";
 import {
   annotationBounds,
   loadImagePlacement,
@@ -134,6 +133,14 @@ function drawSequenceBadges(
   }
 }
 
+const ARTBOARD_EXPORT_PAD = 32;
+/** 单板导出长边上限，避免超大 dataURL */
+const ARTBOARD_EXPORT_MAX_EDGE = 2200;
+
+/**
+ * 按工作室实际坐标渲染单板（含缩放/偏移），并裁到内容包围盒。
+ * 不再塞进固定 1000×750，否则图会挤在角上、预览/PDF 看起来「错位」。
+ */
 export async function renderArtboardToDataUrl(
   artboard: Artboard,
   imageFallback?: string,
@@ -143,31 +150,62 @@ export async function renderArtboardToDataUrl(
   const src = artboard.imageDataUrl ?? imageFallback;
   if (!src) return null;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = CANVAS_W;
-  canvas.height = CANVAS_H;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-
   const img = await loadImage(src);
   const fit = await loadImagePlacement(src);
   const offset = artboard.imageOffset ?? { x: 0, y: 0 };
   const scale = artboard.imageScale ?? { x: 1, y: 1 };
-  const drawW = fit.width * (scale.x || 1);
-  const drawH = fit.height * (scale.y || 1);
+  const drawW = Math.max(1, fit.width * (scale.x || 1));
+  const drawH = Math.max(1, fit.height * (scale.y || 1));
   const drawX = fit.x + offset.x;
   const drawY = fit.y + offset.y;
-  // 工艺包纸面白底；深色底会让黑/深色成衣在分页预览里看起来「整页发黑」
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
   const ab = migrateArtboardHotspots(artboard);
-  const anns = filterAnnotationsForExport(normalizeAnnotations(ab.annotations), layerFilter);
+  const anns = filterAnnotationsForExport(
+    normalizeAnnotations(ab.annotations),
+    layerFilter,
+  );
+
+  let content: RectBounds = {
+    minX: drawX,
+    minY: drawY,
+    maxX: drawX + drawW,
+    maxY: drawY + drawH,
+  };
+  for (const ann of anns) {
+    content = mergeRect(content, annotationBounds(ann));
+  }
+
+  const pad = ARTBOARD_EXPORT_PAD;
+  let logicalW = Math.max(1, Math.ceil(content.maxX - content.minX + pad * 2));
+  let logicalH = Math.max(1, Math.ceil(content.maxY - content.minY + pad * 2));
+  const originX = pad - content.minX;
+  const originY = pad - content.minY;
+
+  let outScale = 1;
+  const maxEdge = Math.max(logicalW, logicalH);
+  if (maxEdge > ARTBOARD_EXPORT_MAX_EDGE) {
+    outScale = ARTBOARD_EXPORT_MAX_EDGE / maxEdge;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(logicalW * outScale));
+  canvas.height = Math.max(1, Math.floor(logicalH * outScale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.scale(outScale, outScale);
+  // 工艺包纸面白底；深色底会让黑/深色成衣在分页预览里看起来「整页发黑」
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, logicalW, logicalH);
+  ctx.drawImage(img, drawX + originX, drawY + originY, drawW, drawH);
+
+  ctx.save();
+  ctx.translate(originX, originY);
   anns.forEach((ann) => drawAnnotation(ctx, ann));
   if (layerFilter === "all" || layerFilter === "process") {
     drawSequenceBadges(ctx, processItems, anns);
   }
+  ctx.restore();
 
   return canvas.toDataURL("image/png");
 }
