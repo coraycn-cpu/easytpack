@@ -48,6 +48,7 @@ import { STUDIO_TOOLBAR_ANCHOR_ID } from "@/lib/studio/layout";
 import { isAnnotationLocked, scaleAnnotationAroundOrigin } from "@/lib/canvas/annotation-helpers";
 import type { ImageCropRect } from "@/lib/canvas/crop-image";
 import { readImageDataUrlFromClipboard } from "@/lib/canvas/paste-image";
+import AnnotationTextDialog from "@/components/canvas/AnnotationTextDialog";
 import ViewRegenerateOverlays from "@/components/canvas/ViewRegenerateOverlays";
 
 type Snapshot = { annotations: Annotation[] };
@@ -226,6 +227,11 @@ export default function AnnotationCanvas({
   const [imageSelected, setImageSelected] = useState(false);
   const [cropSession, setCropSession] = useState<
     (ImageCropRect & { artboardId: string }) | null
+  >(null);
+  const [textDialog, setTextDialog] = useState<
+    | { kind: "text"; x: number; y: number }
+    | { kind: "dimension"; x: number; y: number; x2: number; y2: number }
+    | null
   >(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -623,22 +629,7 @@ export default function AnnotationCanvas({
     }
 
     if (currentTool === "text") {
-      const text = window.prompt("输入标注文字", "");
-      if (text?.trim()) {
-        commitAnnotations([
-          ...annotations,
-          {
-            id: createId("ann"),
-            type: "text",
-            color,
-            x: pos.x,
-            y: pos.y,
-            text: text.trim(),
-            strokeWidth: 3,
-          },
-        ]);
-        setTool("select");
-      }
+      setTextDialog({ kind: "text", x: pos.x, y: pos.y });
       return;
     }
 
@@ -714,9 +705,11 @@ export default function AnnotationCanvas({
     if (line && (currentTool === "arrow" || currentTool === "dimension")) {
       const { x, y, x2, y2 } = line;
       if (Math.hypot(x2 - x, y2 - y) > 12) {
-        let text: string | undefined;
         if (currentTool === "dimension") {
-          text = window.prompt("尺寸数值（如 52cm）", "") ?? undefined;
+          draftLineRef.current = null;
+          setDraftLine(null);
+          setTextDialog({ kind: "dimension", x, y, x2, y2 });
+          return;
         }
         const id = createId("ann");
         const currentAnnotations = annotationsRef.current;
@@ -725,12 +718,11 @@ export default function AnnotationCanvas({
           {
             id,
             type: currentTool,
-            color: currentTool === "dimension" ? MANUAL_ANNOTATION_COLOR : color,
+            color,
             x,
             y,
             x2,
             y2,
-            text: text?.trim() || undefined,
             strokeWidth: 3,
           },
         ]);
@@ -763,6 +755,75 @@ export default function AnnotationCanvas({
     freehandRef.current = [];
     setFreehandPoints([]);
   }, [color, commitAnnotations, selectAnnotation]);
+
+  const handleTextDialogConfirm = useCallback(
+    (raw: string) => {
+      const pending = textDialog;
+      setTextDialog(null);
+      if (!pending) return;
+      const text = raw.trim();
+
+      if (pending.kind === "text") {
+        if (!text) return;
+        const id = createId("ann");
+        commitAnnotations([
+          ...annotationsRef.current,
+          {
+            id,
+            type: "text",
+            color,
+            x: pending.x,
+            y: pending.y,
+            text,
+            strokeWidth: 3,
+          },
+        ]);
+        selectAnnotation(id);
+        setTool("select");
+        return;
+      }
+
+      const id = createId("ann");
+      commitAnnotations([
+        ...annotationsRef.current,
+        {
+          id,
+          type: "dimension",
+          color: MANUAL_ANNOTATION_COLOR,
+          x: pending.x,
+          y: pending.y,
+          x2: pending.x2,
+          y2: pending.y2,
+          text: text || undefined,
+          strokeWidth: 3,
+        },
+      ]);
+      selectAnnotation(id);
+      setTool("select");
+    },
+    [textDialog, color, commitAnnotations, selectAnnotation],
+  );
+
+  const handleTextDialogCancel = useCallback(() => {
+    setTextDialog(null);
+  }, []);
+
+  const textDialogEl = (
+    <AnnotationTextDialog
+      open={Boolean(textDialog)}
+      title={
+        textDialog?.kind === "dimension" ? "尺寸数值" : "输入标注文字"
+      }
+      placeholder={
+        textDialog?.kind === "dimension"
+          ? "例如：52cm"
+          : "输入要标注的文字…"
+      }
+      multiline={textDialog?.kind !== "dimension"}
+      onConfirm={handleTextDialogConfirm}
+      onCancel={handleTextDialogCancel}
+    />
+  );
 
   useEffect(() => {
     if (tool === "select" || tool === "pan") return;
@@ -1966,6 +2027,7 @@ export default function AnnotationCanvas({
         >
           {stageEl}
         </div>
+        {textDialogEl}
       </>
     );
   }
@@ -2012,46 +2074,50 @@ export default function AnnotationCanvas({
         >
           {stageEl}
         </DraggablePanel>
+        {textDialogEl}
       </>
     );
   }
 
   return (
-    <div
-      className={`flex min-h-0 flex-col overflow-hidden ${
-        embedded
-          ? "border-0 bg-[#141414]"
-          : `border border-zinc-700/50 shadow-2xl rounded-xl ${className}`
-      } ${embedded ? className : ""}`}
-    >
-      {toolbarEl}
+    <>
+      <div
+        className={`flex min-h-0 flex-col overflow-hidden ${
+          embedded
+            ? "border-0 bg-[#141414]"
+            : `border border-zinc-700/50 shadow-2xl rounded-xl ${className}`
+        } ${embedded ? className : ""}`}
+      >
+        {toolbarEl}
 
-      {showImport && !splitOnCanvas && (
-        <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900 px-3 py-1.5">
-          <label className="cursor-pointer text-xs text-zinc-400 hover:text-white">
-            📎 更换图片
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const url = reader.result as string;
-                  loadImage(url);
-                  onImageChange?.(url);
-                };
-                reader.readAsDataURL(file);
-              }}
-            />
-          </label>
-        </div>
-      )}
+        {showImport && !splitOnCanvas && (
+          <div className="shrink-0 border-b border-zinc-700/50 bg-zinc-900 px-3 py-1.5">
+            <label className="cursor-pointer text-xs text-zinc-400 hover:text-white">
+              📎 更换图片
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const url = reader.result as string;
+                    loadImage(url);
+                    onImageChange?.(url);
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+          </div>
+        )}
 
-      {stageEl}
-    </div>
+        {stageEl}
+      </div>
+      {textDialogEl}
+    </>
   );
 }
 
