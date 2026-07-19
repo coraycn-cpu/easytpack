@@ -13,6 +13,7 @@ import {
   COLLAGE_REFERENCE_NAME,
   MODEL_REFERENCE_NAME,
 } from "@/lib/studio/reference-artboard";
+import { formatAiDraftBadge } from "@/lib/studio/view-artboard-names";
 import type { Artboard } from "@/types/project";
 
 function isPhotoReferenceArtboard(ab: Artboard): boolean {
@@ -277,7 +278,7 @@ export default function ViewRegenerateOverlays({
 
         const imageTopBadge =
           meta != null
-            ? COMM_PACK_COPY.aiDraftBadge
+            ? formatAiDraftBadge(ab, COMM_PACK_COPY.aiDraftBadge)
             : isPhotoReferenceArtboard(ab)
               ? COMM_PACK_COPY.originalBadge
               : null;

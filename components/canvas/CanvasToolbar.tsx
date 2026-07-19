@@ -168,6 +168,7 @@ export default function CanvasToolbar({
             手动
           </span>
           <div
+            data-canvas-toolbar
             className={`inline-flex flex-wrap items-center gap-0.5 rounded-lg p-1 ${
               light ? "bg-slate-100" : flat ? "bg-[#262626]" : "rounded-lg bg-zinc-800 p-1"
             }`}
@@ -179,10 +180,17 @@ export default function CanvasToolbar({
                 title={
                   t.id === "eraser" ? ANN_ACTION_LABELS.eraserHint : t.label
                 }
-                onClick={() => onToolChange(t.id)}
+                onPointerDown={(e) => {
+                  // pointerdown 先于 window mouseup，避免切工具时被 finishDrawing 抢回「选择」
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  onToolChange(t.id);
+                }}
                 className={toolBtn(tool === t.id)}
               >
-                <span className="text-sm leading-none">{t.icon}</span>
+                <span className="text-sm leading-none" aria-hidden>
+                  {t.icon}
+                </span>
                 <span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}

@@ -65,3 +65,28 @@ export function lineArtArtboardNameFromSource(
 ): string {
   return `${shortViewBaseName(source)}-线稿`;
 }
+
+/**
+ * 画板视角短标识：正面 / 背面 / 领口 / 正面-线稿 等
+ *（用于 AI草稿角标，避免只显示「AI草稿」丢视角信息）
+ */
+export function artboardViewBadgeLabel(
+  source: Pick<Artboard, "name" | "viewImageMeta">,
+): string {
+  const kind = source.viewImageMeta?.kind;
+  if (kind === "line_art") {
+    const name = source.name?.trim() ?? "";
+    if (name.includes("线稿")) return name;
+    return lineArtArtboardNameFromSource(source);
+  }
+  if (kind) return VIEW_KIND_ARTBOARD_NAME[kind];
+  return shortViewBaseName(source);
+}
+
+/** 例：AI草稿-正面、AI草稿-背面、AI草稿-正面-线稿 */
+export function formatAiDraftBadge(
+  source: Pick<Artboard, "name" | "viewImageMeta">,
+  prefix = "AI草稿",
+): string {
+  return `${prefix}-${artboardViewBadgeLabel(source)}`;
+}

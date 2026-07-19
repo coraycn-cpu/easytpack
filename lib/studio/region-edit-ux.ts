@@ -34,6 +34,7 @@ export const COMM_PACK_COPY = {
   annotateAfterAi:
     "图不准时：用方框/尺寸/画笔标出说明，或点画板旁「局部」框选重绘。",
   aiDraftBadge: "AI草稿",
+  /** 角标前缀；完整文案见 formatAiDraftBadge（如 AI草稿-正面） */
   originalBadge: "原图",
   /** 写入评语的快捷说明（点选追加，不覆盖） */
   reviewGuideChips: [

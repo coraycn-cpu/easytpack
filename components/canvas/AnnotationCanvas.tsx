@@ -354,6 +354,14 @@ export default function AnnotationCanvas({
     }
   }, [layerVisibility, onLayerVisibilityChange]);
 
+  /** 尺寸标注落在尺寸层；工艺 tab 默认关闭尺寸层，不打开则画完看不见 */
+  const ensureSizeLayerVisible = useCallback(() => {
+    if (!layerVisibility || !onLayerVisibilityChange) return;
+    if (!layerVisibility.size) {
+      onLayerVisibilityChange({ ...layerVisibility, size: true });
+    }
+  }, [layerVisibility, onLayerVisibilityChange]);
+
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -668,6 +676,7 @@ export default function AnnotationCanvas({
       currentTool === "line" ||
       currentTool === "dash"
     ) {
+      if (currentTool === "dimension") ensureSizeLayerVisible();
       const next = { x: pos.x, y: pos.y, x2: pos.x, y2: pos.y };
       draftLineRef.current = next;
       setDraftLine(next);
@@ -867,6 +876,7 @@ export default function AnnotationCanvas({
         return;
       }
 
+      ensureSizeLayerVisible();
       const id = createId("ann");
       commitAnnotations([
         ...annotationsRef.current,
@@ -885,7 +895,13 @@ export default function AnnotationCanvas({
       selectAnnotation(id);
       setTool("select");
     },
-    [textDialog, color, commitAnnotations, selectAnnotation],
+    [
+      textDialog,
+      color,
+      commitAnnotations,
+      selectAnnotation,
+      ensureSizeLayerVisible,
+    ],
   );
 
   const handleTextDialogCancel = useCallback(() => {
@@ -911,7 +927,24 @@ export default function AnnotationCanvas({
 
   useEffect(() => {
     if (tool === "select" || tool === "pan") return;
-    const onUp = () => finishDrawing();
+    /** 工具栏/弹层上的 mouseup 不应结束绘制，否则会与切工具抢 setTool */
+    const isUiTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      return Boolean(
+        target.closest(
+          "[data-canvas-toolbar], [data-no-canvas-draw], button, input, textarea, select, [role='dialog']",
+        ),
+      );
+    };
+    const onUp = (e: Event) => {
+      const hasDraft =
+        Boolean(draftLineRef.current) ||
+        Boolean(draftRectRef.current) ||
+        isDrawingRef.current;
+      // 无草稿时忽略 UI 上的 mouseup，避免切工具被 finishDrawing 抢回「选择」
+      if (!hasDraft && isUiTarget(e.target)) return;
+      finishDrawing();
+    };
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchend", onUp);
     return () => {
@@ -1358,6 +1391,11 @@ export default function AnnotationCanvas({
         const y2 = displayAnn.y2 ?? displayAnn.y;
         const rdx = x2 - x1;
         const rdy = y2 - y1;
+        const lineStroke = isSelected
+          ? "#2563eb"
+          : isLinkedHighlight
+            ? "#f59e0b"
+            : c;
         return (
           <Group
             key={ann.id}
@@ -1373,15 +1411,24 @@ export default function AnnotationCanvas({
             onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
             onTransformEnd={(e) => handleLineTransformEnd(ann.id, e)}
           >
+            {/* Konva Arrow 热区不稳定，用 Line 承担点击/选中 */}
+            <Line
+              points={[0, 0, rdx, rdy]}
+              stroke={lineStroke}
+              strokeWidth={isSelected || isLinkedHighlight ? sw + 1 : sw}
+              opacity={0}
+              hitStrokeWidth={28}
+              listening={listening}
+            />
             <Arrow
               points={[0, 0, rdx, rdy]}
-              stroke={c}
-              fill={c}
-              strokeWidth={isSelected ? sw + 1 : sw}
+              stroke={lineStroke}
+              fill={lineStroke}
+              strokeWidth={isSelected || isLinkedHighlight ? sw + 1 : sw}
               pointerLength={10}
               pointerWidth={10}
               dash={ann.type === "dimension" ? [8, 4] : undefined}
-              hitStrokeWidth={16}
+              listening={false}
             />
             {ann.text && (
               <Text
@@ -1428,7 +1475,7 @@ export default function AnnotationCanvas({
               stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 1 : sw}
               dash={ann.dashed ? [8, 5] : undefined}
-              hitStrokeWidth={16}
+              hitStrokeWidth={24}
               lineCap="round"
             />
           </Group>
@@ -1469,7 +1516,7 @@ export default function AnnotationCanvas({
             lineCap="round"
             lineJoin="round"
             tension={0.4}
-            hitStrokeWidth={16}
+            hitStrokeWidth={24}
             listening={listening}
             draggable={draggable}
             onClick={(e) => handleAnnClick(e, ann.id)}
@@ -1510,6 +1557,9 @@ export default function AnnotationCanvas({
         }
         if (t === "rect" || t === "circle") {
           ensureProcessLayerVisible();
+        }
+        if (t === "dimension") {
+          ensureSizeLayerVisible();
         }
       }}
       color={color}
