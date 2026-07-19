@@ -1036,9 +1036,13 @@ export default function StudioPage() {
               ? "线稿"
               : "视角图");
         setAiTip(
-          err
-            ? `${viewLabel}生图失败：${err}。当前仅为源图占位（内容可能仍是正面），请检查密钥后重试。`
-            : `${viewLabel} API 未返回图片，已用源图占位（非真实${viewLabel}），请重试。`,
+          params.kind === "line_art"
+            ? err
+              ? `线稿生成失败：${err}。画板上仍是源彩图占位（不是线稿），请在右侧用「修正」重试或检查密钥。`
+              : `线稿 API 未返回图片，画板上仍是源彩图占位（不是线稿），请重试。`
+            : err
+              ? `${viewLabel}生图失败：${err}。当前仅为源图占位，请检查密钥后重试。`
+              : `${viewLabel} API 未返回图片，已用源图占位（非真实${viewLabel}），请重试。`,
         );
       } else {
         imageDataUrl = await matchImageToSourceSize(

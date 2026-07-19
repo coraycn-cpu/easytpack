@@ -4,7 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
 import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
+import {
+  COLLAGE_REFERENCE_NAME,
+  MODEL_REFERENCE_NAME,
+} from "@/lib/studio/reference-artboard";
 import type { Artboard } from "@/types/project";
+
+function isPhotoReferenceArtboard(ab: Artboard): boolean {
+  return (
+    ab.name === MODEL_REFERENCE_NAME ||
+    ab.name === COLLAGE_REFERENCE_NAME ||
+    ab.name === "参考图"
+  );
+}
 
 export type ArtboardCropUi = {
   artboardId: string;
@@ -181,10 +193,12 @@ export default function ViewRegenerateOverlays({
           ab.id === primaryArtboardId &&
           !isPrimaryFlatFront;
 
+        // 任意彩图（含直接上传的平铺主款）均可转线稿；不要求 viewImageMeta
+        // 受保护主款仅限制「修正/删除」，不挡线稿（否则平铺上传主款看不到按钮）
         const canConvertToLineArt =
-          Boolean(meta) &&
+          Boolean(ab.imageDataUrl) &&
           !isLineArt &&
-          !isProtectedPrimary &&
+          !isPhotoReferenceArtboard(ab) &&
           Boolean(onGenerateLineArt);
 
         const showRegen =

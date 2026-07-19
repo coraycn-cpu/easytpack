@@ -95,14 +95,12 @@ export async function generateViewImagePrompt(input: {
   const description = hints.description ?? input.description;
 
   if (input.sourceImageUrl) {
-    // 线稿：不抽 GarmentSpec 主导构图，强制「描摹源图」提示词
+    // 线稿：不抽 GarmentSpec；不注入选款隔离（避免「只出下装」等干扰背面描摹）
     if (kind === "line_art") {
       const imagePrompt = buildRecraftPromptForKind({
         kind: "line_art",
         viewHint: viewDesc,
         correctionPrompt: input.correctionPrompt,
-        scopeNote,
-        bodyZone: hints.bodyZone,
       });
       return {
         kind,

@@ -48,12 +48,13 @@ CRITICAL:
 - Flat on white/neutral surface; no model, no ghost mannequin
 - No text overlays on the image`;
 
-const LINE_ART_TRACE_INSTRUCTION = `TRACE the attached garment PHOTO into a black-and-white technical line drawing of THAT SAME garment.
+const LINE_ART_TRACE_INSTRUCTION = `TRACE the attached garment PHOTO into a black-and-white technical line drawing of THAT SAME garment and SAME VIEW.
 
 CRITICAL:
 - Do not invent or redesign — follow the photo exactly
+- Keep the same camera view as the photo (if the photo is a BACK view, output a BACK line drawing; if front, output front)
 - Keep silhouette, sleeve/hem length, seams, and print motif positions identical
-- White background, black outlines only
+- White background, black outlines only — no photoreal fabric, no color fill
 - If text conflicts with the photo, follow the photo`;
 
 function parseGarmentSpec(json?: string): GarmentSpec | null {
@@ -263,16 +264,20 @@ export async function synthesizeViaGateway(
   let lastModel = models[0];
 
   try {
-    // view-image 已按 kind 组装好最终 prompt 时直接用，避免二次包装
+    // view-image 已按 kind 组装好最终 prompt 时直接用，避免二次包装。
+    // 线稿无 garmentSpecJson，且 resolveSpec 恒为 null——若仍 rebuild 会把整段 prompt
+    // 再塞进 viewHint，导致背面→线稿等路径偶发失败并落到彩图占位。
     let imagePrompt = prompt;
-    if (!options.garmentSpecJson) {
+    if (!options.garmentSpecJson && kind !== "line_art") {
       const spec = await resolveSpec(options, kind);
-      imagePrompt = buildRecraftPromptForKind({
-        kind,
-        spec,
-        viewHint: prompt,
-        correctionPrompt: options.correctionPrompt,
-      });
+      if (spec) {
+        imagePrompt = buildRecraftPromptForKind({
+          kind,
+          spec,
+          viewHint: prompt,
+          correctionPrompt: options.correctionPrompt,
+        });
+      }
     }
 
     for (const model of models) {
@@ -281,13 +286,21 @@ export async function synthesizeViaGateway(
       // 仅当主模型本身就是多模态生图模型时才走该路径
       if (isMultimodalImageModel(model) && sourceImageUrl) {
         try {
-          const instruction = `${
+          const correction = options.correctionPrompt?.trim();
+          const instruction =
             kind === "line_art"
-              ? LINE_ART_TRACE_INSTRUCTION
-              : kind === "back"
-                ? BACK_VIEW_INSTRUCTION
-                : REF_FIDELITY_INSTRUCTION
-          }\n\nView / task: ${prompt}`;
+              ? [
+                  LINE_ART_TRACE_INSTRUCTION,
+                  correction ? `User correction: ${correction}` : "",
+                  "Convert the attached garment PHOTO into a black-and-white tech-pack line drawing of that SAME view (front or back as shown).",
+                ]
+                  .filter(Boolean)
+                  .join("\n\n")
+              : `${
+                  kind === "back"
+                    ? BACK_VIEW_INSTRUCTION
+                    : REF_FIDELITY_INSTRUCTION
+                }\n\nView / task: ${imagePrompt}`;
           const result = await generateText({
             model,
             messages: [
