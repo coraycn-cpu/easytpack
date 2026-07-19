@@ -12,7 +12,7 @@ type A4LandscapePageProps = {
   screenChrome?: boolean;
 };
 
-/** A4 横向单页壳：297×210mm，页眉/页脚对齐 aitechpacks 骨架 */
+/** A4 横向单页壳：屏上流式宽度防裁切；打印固定 297×210mm */
 export default function A4LandscapePage({
   meta,
   sectionTitle,
@@ -24,15 +24,23 @@ export default function A4LandscapePage({
     <section
       className={`a4-landscape-page flex flex-col overflow-hidden border border-black bg-white text-black ${
         screenChrome
-          ? "mx-auto mb-6 shadow-md"
-          : "mb-0 shadow-none"
+          ? "mx-auto mb-0 w-full max-w-full shadow-md"
+          : "mx-auto mb-0 shadow-none"
       }`}
-      style={{
-        width: "297mm",
-        height: "210mm",
-        pageBreakAfter: "always",
-        breakAfter: "page",
-      }}
+      style={
+        screenChrome
+          ? {
+              aspectRatio: "297 / 210",
+              height: "auto",
+              minHeight: 0,
+            }
+          : {
+              width: "297mm",
+              height: "210mm",
+              pageBreakAfter: "always",
+              breakAfter: "page",
+            }
+      }
     >
       <header className="shrink-0 border-b border-black">
         <div className="grid grid-cols-12 border-b border-black text-[10px] leading-tight">

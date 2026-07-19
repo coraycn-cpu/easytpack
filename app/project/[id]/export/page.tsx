@@ -7,20 +7,20 @@ import TechPackPreview from "@/components/techpack/TechPackPreview";
 import {
   renderAllArtboards,
   renderTechPackSheetToDataUrl,
-  type AnnotatedImageMode,
 } from "@/lib/export/canvas-render";
 import {
   downloadDataUrl,
   exportFilename,
   styleExportBasename,
 } from "@/lib/export/filename";
-import {
-  buildTechPackDocument,
-} from "@/lib/export/techpack-document";
+import { buildTechPackDocument } from "@/lib/export/techpack-document";
 import { exportTechPackXlsx } from "@/lib/export/xlsx";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
+
+/** 分页导出统一用合并标注；分图开关已去掉 */
+const IMAGE_MODE = "merged" as const;
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +32,6 @@ export default function ExportPage() {
   const [stageCompositeUrl, setStageCompositeUrl] = useState<string | null>(
     null,
   );
-  const [imageMode, setImageMode] = useState<AnnotatedImageMode>("merged");
   const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -51,9 +50,6 @@ export default function ExportPage() {
       } else if (!cancelled) {
         setProject(p);
       }
-      if (!cancelled) {
-        setImageMode(p.exportSettings?.annotatedImageMode ?? "merged");
-      }
     });
     return () => {
       cancelled = true;
@@ -70,9 +66,9 @@ export default function ExportPage() {
         project.canvas_data.artboards,
         project.intake.imageDataUrl,
         project.process_items,
-        imageMode,
+        IMAGE_MODE,
       ),
-      renderTechPackSheetToDataUrl(project, imageMode, { forShare: true }),
+      renderTechPackSheetToDataUrl(project, IMAGE_MODE, { forShare: true }),
     ])
       .then(([images, stageUrl]) => {
         if (cancelled) return;
@@ -86,7 +82,7 @@ export default function ExportPage() {
     return () => {
       cancelled = true;
     };
-  }, [project, imageMode]);
+  }, [project]);
 
   const pageCount = useMemo(() => {
     if (!project) return 0;
@@ -103,7 +99,7 @@ export default function ExportPage() {
       kind,
       basename: styleExportBasename(project),
       pageCount: extra?.pageCount,
-      imageMode,
+      imageMode: IMAGE_MODE,
     };
     const history = [...(project.exportHistory ?? []), entry].slice(-20);
     const updated = { ...project, exportHistory: history };
@@ -111,22 +107,10 @@ export default function ExportPage() {
     setProject(updated);
   };
 
-  const handleImageModeChange = (mode: AnnotatedImageMode) => {
-    setImageMode(mode);
-    if (!project) return;
-    const updated: TechPackProject = {
-      ...project,
-      exportSettings: { ...project.exportSettings, annotatedImageMode: mode },
-    };
-    void saveProject(updated);
-    setProject(updated);
-  };
-
   const handleExportPdf = () => {
     if (!project) return;
     setBusy("pdf");
     void persistHistory("pdf", { pageCount }).finally(() => {
-      // 打印另存为 PDF；文件名由系统对话框决定，预填提示用款式名
       document.title = exportFilename(project, "工艺包");
       window.print();
       setBusy(null);
@@ -187,30 +171,6 @@ export default function ExportPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg border border-zinc-200 p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleImageModeChange("merged")}
-                  className={`rounded-md px-2.5 py-1.5 ${
-                    imageMode === "merged"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                >
-                  合并标注图
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleImageModeChange("split")}
-                  className={`rounded-md px-2.5 py-1.5 ${
-                    imageMode === "split"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                >
-                  工艺/尺寸分图
-                </button>
-              </div>
               <button
                 type="button"
                 disabled={rendering || busy !== null}
@@ -241,8 +201,8 @@ export default function ExportPage() {
 
         <main className="mx-auto max-w-5xl px-4 py-6">
           <p className="mb-3 text-[11px] text-zinc-400">
-            PDF：打印对话框选「另存为 PDF / A4 横向」。Excel：一个文件多
-            Sheet。合拼大图：适合微信转发，按款式名保存。
+            首页为协作总览（下单数量可手填）。PDF 请选 A4
+            横向另存；Excel 为多 Sheet；合拼大图适合微信转发。
           </p>
           <TechPackPreview
             project={project}
@@ -274,6 +234,8 @@ export default function ExportPage() {
           .a4-landscape-page {
             width: 277mm !important;
             height: 194mm !important;
+            max-width: none !important;
+            aspect-ratio: auto !important;
             margin: 0 !important;
             box-shadow: none !important;
             page-break-after: always;

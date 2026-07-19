@@ -152,11 +152,15 @@ export async function renderArtboardToDataUrl(
   const img = await loadImage(src);
   const fit = await loadImagePlacement(src);
   const offset = artboard.imageOffset ?? { x: 0, y: 0 };
+  const scale = artboard.imageScale ?? { x: 1, y: 1 };
+  const drawW = fit.width * (scale.x || 1);
+  const drawH = fit.height * (scale.y || 1);
   const drawX = fit.x + offset.x;
   const drawY = fit.y + offset.y;
-  ctx.fillStyle = "#0f0f14";
+  // 工艺包纸面白底；深色底会让黑/深色成衣在分页预览里看起来「整页发黑」
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.drawImage(img, drawX, drawY, fit.width, fit.height);
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
   const ab = migrateArtboardHotspots(artboard);
   const anns = filterAnnotationsForExport(normalizeAnnotations(ab.annotations), layerFilter);

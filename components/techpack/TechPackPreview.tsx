@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TechPackDocPages from "@/components/techpack/pages/TechPackDocPages";
 import {
   buildDocMeta,
@@ -27,6 +27,11 @@ export default function TechPackPreview({
     [project, annotatedImages],
   );
   const [pageIndex, setPageIndex] = useState(0);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [pages.length, project.id]);
+
   const safeIndex = Math.min(pageIndex, Math.max(0, pages.length - 1));
   const current = pages[safeIndex];
 
@@ -39,7 +44,7 @@ export default function TechPackPreview({
   }
 
   return (
-    <div className="mx-auto max-w-[min(100%,980px)]">
+    <div className="mx-auto w-full max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
         <p className="text-xs text-zinc-500">
           A4 横向 · {pages.length} 页 · {meta.targetLabel}
@@ -69,15 +74,9 @@ export default function TechPackPreview({
         </div>
       </div>
 
-      <div className="overflow-auto rounded-xl border border-zinc-200 bg-zinc-100 p-4">
+      <div className="w-full overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 p-3 sm:p-4">
         {current ? (
-          <div className="origin-top scale-[0.72] sm:scale-[0.85] md:scale-100">
-            <TechPackDocPages
-              meta={meta}
-              pages={[current]}
-              screenChrome
-            />
-          </div>
+          <TechPackDocPages meta={meta} pages={[current]} screenChrome />
         ) : (
           <p className="py-16 text-center text-sm text-zinc-400">暂无页面</p>
         )}
