@@ -7,6 +7,7 @@ import ProcessExpandDialog from "@/components/studio/ProcessExpandDialog";
 import ReviewExpandDialog from "@/components/studio/ReviewExpandDialog";
 import SizeChartEditor from "@/components/studio/SizeChartEditor";
 import { resolveSelectionMode } from "@/lib/studio/annotation-ux";
+import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 import {
   clearProcessIdFromAnnotations,
   countShapesLinkedToProcess,
@@ -235,6 +236,9 @@ export default function StudioDataPanel({
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+          <p className="mb-2 rounded-md bg-slate-50 px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
+            {COMM_PACK_COPY.annotateAfterAi}
+          </p>
           <AnnotationActionBar
             selected={selectedAnns}
             mode={selectionMode}
@@ -373,8 +377,8 @@ export default function StudioDataPanel({
                 );
               })}
               {project.process_items.length === 0 && (
-                <p className="text-[11px] text-slate-400">
-                  暂无工艺条目，可手动添加或使用 AI 一键标注
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  {COMM_PACK_COPY.processEmpty}
                 </p>
               )}
               <button
@@ -476,7 +480,7 @@ export default function StudioDataPanel({
                 </div>
               ))}
               {project.bom_items.length === 0 && (
-                <p className="text-[11px] text-slate-400">暂无物料，可手动添加或点击「一键补全」</p>
+                <p className="text-[11px] text-slate-400">{COMM_PACK_COPY.bomEmpty}</p>
               )}
               <button
                 type="button"
@@ -518,8 +522,7 @@ export default function StudioDataPanel({
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] leading-relaxed text-slate-500">
-                  面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段（≤{REVIEW_MAX}字）。可点工具栏「款式评语」由
-                  AI 生成。
+                  面向版师/车版/设计师。图不准处可点下方芯片写入说明，或直接在画布标注。
                 </p>
                 <button
                   type="button"
@@ -529,6 +532,29 @@ export default function StudioDataPanel({
                 >
                   展开编辑
                 </button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {COMM_PACK_COPY.reviewGuideChips.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600 hover:border-blue-300 hover:bg-blue-50"
+                    onClick={() => {
+                      const cur = (project.style_review ?? "").trim();
+                      const next = cur.includes(chip)
+                        ? cur
+                        : cur
+                          ? `${cur}\n· ${chip}`
+                          : `· ${chip}`;
+                      onPersist({
+                        ...project,
+                        style_review: next.slice(0, REVIEW_MAX),
+                      });
+                    }}
+                  >
+                    {chip}
+                  </button>
+                ))}
               </div>
               <textarea
                 value={project.style_review ?? ""}

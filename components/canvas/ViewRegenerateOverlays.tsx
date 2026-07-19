@@ -5,6 +5,11 @@ import { createPortal } from "react-dom";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
 import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import {
+  COMM_PACK_COPY,
+  REGION_EDIT_LABELS,
+  WHOLE_IMAGE_CORRECTION_CHIPS,
+} from "@/lib/studio/region-edit-ux";
+import {
   COLLAGE_REFERENCE_NAME,
   MODEL_REFERENCE_NAME,
 } from "@/lib/studio/reference-artboard";
@@ -24,6 +29,7 @@ export type ArtboardCropUi = {
   y: number;
   width: number;
   height: number;
+  mode?: "crop" | "regionEdit";
 } | null;
 
 type ViewRegenerateOverlaysProps = {
@@ -42,6 +48,12 @@ type ViewRegenerateOverlaysProps = {
   onConfirmCrop?: () => void;
   onCancelCrop?: () => void;
   canCropArtboard?: (artboard: Artboard) => boolean;
+  /** 新增：开始选区重绘（仿剪裁框选，不改现有工具） */
+  onStartRegionEdit?: (artboardId: string) => void;
+  canRegionEditArtboard?: (artboard: Artboard) => boolean;
+  /** 可恢复上一版图的画板 */
+  undoableArtboardIds?: string[];
+  onUndoArtboardImage?: (artboardId: string) => void;
   onRegenerateView?: (artboardId: string, correctionPrompt: string) => void;
   onGenerateLineArt?: (sourceArtboardId: string) => void;
   onDeleteArtboard?: (artboardId: string) => void;
@@ -103,6 +115,10 @@ export default function ViewRegenerateOverlays({
   onConfirmCrop,
   onCancelCrop,
   canCropArtboard,
+  onStartRegionEdit,
+  canRegionEditArtboard,
+  undoableArtboardIds = [],
+  onUndoArtboardImage,
   onRegenerateView,
   onGenerateLineArt,
   onDeleteArtboard,
@@ -228,7 +244,19 @@ export default function ViewRegenerateOverlays({
           !interactionLocked;
 
         const croppingThis = cropSession?.artboardId === ab.id;
+        const regionEditingThis =
+          croppingThis && cropSession?.mode === "regionEdit";
         const hasDraft = (drafts[ab.id] ?? "").trim().length > 0;
+        const canRegion =
+          Boolean(canRegionEditArtboard?.(ab) ?? onStartRegionEdit) &&
+          Boolean(ab.imageDataUrl) &&
+          isActive &&
+          toolIsSelect &&
+          !interactionLocked;
+        const canUndoImage =
+          Boolean(onUndoArtboardImage) &&
+          undoableArtboardIds.includes(ab.id) &&
+          !interactionLocked;
 
         const handleDelete = () => {
           if (!onDeleteArtboard || locked) return;
@@ -243,84 +271,138 @@ export default function ViewRegenerateOverlays({
           deletable ||
           aiDeletable ||
           croppable ||
-          croppingThis;
+          croppingThis ||
+          canRegion ||
+          canUndoImage;
 
-        if (!hasAnyAction) return null;
+        const imageTopBadge =
+          meta != null
+            ? COMM_PACK_COPY.aiDraftBadge
+            : isPhotoReferenceArtboard(ab)
+              ? COMM_PACK_COPY.originalBadge
+              : null;
+
+        if (!hasAnyAction && !imageTopBadge) return null;
 
         return (
-          <div
-            key={`view-rail-${ab.id}`}
-            className="pointer-events-none absolute z-[13]"
-            style={{
-              left: railLeft,
-              top: railTop,
-              width: railWidth,
-            }}
-            data-no-canvas-zoom
-          >
-            <div className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-sm">
-              {croppingThis ? (
-                <>
-                  <RailButton
-                    label="确认"
-                    title={ANN_ACTION_LABELS.cropConfirm}
-                    tone="success"
-                    disabled={locked}
-                    onClick={() => onConfirmCrop?.()}
-                  />
-                  <RailButton
-                    label="取消"
-                    title={ANN_ACTION_LABELS.cropCancel}
-                    disabled={locked}
-                    onClick={() => onCancelCrop?.()}
-                  />
-                </>
-              ) : (
-                <>
-                  {croppable && (
-                    <RailButton
-                      label="剪裁"
-                      title={ANN_ACTION_LABELS.cropImageHint}
-                      tone="primary"
-                      disabled={locked}
-                      onClick={() => onStartCrop?.(ab.id)}
-                    />
-                  )}
-                  {canConvertToLineArt && (
-                    <RailButton
-                      label={busy ? "生成中" : "线稿"}
-                      title="按当前彩图严格转换为线稿"
-                      tone="success"
-                      disabled={locked}
-                      onClick={() => onGenerateLineArt?.(ab.id)}
-                    />
-                  )}
-                  {showRegen && (
+          <div key={`view-rail-${ab.id}`}>
+            {imageTopBadge ? (
+              <div
+                className="pointer-events-none absolute z-[12]"
+                style={{
+                  left: imageLeft,
+                  top: Math.max(0, imageTop - 2),
+                }}
+                data-no-canvas-zoom
+              >
+                <span className="rounded bg-slate-800/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  {imageTopBadge}
+                </span>
+              </div>
+            ) : null}
+
+            {hasAnyAction ? (
+              <div
+                className="pointer-events-none absolute z-[13]"
+                style={{
+                  left: railLeft,
+                  top: railTop,
+                  width: railWidth,
+                }}
+                data-no-canvas-zoom
+              >
+                <div className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-sm">
+                  {croppingThis ? (
                     <>
                       <RailButton
-                        label={busy ? "生成中" : hasDraft ? "重生成" : "修正"}
-                        title={
-                          hasDraft
-                            ? "打开修正词并重新生成"
-                            : "填写修正提示词后重新生成"
+                        label={
+                          regionEditingThis
+                            ? REGION_EDIT_LABELS.confirmNext
+                            : "确认"
                         }
-                        tone={hasDraft ? "accent" : "neutral"}
+                        title={
+                          regionEditingThis
+                            ? REGION_EDIT_LABELS.dialogHint
+                            : ANN_ACTION_LABELS.cropConfirm
+                        }
+                        tone="success"
                         disabled={locked}
-                        onClick={() => openComposer(ab.id)}
+                        onClick={() => onConfirmCrop?.()}
+                      />
+                      <RailButton
+                        label="取消"
+                        title={
+                          regionEditingThis
+                            ? REGION_EDIT_LABELS.cancel
+                            : ANN_ACTION_LABELS.cropCancel
+                        }
+                        disabled={locked}
+                        onClick={() => onCancelCrop?.()}
                       />
                     </>
+                  ) : (
+                    <>
+                      {croppable && (
+                        <RailButton
+                          label="剪裁"
+                          title={ANN_ACTION_LABELS.cropImageHint}
+                          tone="primary"
+                          disabled={locked}
+                          onClick={() => onStartCrop?.(ab.id)}
+                        />
+                      )}
+                      {canRegion && (
+                        <RailButton
+                          label={REGION_EDIT_LABELS.rail}
+                          title={REGION_EDIT_LABELS.railHint}
+                          tone="accent"
+                          disabled={locked}
+                          onClick={() => onStartRegionEdit?.(ab.id)}
+                        />
+                      )}
+                      {canUndoImage && (
+                        <RailButton
+                          label={REGION_EDIT_LABELS.undoImage}
+                          title={REGION_EDIT_LABELS.undoImageHint}
+                          disabled={locked}
+                          onClick={() => onUndoArtboardImage?.(ab.id)}
+                        />
+                      )}
+                      {canConvertToLineArt && (
+                        <RailButton
+                          label={busy ? "生成中" : "线稿"}
+                          title="按当前彩图严格转换为线稿"
+                          tone="success"
+                          disabled={locked}
+                          onClick={() => onGenerateLineArt?.(ab.id)}
+                        />
+                      )}
+                      {showRegen && (
+                        <RailButton
+                          label={busy ? "生成中" : hasDraft ? "重生成" : "修正"}
+                          title={
+                            hasDraft
+                              ? "整图按修正词重生成（局部小改请优先用「局部」）"
+                              : "整图修正（局部小改请优先用「局部」）"
+                          }
+                          tone={hasDraft ? "accent" : "neutral"}
+                          disabled={locked}
+                          onClick={() => openComposer(ab.id)}
+                        />
+                      )}
+                      {(deletable || aiDeletable) && (
+                        <RailButton
+                          label="删除"
+                          tone="danger"
+                          disabled={locked}
+                          onClick={handleDelete}
+                        />
+                      )}
+                    </>
                   )}
-                  {(deletable || aiDeletable) && (
-                    <RailButton
-                      label="删除"
-                      tone="danger"
-                      disabled={locked}
-                      onClick={handleDelete}
-                    />
-                  )}
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         );
       })}
@@ -353,9 +435,28 @@ export default function ViewRegenerateOverlays({
               </div>
               <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
                 {composerIsLineArt
-                  ? "说明要改什么，例如「花纹线条再清晰」「袖长与彩图一致」。提交后按此词重新生成。"
-                  : "说明要改什么，例如「去掉假模特改真平铺」「领口罗纹再清晰」。提交后按此词重新生成。"}
+                  ? "基于当前这张线稿做局部修改（不是从彩图重抽）。例如：「花纹线条再清晰」「领口再圆一点」。"
+                  : "基于当前这张款式图做局部修改（不是回到原上传图重抽）。例如：「去掉假模特改真平铺」「领口罗纹再清晰」。局部小改优先用画板旁「局部」。"}
               </p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {WHOLE_IMAGE_CORRECTION_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    disabled={composerLocked}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50"
+                    onClick={() => {
+                      const cur = drafts[composerId] ?? "";
+                      const next = cur.trim()
+                        ? `${cur.trim()}；${chip}`
+                        : chip;
+                      setDraft(composerId, next);
+                    }}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
               <textarea
                 ref={textareaRef}
                 value={composerDraft}

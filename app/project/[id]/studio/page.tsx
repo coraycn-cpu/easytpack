@@ -21,6 +21,12 @@ import {
 } from "@/lib/intake/apply-intent";
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { shouldKeepPhotoReference } from "@/lib/studio/reference-artboard";
+import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
+import {
+  compositeRegionPatch,
+  extractRegionPatch,
+} from "@/lib/canvas/region-edit";
+import RegionEditDialog from "@/components/canvas/RegionEditDialog";
 import { isModelPhoto } from "@/lib/ai/garment-scope";
 import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
@@ -158,6 +164,14 @@ export default function StudioPage() {
   const [regeneratingArtboardId, setRegeneratingArtboardId] = useState<string | null>(null);
   /** 与真实 API 取图对齐的短生命周期上下文 */
   const [aiImageContext, setAiImageContext] = useState<AiImageContext | null>(null);
+  const [regionEditPending, setRegionEditPending] = useState<{
+    artboardId: string;
+    crop: ImageCropRect;
+  } | null>(null);
+  const [regionEditBusy, setRegionEditBusy] = useState(false);
+  const [imageUndoByArtboard, setImageUndoByArtboard] = useState<
+    Record<string, string>
+  >({});
   const garmentBlocked = Boolean(
     project && needsGarmentConfirmation(project.intake),
   );
@@ -165,9 +179,12 @@ export default function StudioPage() {
     aiTask !== null ||
     viewGenerating ||
     regeneratingArtboardId !== null ||
+    regionEditBusy ||
     garmentBlocked;
   const activeAiPreset: AiLoadingPresetId | null =
-    viewGenerating || regeneratingArtboardId ? "view-image" : aiTask;
+    viewGenerating || regeneratingArtboardId || regionEditBusy
+      ? "view-image"
+      : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
@@ -923,6 +940,114 @@ export default function StudioPage() {
     [aiBusy, project, updateArtboard],
   );
 
+  const handleRegionEditSelect = useCallback(
+    (artboardId: string, crop: ImageCropRect) => {
+      setRegionEditPending({ artboardId, crop });
+    },
+    [],
+  );
+
+  const handleRegionEditSubmit = useCallback(
+    async (prompt: string) => {
+      if (!project || !regionEditPending || regionEditBusy) return;
+      const { artboardId, crop } = regionEditPending;
+      const ab = project.canvas_data.artboards.find((a) => a.id === artboardId);
+      if (!ab?.imageDataUrl) return;
+
+      setRegionEditBusy(true);
+      setRegeneratingArtboardId(artboardId);
+      setAiImageContext({
+        action: "view-image",
+        sourceArtboardId: artboardId,
+        taskLabel: "选区重绘",
+        userNote: prompt,
+      });
+      setAiMessage(null);
+      try {
+        const fit = await loadImagePlacement(ab.imageDataUrl);
+        const scale = ab.imageScale ?? { x: 1, y: 1 };
+        const displaySize = {
+          width: fit.width * scale.x,
+          height: fit.height * scale.y,
+        };
+        const { patchDataUrl, sourceCrop } = await extractRegionPatch({
+          imageDataUrl: ab.imageDataUrl,
+          displayCrop: crop,
+          displaySize,
+        });
+        const imageForAi = await resolveImageDataUrlForAi(patchDataUrl);
+        if (!imageForAi) {
+          setAiMessage("选区图过大，请缩小选区后重试");
+          return;
+        }
+
+        const res = await fetch("/api/ai/view-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "custom",
+            customPrompt: `IMAGE EDIT: Edit ONLY this cropped garment region. Apply: ${prompt}. Keep fabric/color/identity; do not redesign the whole garment.`,
+            correctionPrompt: prompt,
+            category:
+              project.intake.targetGarment?.category ??
+              project.intake.detectedCategory,
+            description:
+              project.intake.targetGarment?.label ??
+              project.intake.description,
+            sourceImageUrl: imageForAi,
+            intake: project.intake,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "选区重绘失败");
+        if (!data.imageDataUrl) {
+          throw new Error(data.synthesisError || "未返回图片");
+        }
+
+        const nextUrl = await compositeRegionPatch({
+          baseDataUrl: ab.imageDataUrl,
+          patchDataUrl: data.imageDataUrl as string,
+          sourceCrop,
+        });
+        setImageUndoByArtboard((prev) => ({
+          ...prev,
+          [artboardId]: ab.imageDataUrl!,
+        }));
+        updateArtboard(artboardId, { imageDataUrl: nextUrl });
+        setRegionEditPending(null);
+        setAiMessage("选区已重绘（区外与标注未改）");
+        setAiTip(COMM_PACK_COPY.annotateAfterAi);
+      } catch (e) {
+        setAiMessage(e instanceof Error ? e.message : "选区重绘失败");
+      } finally {
+        setRegionEditBusy(false);
+        setRegeneratingArtboardId(null);
+        setAiImageContext(null);
+      }
+    },
+    [
+      project,
+      regionEditPending,
+      regionEditBusy,
+      updateArtboard,
+    ],
+  );
+
+  const handleUndoRegionEditImage = useCallback(
+    (artboardId: string) => {
+      const prev = imageUndoByArtboard[artboardId];
+      if (!prev || !project) return;
+      updateArtboard(artboardId, { imageDataUrl: prev });
+      setImageUndoByArtboard((map) => {
+        const next = { ...map };
+        delete next[artboardId];
+        return next;
+      });
+      setAiMessage("已恢复选区重绘前的图片");
+    },
+    [imageUndoByArtboard, project, updateArtboard],
+  );
+
   const sourceImageUrl = useMemo(() => {
     if (!project) return undefined;
     const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
@@ -1094,6 +1219,12 @@ export default function StudioPage() {
         const existing = project.canvas_data.artboards.find(
           (a) => a.id === params.targetArtboardId,
         );
+        if (existing?.imageDataUrl) {
+          setImageUndoByArtboard((prev) => ({
+            ...prev,
+            [params.targetArtboardId!]: existing.imageDataUrl!,
+          }));
+        }
         const artboards = project.canvas_data.artboards.map((ab) =>
           ab.id === params.targetArtboardId
             ? {
@@ -1114,6 +1245,7 @@ export default function StudioPage() {
           canvas_data: { ...project.canvas_data, artboards },
         });
         setAiMessage(`已重新生成「${displayName}」`);
+        setAiTip(COMM_PACK_COPY.annotateAfterAi);
       } else {
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
         const origin = nextArtboardOrigin(slots);
@@ -1132,6 +1264,7 @@ export default function StudioPage() {
         });
         setActiveArtboardId(newBoard.id);
         setAiMessage(`已添加「${newBoard.name}」到画布`);
+        setAiTip(COMM_PACK_COPY.annotateAfterAi);
       }
     } catch (e) {
       appendViewGenRecord(
@@ -1210,23 +1343,31 @@ export default function StudioPage() {
     }
 
     if (meta.kind === "flat_front") {
+      // 修正：基于当前主款平铺图编辑，而不是回到 intake 原图重抽
       setAiImageContext({
         action: "flat-front-regen",
-        preferIntake: true,
-        taskLabel: "平铺正面",
+        sourceArtboardId: artboardId,
+        preferIntake: false,
+        taskLabel: "平铺正面·修正",
         userNote: correctionPrompt.trim() || undefined,
       });
       setRegeneratingArtboardId(artboardId);
       setAiMessage(null);
       try {
+        if (target.imageDataUrl) {
+          setImageUndoByArtboard((prev) => ({
+            ...prev,
+            [artboardId]: target.imageDataUrl!,
+          }));
+        }
         const result = await generateFlatFrontForPrimary(project, {
           correctionPrompt: correctionPrompt || undefined,
           regenerate: true,
         });
         persist(result.project);
-        setAiMessage(result.success ? "平铺正面已重新生成" : result.message);
+        setAiMessage(result.success ? "平铺正面已按修正词更新" : result.message);
         if (result.success) {
-          setAiTip("主款平铺图已更新，原图仍在参考画板");
+          setAiTip(COMM_PACK_COPY.annotateAfterAi);
         }
       } catch (e) {
         setAiMessage(e instanceof Error ? e.message : "平铺正面重新生成失败");
@@ -1237,11 +1378,13 @@ export default function StudioPage() {
       return;
     }
 
-    // 线稿重生成：必须用绑定的源彩图，而不是主款正面
+    // 修正：一律以「当前这张图」为参考做编辑；线稿首次生成才绑源彩图
+    // （旧逻辑线稿用源彩图、其它视角用主款，修正词常被无视 → 盲盒感）
+    const editSourceId = target.imageDataUrl ? artboardId : undefined;
     const lineSourceId =
       meta.kind === "line_art" ? meta.sourceArtboardId : undefined;
-    if (meta.kind === "line_art" && !lineSourceId) {
-      setAiMessage("该线稿缺少源彩图绑定，请在彩图右侧重新生成线稿");
+    if (meta.kind === "line_art" && !editSourceId && !lineSourceId) {
+      setAiMessage("该线稿缺少可修正的图片，请在彩图右侧重新生成线稿");
       return;
     }
 
@@ -1258,7 +1401,8 @@ export default function StudioPage() {
       customPrompt: meta.customPrompt,
       correctionPrompt: correctionPrompt || undefined,
       targetArtboardId: artboardId,
-      sourceArtboardId: lineSourceId ?? primaryArtboardId,
+      sourceArtboardId:
+        editSourceId ?? lineSourceId ?? primaryArtboardId,
       lineArtSourceArtboardId: lineSourceId,
       preferredArtboardName,
     });
@@ -2018,8 +2162,29 @@ export default function StudioPage() {
               onPasteImage={handlePasteImageToCanvas}
               pasteImageDisabled={aiBusy}
               onCropArtboardImage={handleCropArtboardImage}
+              onRegionEditSelect={handleRegionEditSelect}
+              regionEditUndoableIds={Object.keys(imageUndoByArtboard)}
+              onUndoRegionEditImage={handleUndoRegionEditImage}
             />
           </InfiniteCanvas>
+
+          <RegionEditDialog
+            open={Boolean(regionEditPending)}
+            artboardName={
+              regionEditPending
+                ? project.canvas_data.artboards.find(
+                    (a) => a.id === regionEditPending.artboardId,
+                  )?.name
+                : undefined
+            }
+            busy={regionEditBusy}
+            onClose={() => {
+              if (!regionEditBusy) setRegionEditPending(null);
+            }}
+            onSubmit={(prompt) => {
+              void handleRegionEditSubmit(prompt);
+            }}
+          />
 
           <StudioAiDock
             project={project}

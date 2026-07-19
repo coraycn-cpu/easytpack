@@ -96,6 +96,7 @@ export type AnnotationType =
   | "arrow"
   | "text"
   | "dimension"
+  | "line"
   | "freehand"
   | "marker";
 
@@ -112,6 +113,8 @@ export type Annotation = {
   y2?: number;
   text?: string;
   points?: number[];
+  /** 直线是否虚线（type===line） */
+  dashed?: boolean;
   /** 闭合形状关联的工艺行 ID（多对多） */
   linkedProcessIds?: string[];
   /** 关联尺码表部位名（尺寸标注 dimension） */

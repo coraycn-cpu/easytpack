@@ -292,21 +292,28 @@ export function buildRecraftPromptForKind(input: {
     const sleeveHint = spec
       ? SLEEVE_LOCK[spec.sleeveLength]
       : "match sleeve length from the reference photo";
+    const hasFix = Boolean(correctionPrompt?.trim());
     return [
-      "PRIORITY 1 — REFERENCE IMAGE IS THE ONLY SOURCE OF TRUTH.",
-      "Convert / TRACE the attached color garment photo into a black-and-white tech-pack line drawing.",
-      "Match the reference pixel-for-pixel in structure: silhouette, proportions, sleeve length, hem length, neckline, waist, seams, openings, and every print/pattern motif position, scale, and orientation.",
-      "If any text brief conflicts with the reference photo, IGNORE the text and FOLLOW THE PHOTO.",
-      "DO NOT redesign, reinterpret, restyle, or generate a different dress from a written description.",
+      hasFix
+        ? "PRIORITY 1 — APPLY THE USER CORRECTION to the attached reference image."
+        : "PRIORITY 1 — REFERENCE IMAGE IS THE ONLY SOURCE OF TRUTH.",
+      hasFix
+        ? "Edit / refine the attached garment image (color photo OR existing line drawing) into an improved black-and-white tech-pack line drawing."
+        : "Convert / TRACE the attached color garment photo into a black-and-white tech-pack line drawing.",
+      "Match the reference in structure: silhouette, proportions, sleeve length, hem length, neckline, waist, seams, openings, and print/pattern motif position, scale, and orientation — except where the user correction explicitly asks to change them.",
+      hasFix
+        ? "The user correction OVERRIDES conflicting defaults. Change only what the correction asks; keep everything else identical to the reference."
+        : "If any text brief conflicts with the reference photo, IGNORE the text and FOLLOW THE PHOTO.",
+      "DO NOT redesign, reinterpret, restyle, or generate a different garment from a written description alone.",
       removeModel,
       "Output: pure white background; thin clean black contour lines only.",
       "Allowed: outline strokes for prints/embroidery exactly where they appear in the photo.",
-      "Forbidden: color fills, shading, photoreal fabric, inventing motifs, changing sleeve/hem/neckline, moving belts/ties, adding or removing panels.",
+      "Forbidden: color fills, shading, photoreal fabric, inventing motifs, moving belts/ties, adding or removing panels (unless the correction asks).",
       spec
-        ? `Secondary identity check only (never override the photo): ${garmentCoreLineArt(spec)}.`
+        ? `Secondary identity check only (never override the photo unless correction says so): ${garmentCoreLineArt(spec)}.`
         : "",
       sleeveHint + ".",
-      fix ? `User correction (apply without changing unrelated geometry):${fix}` : "",
+      fix ? `USER CORRECTION (must satisfy):${fix}` : "",
       extra ? `Note:${extra}` : "",
       `Task: ${viewHint}.`,
     ]
@@ -358,10 +365,13 @@ export function buildRecraftPromptForKind(input: {
   }
 
   // flat_front
+  const hasFix = Boolean(correctionPrompt?.trim());
   return [
     scope,
     removeModel,
-    "Professional fashion tech-pack FRONT true FLAT LAY product photo: the SINGLE target garment spread flat on white/neutral surface.",
+    hasFix
+      ? "IMAGE EDIT: Refine the attached FRONT flat-lay product photo. Keep the same garment; apply the user correction only."
+      : "Professional fashion tech-pack FRONT true FLAT LAY product photo: the SINGLE target garment spread flat on white/neutral surface.",
     "FORBIDDEN: ghost mannequin, invisible mannequin, dress form, white torso, 3D body form, worn-on-form presentation, full coordinated outfit when target is a single piece.",
     "REQUIRED: flat product photography as if THIS ONE garment is laid on a table — hollow interior ok, but no mannequin body.",
     bodyZone === "bottom"
@@ -376,7 +386,10 @@ export function buildRecraftPromptForKind(input: {
       ? ""
       : "IMPORTANT: if sleeves are short/cap, do NOT lengthen them toward the elbow.",
     "White/neutral studio background, no watermark, no text.",
-    `Task: ${viewHint}.${extra}${fix}`,
+    hasFix
+      ? `USER CORRECTION (must satisfy):${fix}`
+      : "",
+    `Task: ${viewHint}.${extra}${hasFix ? "" : fix}`,
   ]
     .filter(Boolean)
     .join(" ");

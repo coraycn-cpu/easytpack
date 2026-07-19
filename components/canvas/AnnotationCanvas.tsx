@@ -127,6 +127,11 @@ type AnnotationCanvasProps = {
   onPasteImage?: (dataUrl: string) => void;
   pasteImageDisabled?: boolean;
   onCropArtboardImage?: (artboardId: string, crop: ImageCropRect) => void;
+  /** 选区重绘：框选确认后回调（不改变剪裁习惯） */
+  onRegionEditSelect?: (artboardId: string, crop: ImageCropRect) => void;
+  /** 可撤销选区重绘的画板 id */
+  regionEditUndoableIds?: string[];
+  onUndoRegionEditImage?: (artboardId: string) => void;
 };
 
 function createId(prefix: string) {
@@ -137,11 +142,31 @@ const DRAW_TOOLS: CanvasTool[] = [
   "rect",
   "circle",
   "arrow",
+  "line",
+  "dash",
   "text",
   "dimension",
   "freehand",
+  "eraser",
 ];
 
+function freehandHitTest(
+  ann: Annotation,
+  x: number,
+  y: number,
+  radius = 14,
+): boolean {
+  if (ann.type !== "freehand" || !ann.points || ann.points.length < 2) {
+    return false;
+  }
+  const r2 = radius * radius;
+  for (let i = 0; i < ann.points.length; i += 2) {
+    const dx = ann.points[i] - x;
+    const dy = ann.points[i + 1] - y;
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
+}
 export default function AnnotationCanvas({
   imageUrl,
   annotations,
@@ -198,6 +223,9 @@ export default function AnnotationCanvas({
   onPasteImage,
   pasteImageDisabled,
   onCropArtboardImage,
+  onRegionEditSelect,
+  regionEditUndoableIds = [],
+  onUndoRegionEditImage,
 }: AnnotationCanvasProps) {
   const multiMode = Boolean(multiArtboards?.length && artboardSlots?.length);
   const activeSlot = multiMode
@@ -226,7 +254,10 @@ export default function AnnotationCanvas({
   );
   const [imageSelected, setImageSelected] = useState(false);
   const [cropSession, setCropSession] = useState<
-    (ImageCropRect & { artboardId: string }) | null
+    (ImageCropRect & {
+      artboardId: string;
+      mode: "crop" | "regionEdit";
+    }) | null
   >(null);
   const [textDialog, setTextDialog] = useState<
     | { kind: "text"; x: number; y: number }
@@ -548,10 +579,19 @@ export default function AnnotationCanvas({
     setSelectedAnnIds([]);
   };
 
-  /** 进入剪裁会话（主图 / AI 图 / 贴图均可）；由标题旁「剪裁」触发 */
+  /** 进入剪裁或选区重绘会话；默认剪裁，不改变原「剪裁」入口习惯 */
   const beginImageCrop = useCallback(
-    (artboardId: string, width: number, height: number) => {
-      if (!onCropArtboardImage || interactionLocked || width <= 0 || height <= 0) {
+    (
+      artboardId: string,
+      width: number,
+      height: number,
+      mode: "crop" | "regionEdit" = "crop",
+    ) => {
+      const canStart =
+        mode === "regionEdit"
+          ? Boolean(onRegionEditSelect)
+          : Boolean(onCropArtboardImage);
+      if (!canStart || interactionLocked || width <= 0 || height <= 0) {
         selectImage();
         return;
       }
@@ -563,12 +603,13 @@ export default function AnnotationCanvas({
         y: 0,
         width,
         height,
+        mode,
       });
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
       }
     },
-    [onCropArtboardImage, interactionLocked],
+    [onCropArtboardImage, onRegionEditSelect, interactionLocked],
   );
 
   const cancelCropSession = useCallback(() => {
@@ -621,7 +662,12 @@ export default function AnnotationCanvas({
       return;
     }
 
-    if (currentTool === "arrow" || currentTool === "dimension") {
+    if (
+      currentTool === "arrow" ||
+      currentTool === "dimension" ||
+      currentTool === "line" ||
+      currentTool === "dash"
+    ) {
       const next = { x: pos.x, y: pos.y, x2: pos.x, y2: pos.y };
       draftLineRef.current = next;
       setDraftLine(next);
@@ -638,6 +684,21 @@ export default function AnnotationCanvas({
       setIsDrawing(true);
       freehandRef.current = [pos.x, pos.y];
       setFreehandPoints([pos.x, pos.y]);
+      return;
+    }
+
+    if (currentTool === "eraser") {
+      const hit = annotationsRef.current.find(
+        (ann) =>
+          ann.type === "freehand" &&
+          !ann.locked &&
+          freehandHitTest(ann, pos.x, pos.y),
+      );
+      if (hit) {
+        commitAnnotations(
+          annotationsRef.current.filter((a) => a.id !== hit.id),
+        );
+      }
     }
   };
 
@@ -702,7 +763,13 @@ export default function AnnotationCanvas({
       setDraftRect(null);
     }
 
-    if (line && (currentTool === "arrow" || currentTool === "dimension")) {
+    if (
+      line &&
+      (currentTool === "arrow" ||
+        currentTool === "dimension" ||
+        currentTool === "line" ||
+        currentTool === "dash")
+    ) {
       const { x, y, x2, y2 } = line;
       if (Math.hypot(x2 - x, y2 - y) > 12) {
         if (currentTool === "dimension") {
@@ -713,19 +780,36 @@ export default function AnnotationCanvas({
         }
         const id = createId("ann");
         const currentAnnotations = annotationsRef.current;
-        commitAnnotations([
-          ...currentAnnotations,
-          {
-            id,
-            type: currentTool,
-            color,
-            x,
-            y,
-            x2,
-            y2,
-            strokeWidth: 3,
-          },
-        ]);
+        if (currentTool === "line" || currentTool === "dash") {
+          commitAnnotations([
+            ...currentAnnotations,
+            {
+              id,
+              type: "line",
+              color,
+              x,
+              y,
+              x2,
+              y2,
+              strokeWidth: 3,
+              dashed: currentTool === "dash",
+            },
+          ]);
+        } else {
+          commitAnnotations([
+            ...currentAnnotations,
+            {
+              id,
+              type: currentTool,
+              color,
+              x,
+              y,
+              x2,
+              y2,
+              strokeWidth: 3,
+            },
+          ]);
+        }
         selectAnnotation(id);
         setTool("select");
       }
@@ -910,16 +994,24 @@ export default function AnnotationCanvas({
   }, []);
 
   const confirmCropSession = useCallback(() => {
-    if (!cropSession || !onCropArtboardImage) return;
-    onCropArtboardImage(cropSession.artboardId, {
+    if (!cropSession) return;
+    const rect = {
       x: cropSession.x,
       y: cropSession.y,
       width: cropSession.width,
       height: cropSession.height,
-    });
+    };
+    if (cropSession.mode === "regionEdit") {
+      onRegionEditSelect?.(cropSession.artboardId, rect);
+      setCropSession(null);
+      setImageSelected(false);
+      return;
+    }
+    if (!onCropArtboardImage) return;
+    onCropArtboardImage(cropSession.artboardId, rect);
     setCropSession(null);
     setImageSelected(false);
-  }, [cropSession, onCropArtboardImage]);
+  }, [cropSession, onCropArtboardImage, onRegionEditSelect]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1086,7 +1178,11 @@ export default function AnnotationCanvas({
       });
     } else if (ann.type === "text") {
       updateAnnotation(id, { x: node.x() + ox, y: node.y() + oy });
-    } else if (ann.type === "arrow" || ann.type === "dimension") {
+    } else if (
+      ann.type === "arrow" ||
+      ann.type === "dimension" ||
+      ann.type === "line"
+    ) {
       const baseX = ann.x ?? 0;
       const baseY = ann.y ?? 0;
       const dx = (ann.x2 ?? baseX) - baseX;
@@ -1108,7 +1204,12 @@ export default function AnnotationCanvas({
     pushHistory();
     const node = e.target;
     const ann = annotations.find((a) => a.id === id);
-    if (!ann || (ann.type !== "arrow" && ann.type !== "dimension")) return;
+    if (
+      !ann ||
+      (ann.type !== "arrow" && ann.type !== "dimension" && ann.type !== "line")
+    ) {
+      return;
+    }
 
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
@@ -1297,6 +1398,39 @@ export default function AnnotationCanvas({
                 listening={false}
               />
             )}
+          </Group>
+        );
+      }
+      case "line": {
+        const lx1 = displayAnn.x;
+        const ly1 = displayAnn.y;
+        const lx2 = displayAnn.x2 ?? displayAnn.x;
+        const ly2 = displayAnn.y2 ?? displayAnn.y;
+        const ldx = lx2 - lx1;
+        const ldy = ly2 - ly1;
+        return (
+          <Group
+            key={ann.id}
+            id={`ann_${ann.id}`}
+            x={lx1}
+            y={ly1}
+            visible={layerVisible}
+            listening={listening}
+            draggable={draggable}
+            onDragStart={stopDragBubble}
+            onClick={(e) => handleAnnClick(e, ann.id)}
+            onTap={(e) => handleAnnClick(e, ann.id)}
+            onDragEnd={(e) => handleAnnDragEnd(ann.id, e)}
+            onTransformEnd={(e) => handleLineTransformEnd(ann.id, e)}
+          >
+            <Line
+              points={[0, 0, ldx, ldy]}
+              stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+              strokeWidth={isSelected || isLinkedHighlight ? sw + 1 : sw}
+              dash={ann.dashed ? [8, 5] : undefined}
+              hitStrokeWidth={16}
+              lineCap="round"
+            />
           </Group>
         );
       }
@@ -1633,10 +1767,18 @@ export default function AnnotationCanvas({
                             y={cropSession.y}
                             width={cropSession.width}
                             height={cropSession.height}
-                            stroke="#22c55e"
+                            stroke={
+                              cropSession.mode === "regionEdit"
+                                ? "#8b5cf6"
+                                : "#22c55e"
+                            }
                             strokeWidth={2}
                             dash={[8, 4]}
-                            fill="rgba(34,197,94,0.08)"
+                            fill={
+                              cropSession.mode === "regionEdit"
+                                ? "rgba(139,92,246,0.08)"
+                                : "rgba(34,197,94,0.08)"
+                            }
                             draggable
                             onDragEnd={handleCropDragEnd}
                             onTransformEnd={handleCropTransformEnd}
@@ -1712,7 +1854,7 @@ export default function AnnotationCanvas({
                           listening={false}
                         />
                       )}
-                      {isActive && draftLine && (
+                      {isActive && draftLine && (tool === "arrow" || tool === "dimension") && (
                         <Arrow
                           points={[
                             draftLine.x - imageAnchor.x,
@@ -1722,8 +1864,25 @@ export default function AnnotationCanvas({
                           ]}
                           stroke="#22c55e"
                           fill="#22c55e"
-                          dash={[4, 4]}
+                          dash={tool === "dimension" ? [6, 4] : [4, 4]}
                           listening={false}
+                        />
+                      )}
+                      {isActive &&
+                        draftLine &&
+                        (tool === "line" || tool === "dash") && (
+                        <Line
+                          points={[
+                            draftLine.x - imageAnchor.x,
+                            draftLine.y - imageAnchor.y,
+                            draftLine.x2 - imageAnchor.x,
+                            draftLine.y2 - imageAnchor.y,
+                          ]}
+                          stroke="#22c55e"
+                          strokeWidth={2}
+                          dash={tool === "dash" ? [8, 5] : undefined}
+                          listening={false}
+                          lineCap="round"
                         />
                       )}
                       {isActive && freehandPoints.length > 1 && (
@@ -1862,7 +2021,7 @@ export default function AnnotationCanvas({
                     listening={false}
                   />
                 )}
-                {draftLine && (
+                {draftLine && (tool === "arrow" || tool === "dimension") && (
                   <Arrow
                     points={[
                       draftLine.x - singleImageAnchor.x,
@@ -1872,8 +2031,23 @@ export default function AnnotationCanvas({
                     ]}
                     stroke="#22c55e"
                     fill="#22c55e"
-                    dash={[4, 4]}
+                    dash={tool === "dimension" ? [6, 4] : [4, 4]}
                     listening={false}
+                  />
+                )}
+                {draftLine && (tool === "line" || tool === "dash") && (
+                  <Line
+                    points={[
+                      draftLine.x - singleImageAnchor.x,
+                      draftLine.y - singleImageAnchor.y,
+                      draftLine.x2 - singleImageAnchor.x,
+                      draftLine.y2 - singleImageAnchor.y,
+                    ]}
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dash={tool === "dash" ? [8, 5] : undefined}
+                    listening={false}
+                    lineCap="round"
                   />
                 )}
                 {freehandPoints.length > 1 && (
@@ -2000,6 +2174,26 @@ export default function AnnotationCanvas({
           }}
           onConfirmCrop={confirmCropSession}
           onCancelCrop={cancelCropSession}
+          onStartRegionEdit={(artboardId) => {
+            const entry = artboardImages.get(artboardId);
+            const ab = multiArtboards.find((a) => a.id === artboardId);
+            if (!entry || !onRegionEditSelect) return;
+            if (artboardId !== activeArtboardId) {
+              onActiveArtboardChange?.(artboardId);
+            }
+            const scale = ab?.imageScale ?? { x: 1, y: 1 };
+            beginImageCrop(
+              artboardId,
+              entry.fit.width * scale.x,
+              entry.fit.height * scale.y,
+              "regionEdit",
+            );
+          }}
+          canRegionEditArtboard={(ab) =>
+            Boolean(onRegionEditSelect && ab.imageDataUrl)
+          }
+          undoableArtboardIds={regionEditUndoableIds}
+          onUndoArtboardImage={onUndoRegionEditImage}
           onRegenerateView={onRegenerateView}
           onGenerateLineArt={onGenerateLineArt}
           onDeleteArtboard={onDeleteArtboard}

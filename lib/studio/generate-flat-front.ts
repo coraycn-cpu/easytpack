@@ -25,12 +25,26 @@ export type FlatFrontGenerationOptions = {
   regenerate?: boolean;
 };
 
-/** 调用 view-image API，将平铺正面写入主款画板；模特/拼贴原图保留为参考画板 */
+/**
+ * 调用 view-image API，将平铺正面写入主款画板；模特/拼贴原图保留为参考画板。
+ * 首次：参考 intake 原图；修正重生成：参考当前主款平铺图（用户正在看的那张），避免盲盒重抽。
+ */
 export async function generateFlatFrontForPrimary(
   project: TechPackProject,
   options?: FlatFrontGenerationOptions,
 ): Promise<FlatFrontGenerationResult> {
-  const sourceImageUrl = project.intake.imageDataUrl;
+  const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
+  const primary = project.canvas_data.artboards.find((a) => a.id === primaryId);
+
+  const intakeUrl = project.intake.imageDataUrl;
+  const currentPrimaryUrl = primary?.imageDataUrl;
+  const useCurrentAsSource =
+    Boolean(options?.regenerate) && Boolean(currentPrimaryUrl);
+
+  const sourceImageUrl = useCurrentAsSource
+    ? (currentPrimaryUrl as string)
+    : intakeUrl;
+
   if (!sourceImageUrl) {
     return {
       project,
@@ -81,22 +95,24 @@ export async function generateFlatFrontForPrimary(
   let imageDataUrl = data.imageDataUrl as string | null;
   let synthesisError = data.synthesisError as string | undefined;
 
+  // 尺寸对齐：修正时对齐当前主款；首次对齐 intake
+  const sizeMatchUrl = sourceImageUrl;
   if (!imageDataUrl) {
     imageDataUrl = await createViewPlaceholderImage(
-      sourceImageUrl,
+      sizeMatchUrl,
       data.artboardName ?? "平铺正面",
     );
     synthesisError = synthesisError ?? "生图 API 未返回图片";
   } else {
-    imageDataUrl = await matchImageToSourceSize(imageDataUrl, sourceImageUrl);
+    imageDataUrl = await matchImageToSourceSize(imageDataUrl, sizeMatchUrl);
   }
 
-  const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
-  const primary = project.canvas_data.artboards.find((a) => a.id === primaryId);
   const referenceImageUrl =
-    shouldKeepPhotoReference(project.intake.photoType) && primary?.imageDataUrl
+    shouldKeepPhotoReference(project.intake.photoType) &&
+    !useCurrentAsSource &&
+    primary?.imageDataUrl
       ? primary.imageDataUrl
-      : sourceImageUrl;
+      : intakeUrl ?? sourceImageUrl;
 
   const viewMeta = {
     kind: "flat_front" as const,
@@ -116,7 +132,11 @@ export async function generateFlatFrontForPrimary(
     };
   });
 
-  if (shouldKeepPhotoReference(project.intake.photoType)) {
+  if (
+    shouldKeepPhotoReference(project.intake.photoType) &&
+    !useCurrentAsSource &&
+    intakeUrl
+  ) {
     artboards = await appendPhotoReferenceArtboard(
       artboards,
       referenceImageUrl,
@@ -143,9 +163,11 @@ export async function generateFlatFrontForPrimary(
     project: updated,
     success: ok,
     message: ok
-      ? keptRef
-        ? `已生成平铺正面主款图，${project.intake.photoType === "model" ? "模特" : "拼贴"}原图已保留为参考画板`
-        : `已生成平铺正面主款图（${data.provider ?? "AI"}）`
+      ? useCurrentAsSource
+        ? `已按当前平铺图修正生成（${data.provider ?? "AI"}）`
+        : keptRef
+          ? `已生成平铺正面主款图，${project.intake.photoType === "model" ? "模特" : "拼贴"}原图已保留为参考画板`
+          : `已生成平铺正面主款图（${data.provider ?? "AI"}）`
       : `平铺正面生成失败，已用占位图：${synthesisError ?? "未知错误"}`,
     synthesisError,
   };

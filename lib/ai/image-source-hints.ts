@@ -250,6 +250,21 @@ export function getAiActionImageSource(
       };
     }
     case "flat-front-regen": {
+      // 有指定画板（修正当前平铺）时跟画板；否则首次生成用 intake
+      if (context?.sourceArtboardId && !context.preferIntake) {
+        const src = describeArtboardById(project, context.sourceArtboardId);
+        return {
+          ...src,
+          hint: appendTaskAndNote(
+            `本次 AI 基于：${src.label}（在当前平铺上修正）`,
+            taskLabel,
+            userNote,
+          ),
+          previewUrl: previewUrlForArtboard(project, context.sourceArtboardId),
+          taskLabel,
+          userNote,
+        };
+      }
       const label = describeIntakeOriginal(project.intake);
       return {
         kind: "intake_original",

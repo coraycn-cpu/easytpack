@@ -39,7 +39,7 @@ function mergeBounds(a: RectBounds, b: RectBounds): RectBounds {
 }
 
 export function annotationBounds(ann: Annotation): RectBounds {
-  if (ann.type === "arrow" || ann.type === "dimension") {
+  if (ann.type === "arrow" || ann.type === "dimension" || ann.type === "line") {
     const x2 = ann.x2 ?? ann.x;
     const y2 = ann.y2 ?? ann.y;
     return {

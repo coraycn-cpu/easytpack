@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/chat-image-intent";
 import { buildChatQuickChips } from "@/lib/ai/chat-quick-chips";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
+import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 import type { AiChatResponse, AiChatSuggestedAction } from "@/types/process";
 import type { TechPackProject } from "@/types/project";
 
@@ -25,7 +26,7 @@ type ChatMessage = {
   suggestedActions?: Array<{ action: AiChatSuggestedAction; reason: string }>;
 };
 
-const DEFAULT_STATUS = "版房 AI 助手 · 点击对话";
+const DEFAULT_STATUS = COMM_PACK_COPY.dockIdleHint;
 
 const ACTION_LABELS: Record<AiChatSuggestedAction, string> = {
   "annotate-process": "标工艺",

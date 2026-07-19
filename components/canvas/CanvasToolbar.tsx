@@ -56,9 +56,12 @@ const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
   { id: "rect", label: "方框", icon: "□" },
   { id: "circle", label: "圆圈", icon: "○" },
   { id: "arrow", label: "箭头", icon: "→" },
+  { id: "line", label: "直线", icon: "／" },
+  { id: "dash", label: "虚线", icon: "┅" },
   { id: "text", label: "文字", icon: "T" },
   { id: "dimension", label: "尺寸", icon: "↔" },
   { id: "freehand", label: "画笔", icon: "✎" },
+  { id: "eraser", label: "橡皮", icon: "⌫" },
 ];
 
 export default function CanvasToolbar({
@@ -173,7 +176,9 @@ export default function CanvasToolbar({
               <button
                 key={t.id}
                 type="button"
-                title={t.label}
+                title={
+                  t.id === "eraser" ? ANN_ACTION_LABELS.eraserHint : t.label
+                }
                 onClick={() => onToolChange(t.id)}
                 className={toolBtn(tool === t.id)}
               >

@@ -57,6 +57,22 @@ CRITICAL:
 - White background, black outlines only — no photoreal fabric, no color fill
 - If text conflicts with the photo, follow the photo`;
 
+const LINE_ART_EDIT_INSTRUCTION = `EDIT the attached garment image into an improved black-and-white technical line drawing.
+
+CRITICAL:
+- The user correction has PRIORITY — apply it
+- Keep everything the correction does not mention identical to the reference
+- White background, black outlines only — no photoreal fabric, no color fill
+- Do not redesign the whole garment from scratch`;
+
+const FLAT_EDIT_INSTRUCTION = `EDIT the attached flat-lay / product garment image according to the user correction.
+
+CRITICAL:
+- Start from THIS attached image (do not invent a different garment)
+- Apply the user correction precisely; keep all other details identical
+- Stay a true flat lay on white/neutral background; no model, no ghost mannequin
+- No text overlays on the image`;
+
 function parseGarmentSpec(json?: string): GarmentSpec | null {
   if (!json?.trim()) return null;
   try {
@@ -290,17 +306,31 @@ export async function synthesizeViaGateway(
           const instruction =
             kind === "line_art"
               ? [
-                  LINE_ART_TRACE_INSTRUCTION,
-                  correction ? `User correction: ${correction}` : "",
-                  "Convert the attached garment PHOTO into a black-and-white tech-pack line drawing of that SAME view (front or back as shown).",
+                  correction
+                    ? LINE_ART_EDIT_INSTRUCTION
+                    : LINE_ART_TRACE_INSTRUCTION,
+                  correction ? `User correction (must apply): ${correction}` : "",
+                  correction
+                    ? "Refine the attached image into a tech-pack line drawing while applying the correction."
+                    : "Convert the attached garment PHOTO into a black-and-white tech-pack line drawing of that SAME view (front or back as shown).",
                 ]
                   .filter(Boolean)
                   .join("\n\n")
-              : `${
-                  kind === "back"
-                    ? BACK_VIEW_INSTRUCTION
-                    : REF_FIDELITY_INSTRUCTION
-                }\n\nView / task: ${imagePrompt}`;
+              : correction
+                ? [
+                    kind === "flat_front"
+                      ? FLAT_EDIT_INSTRUCTION
+                      : kind === "back"
+                        ? BACK_VIEW_INSTRUCTION
+                        : REF_FIDELITY_INSTRUCTION,
+                    `User correction (must apply): ${correction}`,
+                    `View / task: ${imagePrompt}`,
+                  ].join("\n\n")
+                : `${
+                    kind === "back"
+                      ? BACK_VIEW_INSTRUCTION
+                      : REF_FIDELITY_INSTRUCTION
+                  }\n\nView / task: ${imagePrompt}`;
           const result = await generateText({
             model,
             messages: [

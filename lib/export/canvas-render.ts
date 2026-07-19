@@ -95,6 +95,16 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, ann: Annotation) {
         }
       }
       break;
+    case "line":
+      if (a.x2 != null && a.y2 != null) {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(a.x2, a.y2);
+        if (a.dashed) ctx.setLineDash([8, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      break;
     case "text":
       if (a.text) {
         ctx.font = "bold 16px sans-serif";

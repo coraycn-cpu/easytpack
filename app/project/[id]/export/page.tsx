@@ -19,6 +19,8 @@ import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
 
+import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
+
 /** 分页导出统一用合并标注；分图开关已去掉 */
 const IMAGE_MODE = "merged" as const;
 
@@ -198,8 +200,9 @@ export default function ExportPage() {
 
         <main className="mx-auto max-w-5xl px-4 py-6">
           <p className="mb-3 text-[11px] text-zinc-400">
-                首页为协作总览（下单数量可手填）。PDF 请选 A4
-                横向另存；Excel 含「视图」Sheet 附图；合拼大图适合微信转发。
+            首页为协作总览（下单数量可手填）。PDF 请选 A4
+            横向另存；Excel 含「视图」Sheet 附图；合拼大图适合微信转发。{" "}
+            {COMM_PACK_COPY.exportHint}
           </p>
           <TechPackPreview
             project={project}

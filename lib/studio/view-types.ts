@@ -29,10 +29,10 @@ export const LINE_ART_VIEW_HINT =
 export const VIEW_IMAGE_PRESETS: ViewImagePreset[] = [
   {
     kind: "back",
-    label: "背面图",
+    label: "背面图·示意",
     icon: "↩",
     promptHint:
-      "同一款式的完整背面平铺图（必须是衣服背面朝上，不是正面复制），版型颜色面料与正面一致，真平铺无模特无人台",
+      "同一款式的完整背面平铺图（必须是衣服背面朝上，不是正面复制），版型颜色面料与正面一致，真平铺无模特无人台。此为沟通示意，非精确打版依据，重要细节请补传实拍或用标注说明",
   },
   {
     kind: "collar",
@@ -72,7 +72,7 @@ export function isViewImageKind(value: string): value is ViewImageKind {
 
 /** 侧栏主说明：只负责彩图；线稿走画板右侧按钮 */
 export const VIEW_IMAGE_AI_GUIDE =
-  "生成背面 / 领口 / 袖口或自定义彩图。线稿请到彩图右侧点「生成线稿」。";
+  "生成领口 / 袖口或自定义彩图；背面为实验示意（重要请补实拍）。线稿请到彩图右侧点「生成线稿」。图不准可用标注或「局部」重绘。";
 
 /** 侧栏补充：数据来源（模特/拼贴时显示） */
 export const SIDEBAR_AI_SOURCE_HINT =

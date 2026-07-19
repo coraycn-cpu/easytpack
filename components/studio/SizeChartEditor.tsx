@@ -4,6 +4,7 @@ import { useState } from "react";
 import { regionStandardLabel } from "@/lib/size-chart/standards";
 import SizeGradeDialog from "@/components/studio/SizeGradeDialog";
 import type { SizeChart } from "@/types/project";
+import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 
 type SizeChartEditorProps = {
   chart: SizeChart;
@@ -95,7 +96,7 @@ export default function SizeChartEditor({
   if (chart.sizes.length === 0 && chart.rows.length === 0) {
     return (
       <div className="text-xs">
-        <p className="text-zinc-400">暂无尺寸表，可用 AI 填尺寸表或从模板创建</p>
+        <p className="text-zinc-400">{COMM_PACK_COPY.sizeEmpty}</p>
         <button
           type="button"
           onClick={() =>

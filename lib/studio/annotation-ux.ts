@@ -21,6 +21,10 @@ export const ANN_ACTION_LABELS = {
   cropCancel: "取消剪裁",
   linkProcessTab: "手动关联工艺",
   linkSizeTab: "手动关联尺寸",
+  eraser: "橡皮",
+  eraserHint: "点击画笔笔画可擦除（不影响其它标注工具）",
+  annotateFirstHint:
+    "图不准时：用方框/尺寸/画笔标出说明，或用「局部」重绘；以标注与表格为准。",
 } as const;
 
 export type AnnotationSelectionMode = "none" | "process" | "dimension" | "mixed" | "other";
