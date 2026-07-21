@@ -12,6 +12,9 @@ import type { TechPackProject } from "@/types/project";
 type TechPackPreviewProps = {
   project: TechPackProject;
   annotatedImages?: AnnotatedImage[];
+  /** 封面主图净图（无标注）；缺省则回退 intake 原图 */
+  coverHeroUrl?: string | null;
+  coverHeroLabel?: string;
   /** 打印模式：铺开全部 A4 页 */
   printMode?: boolean;
 };
@@ -19,12 +22,18 @@ type TechPackPreviewProps = {
 export default function TechPackPreview({
   project,
   annotatedImages = [],
+  coverHeroUrl,
+  coverHeroLabel,
   printMode,
 }: TechPackPreviewProps) {
   const meta = useMemo(() => buildDocMeta(project), [project]);
   const pages = useMemo(
-    () => buildTechPackDocument(project, annotatedImages),
-    [project, annotatedImages],
+    () =>
+      buildTechPackDocument(project, annotatedImages, {
+        coverHeroUrl,
+        coverHeroLabel,
+      }),
+    [project, annotatedImages, coverHeroUrl, coverHeroLabel],
   );
   const [pageIndex, setPageIndex] = useState(0);
 

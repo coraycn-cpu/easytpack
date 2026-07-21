@@ -3,6 +3,7 @@ import {
   downloadBlob,
   exportFilename,
 } from "@/lib/export/filename";
+import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 import {
   buildDocMeta,
   type AnnotatedImage,
@@ -110,7 +111,8 @@ export async function exportTechPackXlsx(
 
   const processSheet = wb.addWorksheet("工艺");
   processSheet.addRow(["序号", "部位", "工艺描述", "针法", "缝份"]);
-  project.process_items.forEach((item, i) => {
+  const processItems = normalizeProcessItemsForExport(project.process_items);
+  processItems.forEach((item, i) => {
     processSheet.addRow([
       i + 1,
       item.part ?? "",

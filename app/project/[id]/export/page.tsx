@@ -6,6 +6,7 @@ import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
 import {
   renderAllArtboards,
+  renderArtboardToDataUrl,
   renderTechPackSheetToDataUrl,
 } from "@/lib/export/canvas-render";
 import {
@@ -16,6 +17,7 @@ import {
 import { buildTechPackDocument } from "@/lib/export/techpack-document";
 import { exportTechPackXlsx } from "@/lib/export/xlsx";
 import { buildShareSnapshotHash } from "@/lib/export/share-snapshot";
+import { sortArtboardsForExport } from "@/lib/export/artboard-order";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
@@ -32,6 +34,8 @@ export default function ExportPage() {
   const [annotatedImages, setAnnotatedImages] = useState<
     Array<{ name: string; dataUrl: string }>
   >([]);
+  const [coverHeroUrl, setCoverHeroUrl] = useState<string | null>(null);
+  const [coverHeroLabel, setCoverHeroLabel] = useState<string>("款式图");
   const [stageCompositeUrl, setStageCompositeUrl] = useState<string | null>(
     null,
   );
@@ -64,6 +68,9 @@ export default function ExportPage() {
     let cancelled = false;
     setRendering(true);
 
+    const ordered = sortArtboardsForExport(project.canvas_data.artboards);
+    const primary = ordered[0];
+
     Promise.all([
       renderAllArtboards(
         project.canvas_data.artboards,
@@ -71,11 +78,24 @@ export default function ExportPage() {
         project.process_items,
         IMAGE_MODE,
       ),
+      primary
+        ? renderArtboardToDataUrl(primary, project.intake.imageDataUrl, {
+            layerFilter: "none",
+            processItems: [],
+          })
+        : Promise.resolve(null),
       renderTechPackSheetToDataUrl(project, IMAGE_MODE, { forShare: true }),
     ])
-      .then(([images, stageUrl]) => {
+      .then(([images, cleanHero, stageUrl]) => {
         if (cancelled) return;
         setAnnotatedImages(images);
+        setCoverHeroUrl(
+          cleanHero ||
+            primary?.imageDataUrl ||
+            project.intake.imageDataUrl ||
+            null,
+        );
+        setCoverHeroLabel(primary?.name ?? "款式图");
         setStageCompositeUrl(stageUrl);
       })
       .finally(() => {
@@ -89,8 +109,11 @@ export default function ExportPage() {
 
   const pageCount = useMemo(() => {
     if (!project) return 0;
-    return buildTechPackDocument(project, annotatedImages).length;
-  }, [project, annotatedImages]);
+    return buildTechPackDocument(project, annotatedImages, {
+      coverHeroUrl,
+      coverHeroLabel,
+    }).length;
+  }, [project, annotatedImages, coverHeroUrl, coverHeroLabel]);
 
   const persistHistory = async (
     kind: "pdf" | "xlsx" | "composite",
@@ -240,6 +263,8 @@ export default function ExportPage() {
           <TechPackPreview
             project={project}
             annotatedImages={annotatedImages}
+            coverHeroUrl={coverHeroUrl}
+            coverHeroLabel={coverHeroLabel}
           />
         </main>
       </div>
@@ -248,6 +273,8 @@ export default function ExportPage() {
         <TechPackPreview
           project={project}
           annotatedImages={annotatedImages}
+          coverHeroUrl={coverHeroUrl}
+          coverHeroLabel={coverHeroLabel}
           printMode
         />
       </div>

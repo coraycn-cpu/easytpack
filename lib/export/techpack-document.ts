@@ -1,10 +1,17 @@
 import { originalIntentAnalysis } from "@/lib/ai/chat-context";
 import { photoTypeLabel } from "@/lib/intake/apply-intent";
+import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
 import { formatDate, WORKFLOW_LABELS } from "@/lib/project/progress";
 
 export type AnnotatedImage = { name: string; dataUrl: string };
+
+export type BuildTechPackDocOptions = {
+  /** 封面主图净图（无标注）；VIEW 页仍用 annotatedImages */
+  coverHeroUrl?: string | null;
+  coverHeroLabel?: string;
+};
 
 /** 首页协作概览：版师/工厂一眼能用的摘要 */
 export type CoverOverview = {
@@ -161,12 +168,25 @@ export function buildDocMeta(project: TechPackProject): DocMeta {
 export function buildCoverOverview(
   project: TechPackProject,
   annotatedImages: AnnotatedImage[],
+  options?: BuildTechPackDocOptions,
 ): CoverOverview {
-  const hero =
-    annotatedImages[0] ??
-    (project.intake.imageDataUrl
-      ? { name: "参考图", dataUrl: project.intake.imageDataUrl }
-      : null);
+  const cleanHero = options?.coverHeroUrl?.trim();
+  const hero = cleanHero
+    ? {
+        name: options?.coverHeroLabel?.trim() || "款式图",
+        dataUrl: cleanHero,
+      }
+    : project.intake.imageDataUrl?.trim()
+      ? {
+          name: annotatedImages[0]?.name ?? "参考图",
+          dataUrl: project.intake.imageDataUrl,
+        }
+      : annotatedImages[0]
+        ? {
+            name: annotatedImages[0].name,
+            dataUrl: annotatedImages[0].dataUrl,
+          }
+        : null;
 
   const fabrics = project.bom_items.filter(
     (b) => b.category === "fabric" || !b.category,
@@ -185,6 +205,8 @@ export function buildCoverOverview(
   const review = project.style_review?.trim() || "";
   const reviewBrief = review.length > 220 ? `${review.slice(0, 220)}…` : review;
 
+  const processItems = normalizeProcessItemsForExport(project.process_items);
+
   return {
     heroUrl: hero?.dataUrl ?? null,
     heroLabel: hero?.name ?? "款式图",
@@ -199,11 +221,11 @@ export function buildCoverOverview(
       .slice(0, 8),
     fabricLines: fabrics.map(bomLine).filter(Boolean).slice(0, 5),
     trimLines: trims.map(bomLine).filter(Boolean).slice(0, 6),
-    processParts: project.process_items
+    processParts: processItems
       .map((p) => p.part?.trim())
       .filter(Boolean)
       .slice(0, 10) as string[],
-    processCount: project.process_items.length,
+    processCount: processItems.length,
     bomCount: project.bom_items.length,
     viewCount: annotatedImages.length,
     styleBrief,
@@ -217,17 +239,19 @@ export function buildCoverOverview(
  * 从项目 + 标注图生成 A4 横向文档页列表（尽量压缩页数）。
  *
  * 策略：视图 2 合 1；空表不占页；短工艺+短 BOM 同页；尺寸+评语同页。
+ * 封面主图优先用 coverHeroUrl（无标注）；VIEW 页保留 annotatedImages。
  */
 export function buildTechPackDocument(
   project: TechPackProject,
   annotatedImages: AnnotatedImage[],
+  options?: BuildTechPackDocOptions,
 ): TechPackDocPage[] {
   const pages: TechPackDocPage[] = [];
 
   pages.push({
     id: "cover",
     kind: "cover",
-    overview: buildCoverOverview(project, annotatedImages),
+    overview: buildCoverOverview(project, annotatedImages, options),
   });
 
   const viewChunks = chunk(annotatedImages, VIEWS_PER_PAGE);
@@ -241,7 +265,7 @@ export function buildTechPackDocument(
     });
   });
 
-  const processItems = project.process_items;
+  const processItems = normalizeProcessItemsForExport(project.process_items);
   const bomItems = project.bom_items;
   const canMergeProcessBom =
     processItems.length > 0 &&
@@ -299,7 +323,6 @@ export function buildTechPackDocument(
         offset: i * SIZE_ROWS,
         pageIndex: i + 1,
         pageCount: sizeChunks.length,
-        // 评语挂在最后一页尺寸表下方，不再单独占一页
         reviewText: isLast && reviewText ? reviewText : undefined,
       });
     });

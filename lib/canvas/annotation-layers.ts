@@ -41,12 +41,13 @@ export function filterAnnotationsByLayers(
   return annotations.filter((ann) => isLayerVisible(ann, visibility));
 }
 
-export type ExportLayerFilter = "all" | "process" | "size";
+export type ExportLayerFilter = "all" | "process" | "size" | "none";
 
 export function filterAnnotationsForExport(
   annotations: Annotation[],
   filter: ExportLayerFilter,
 ): Annotation[] {
+  if (filter === "none") return [];
   if (filter === "all") return annotations;
   return annotations.filter((ann) => {
     const layer = getAnnotationLayer(ann);

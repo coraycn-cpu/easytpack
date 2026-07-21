@@ -114,7 +114,7 @@ function PageByKind({
               <p className="shrink-0 border-b border-black bg-zinc-100 px-2 py-0.5 text-[10px] font-bold">
                 结构工艺表
               </p>
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 <ProcessTable items={page.processItems} offset={0} />
               </div>
             </div>
@@ -255,29 +255,29 @@ function ProcessTable({
   offset: number;
 }) {
   return (
-    <table className="h-full w-full border-collapse text-[10px]">
+    <table className="w-full table-fixed border-collapse text-[10px]">
       <thead>
         <tr className="bg-zinc-100 text-left">
-          <th className="border border-black px-1 py-0.5 w-8">#</th>
-          <th className="border border-black px-1 py-0.5 w-16">部位</th>
+          <th className="w-7 border border-black px-1 py-0.5">#</th>
+          <th className="w-[18%] border border-black px-1 py-0.5">部位</th>
           <th className="border border-black px-1 py-0.5">工艺</th>
-          <th className="border border-black px-1 py-0.5 w-14">针法</th>
-          <th className="border border-black px-1 py-0.5 w-12">缝份</th>
+          <th className="w-[16%] border border-black px-1 py-0.5">针法</th>
+          <th className="w-[12%] border border-black px-1 py-0.5">缝份</th>
         </tr>
       </thead>
       <tbody>
         {items.map((item, i) => (
-          <tr key={i}>
+          <tr key={item.id ?? i} className="align-top">
             <td className="border border-black px-1 py-0.5 text-zinc-500">
               {offset + i + 1}
             </td>
-            <td className="border border-black px-1 py-0.5 font-medium">
+            <td className="border border-black px-1 py-0.5 font-medium break-words">
               {item.part || "—"}
             </td>
-            <td className="border border-black px-1 py-0.5">
+            <td className="border border-black px-1 py-0.5 break-words leading-snug">
               {item.process || "—"}
             </td>
-            <td className="border border-black px-1 py-0.5">
+            <td className="border border-black px-1 py-0.5 break-words leading-snug">
               {item.stitch || "—"}
             </td>
             <td className="border border-black px-1 py-0.5">

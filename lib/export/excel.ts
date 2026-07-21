@@ -1,5 +1,6 @@
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart } from "@/types/project";
+import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 
 function escapeCsv(val: string) {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {
@@ -39,7 +40,8 @@ export function exportBomCsv(items: BomItem[], filename = "bom.csv") {
 
 export function exportProcessCsv(items: ProcessItem[], filename = "process.csv") {
   const headers = ["序号", "部位", "工艺描述", "针法", "缝份"];
-  const rows = items.map((item, i) =>
+  const normalized = normalizeProcessItemsForExport(items);
+  const rows = normalized.map((item, i) =>
     [
       String(i + 1),
       item.part ?? "",
