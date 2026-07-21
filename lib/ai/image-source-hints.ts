@@ -140,6 +140,10 @@ function previewUrlForArtboard(
   return ab?.imageDataUrl ?? project.intake.imageDataUrl;
 }
 
+/** collect / 一键标注 overlay 固定说明（与 runFullTechPackAnnotation 一致） */
+export const FULL_COLLECT_SOURCE_HINT =
+  "本次 AI 基于：工艺/尺寸用主款画板；物料用原参考图";
+
 /**
  * 各 AI 功能使用的图片来源。
  * 若传入 context.sourceArtboardId / preferIntake，则与真实 API 入参对齐，覆盖默认策略。
@@ -223,12 +227,22 @@ export function getAiActionImageSource(
         userNote,
       };
     }
-    case "explain":
-    case "full-collect": {
+    case "explain": {
       const src = describeArtboardById(project, primaryId);
       return {
         ...src,
         hint: appendTaskAndNote(`本次 AI 基于：${src.label}`, taskLabel, userNote),
+        previewUrl: previewUrlForArtboard(project, primaryId),
+        taskLabel,
+        userNote,
+      };
+    }
+    case "full-collect": {
+      const src = describeArtboardById(project, primaryId);
+      return {
+        ...src,
+        // 与 runFullTechPackAnnotation / 分项 AI 一致：工艺·尺寸·评语用主款；物料用原图
+        hint: appendTaskAndNote(FULL_COLLECT_SOURCE_HINT, taskLabel, userNote),
         previewUrl: previewUrlForArtboard(project, primaryId),
         taskLabel,
         userNote,
@@ -397,9 +411,8 @@ export const AI_ACTION_BUTTON_TITLES: Record<
   "fill-size": "尺码表 + 尺寸线 · 基于当前画板",
   enhance: "补全工艺/物料/尺寸空白项 · 物料基于原参考图",
   explain: "生成款式评语 · 基于主款平铺",
-  "full-collect": "问卷 + 工艺/BOM/标注/尺寸全量 · 主款 + 原图",
+  "full-collect": "问卷 + 工艺/BOM/标注/尺寸全量 · 工艺尺寸主款，物料原图",
 };
 
-/** collect 初稿 overlay 固定说明 */
-export const FULL_COLLECT_SOURCE_HINT =
-  "本次 AI 基于：工艺/尺寸用主款画板；物料用原参考图";
+/** @deprecated 使用文件顶部 FULL_COLLECT_SOURCE_HINT */
+export const FULL_COLLECT_SOURCE_HINT_LEGACY = FULL_COLLECT_SOURCE_HINT;

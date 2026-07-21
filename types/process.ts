@@ -92,7 +92,10 @@ export const AiQuestionSchema = z.object({
 
 export const QuestionnaireSchema = z.object({
   intro: z.string().describe("向用户说明为何需要补充这些信息"),
-  questions: z.array(AiQuestionSchema),
+  questions: z
+    .array(AiQuestionSchema)
+    .max(5)
+    .describe("最多 5 个补充问题，建议 3–5 个"),
 });
 
 export const SuggestedHotspotSchema = z.object({

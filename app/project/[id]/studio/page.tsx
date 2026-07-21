@@ -8,6 +8,7 @@ import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
+import FullCollectFlowOverlay from "@/components/studio/FullCollectFlowOverlay";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
@@ -160,6 +161,7 @@ export default function StudioPage() {
   const [activeArtboardId, setActiveArtboardId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("process");
   const [aiTask, setAiTask] = useState<AiLoadingPresetId | null>(null);
+  const [fullCollectOpen, setFullCollectOpen] = useState(false);
   const [viewGenerating, setViewGenerating] = useState(false);
   const [regeneratingArtboardId, setRegeneratingArtboardId] = useState<string | null>(null);
   /** 与真实 API 取图对齐的短生命周期上下文 */
@@ -177,6 +179,7 @@ export default function StudioPage() {
   );
   const aiBusy =
     aiTask !== null ||
+    fullCollectOpen ||
     viewGenerating ||
     regeneratingArtboardId !== null ||
     regionEditBusy ||
@@ -220,13 +223,29 @@ export default function StudioPage() {
         router.replace("/");
         return;
       }
-      if (p.status !== "studio" && p.status !== "completed") {
-        router.replace(`/project/${id}/collect`);
+      // collecting：在工作台弹窗内完成互动问答，不再跳转独立 collect 页
+      if (
+        p.status !== "studio" &&
+        p.status !== "completed" &&
+        p.status !== "collecting"
+      ) {
+        router.replace("/");
         return;
       }
       setProject(p);
       setActiveArtboardId(p.canvas_data.activeArtboardId);
       setLayout(getStudioLayout(p.canvas_data.studioLayout));
+      // 全量标注问答在弹窗内完成：显式 ?fullCollect=1 或 status=collecting
+      const fullCollectParam =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("fullCollect") === "1";
+      if (
+        (fullCollectParam || p.status === "collecting") &&
+        p.intake.imageDataUrl &&
+        !needsGarmentConfirmation(p.intake)
+      ) {
+        setFullCollectOpen(true);
+      }
       const renamed = normalizeViewArtboardNames(p.canvas_data.artboards);
       if (renamed.changed) {
         const fixed = {
@@ -401,6 +420,14 @@ export default function StudioPage() {
         persist(updated);
         setAiMessage(`已锁定目标单款：${garment.label}`);
         setAiTip("当前使用原参考图，可稍后在主款画板重新生成平铺正面");
+        if (
+          updated.status === "collecting" ||
+          (typeof window !== "undefined" &&
+            new URLSearchParams(window.location.search).get("fullCollect") ===
+              "1")
+        ) {
+          setFullCollectOpen(true);
+        }
         return;
       }
       persist(updated);
@@ -408,6 +435,13 @@ export default function StudioPage() {
         await runFlatFrontGeneration(updated);
       } else {
         setAiMessage(`已锁定目标单款：${garment.label}`);
+      }
+      if (
+        updated.status === "collecting" ||
+        (typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("fullCollect") === "1")
+      ) {
+        setFullCollectOpen(true);
       }
     },
     [project, persist, runFlatFrontGeneration],
@@ -421,9 +455,11 @@ export default function StudioPage() {
       setAiMessage("请先上传款式图");
       return;
     }
-    const updated = { ...project, status: "collecting" as const };
-    persist(updated);
-    router.push(`/project/${id}/collect`);
+    if (needsGarmentConfirmation(project.intake)) {
+      setAiMessage("请先确认目标单款");
+      return;
+    }
+    setFullCollectOpen(true);
   };
 
   const showNewStyleOverlay = useMemo(() => {
@@ -2257,7 +2293,32 @@ export default function StudioPage() {
             </div>
           </div>
 
-          {aiBusy && activeAiPreset && !garmentBlocked && (
+          {fullCollectOpen && project && !garmentBlocked && (
+            <FullCollectFlowOverlay
+              project={project}
+              onProjectPatch={(next) => {
+                persist(next);
+              }}
+              onComplete={(next, summary) => {
+                persist(next);
+                setFullCollectOpen(false);
+                setAiMessage(summary || "AI 一键标注已完成");
+                setAiTip(COMM_PACK_COPY.annotateAfterAi);
+                if (
+                  typeof window !== "undefined" &&
+                  new URLSearchParams(window.location.search).get("fullCollect") ===
+                    "1"
+                ) {
+                  router.replace(`/project/${id}/studio`);
+                }
+              }}
+              onError={(message) => {
+                setAiMessage(message);
+              }}
+            />
+          )}
+
+          {aiBusy && activeAiPreset && !garmentBlocked && !fullCollectOpen && (
             <AiAnalysisOverlay
               preset={activeAiPreset}
               imageSourceHint={activeAiImageSource?.hint}
@@ -2296,7 +2357,7 @@ export default function StudioPage() {
                   onCreated={(projectId, mode) => {
                     router.push(
                       mode === "full"
-                        ? `/project/${projectId}/collect`
+                        ? `/project/${projectId}/studio?fullCollect=1`
                         : `/project/${projectId}/studio`,
                     );
                   }}

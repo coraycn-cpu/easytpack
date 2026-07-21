@@ -22,7 +22,7 @@ export default function CanvasHomePage() {
   const handleCreated = (projectId: string, mode: NewStyleMode) => {
     router.push(
       mode === "full"
-        ? `/project/${projectId}/collect`
+        ? `/project/${projectId}/studio?fullCollect=1`
         : `/project/${projectId}/studio`,
     );
   };
@@ -33,7 +33,7 @@ export default function CanvasHomePage() {
     progress: calcProgress(p),
     href:
       p.status === "collecting"
-        ? `/project/${p.id}/collect`
+        ? `/project/${p.id}/studio?fullCollect=1`
         : `/project/${p.id}/studio`,
   }));
 

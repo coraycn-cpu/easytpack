@@ -45,10 +45,11 @@ export default function ProjectsPage() {
   );
 
   const getHref = (p: TechPackProject) => {
-    if (p.status === "collecting") return `/project/${p.id}/collect`;
+    if (p.status === "collecting")
+      return `/project/${p.id}/studio?fullCollect=1`;
     if (p.status === "studio" || p.status === "completed")
       return `/project/${p.id}/studio`;
-    return `/project/${p.id}/collect`;
+    return `/project/${p.id}/studio?fullCollect=1`;
   };
 
   return (
