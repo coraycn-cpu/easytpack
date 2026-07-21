@@ -4,6 +4,7 @@ import {
   getViewImageConfig,
   synthesizeViewImage,
 } from "@/lib/ai/view-image";
+import { meterAiCallServer } from "@/lib/ai/metering";
 import { isViewImageKind } from "@/lib/studio/view-types";
 
 export async function GET() {
@@ -11,8 +12,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const started = Date.now();
+  let projectId: string | undefined;
   try {
     const body = await req.json();
+    projectId =
+      typeof body.projectId === "string" ? body.projectId : undefined;
     const kind = body.kind as string;
     if (!kind || !isViewImageKind(kind)) {
       return NextResponse.json({ error: "无效的视角类型" }, { status: 400 });
@@ -38,7 +43,17 @@ export async function POST(req: NextRequest) {
       garmentSpecJson,
     });
 
-    return NextResponse.json({
+    const ok = Boolean(synthesis.imageDataUrl);
+    meterAiCallServer({
+      action: "view-image",
+      projectId,
+      ok,
+      provider: synthesis.provider,
+      model: synthesis.model,
+      error: ok ? undefined : synthesis.error,
+    });
+
+    const res = NextResponse.json({
       imageDataUrl: synthesis.imageDataUrl,
       artboardName,
       imagePrompt,
@@ -48,8 +63,17 @@ export async function POST(req: NextRequest) {
       model: synthesis.model,
       synthesisError: synthesis.error,
     });
+    res.headers.set("x-ai-action", "view-image");
+    res.headers.set("x-ai-ms", String(Date.now() - started));
+    return res;
   } catch (error) {
     console.error("[AI view-image]", error);
+    meterAiCallServer({
+      action: "view-image",
+      projectId,
+      ok: false,
+      error: error instanceof Error ? error.message : "视角图生成失败",
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "视角图生成失败" },
       { status: 500 },

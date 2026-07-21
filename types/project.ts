@@ -138,6 +138,13 @@ export type ArtboardViewImageMeta = {
   correctionPrompt?: string;
   /** 线稿绑定的源彩图画板 id（重新生成时仍用该彩图转换） */
   sourceArtboardId?: string;
+  /**
+   * 生图结果状态。placeholder = 曾用源图顶替（不应再新增）；
+   * 新流程失败时不应写入画板。
+   */
+  generationStatus?: "ok" | "placeholder" | "failed";
+  /** 最近一次生图失败原因（供角标/重试提示） */
+  lastSynthesisError?: string;
 };
 
 export type Artboard = {
@@ -199,7 +206,14 @@ export type TechPackProject = {
     basename: string;
     pageCount?: number;
     imageMode?: "merged" | "split";
+    /** 下期分享激励用：匿名摘要 hash（本期可选写入） */
+    shareSnapshotHash?: string;
   }>;
+  /**
+   * 是否同意进入质量/检索池（下期管理后台与训练整理用）。
+   * 默认 false；定稿导出时可勾选。
+   */
+  consentQualityPool?: boolean;
 };
 
 export const DEFAULT_ARTBOARD_NAMES = ["正面", "背面", "细节"];

@@ -15,6 +15,7 @@ import {
 } from "@/lib/export/filename";
 import { buildTechPackDocument } from "@/lib/export/techpack-document";
 import { exportTechPackXlsx } from "@/lib/export/xlsx";
+import { buildShareSnapshotHash } from "@/lib/export/share-snapshot";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
@@ -102,6 +103,7 @@ export default function ExportPage() {
       basename: styleExportBasename(project),
       pageCount: extra?.pageCount,
       imageMode: IMAGE_MODE,
+      shareSnapshotHash: buildShareSnapshotHash(project),
     };
     const history = [...(project.exportHistory ?? []), entry].slice(-20);
     const updated = { ...project, exportHistory: history };
@@ -199,11 +201,42 @@ export default function ExportPage() {
         </header>
 
         <main className="mx-auto max-w-5xl px-4 py-6">
-          <p className="mb-3 text-[11px] text-zinc-400">
-            首页为协作总览（下单数量可手填）。PDF 请选 A4
-            横向另存；Excel 含「视图」Sheet 附图；合拼大图适合微信转发。{" "}
-            {COMM_PACK_COPY.exportHint}
-          </p>
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-[11px] leading-relaxed text-amber-950">
+            <p className="font-semibold text-amber-900">发给版师前自检</p>
+            <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-amber-900/90">
+              <li>封面标题、尺码标准、样衣码是否正确</li>
+              <li>工艺 / BOM / 尺寸表是否有空行或缺关键数值</li>
+              <li>画布标注是否指向关键部位（图仅供沟通，以表为准）</li>
+              <li>
+                <strong>PDF</strong>：系统打印对话框选「另存为 PDF」· A4 ·{" "}
+                <strong>横向</strong> · 背景图形开启
+              </li>
+              <li>
+                <strong>Excel</strong>：含工艺/物料/尺码 +「视图」附图，适合改数
+              </li>
+              <li>
+                <strong>合拼大图</strong>：适合微信预览，不替代正式表
+              </li>
+            </ol>
+            <p className="mt-2 text-amber-800/80">{COMM_PACK_COPY.exportHint}</p>
+          </div>
+          <label className="mb-4 flex cursor-pointer items-start gap-2 text-[11px] text-zinc-600">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={Boolean(project.consentQualityPool)}
+              onChange={(e) => {
+                const updated = {
+                  ...project,
+                  consentQualityPool: e.target.checked,
+                };
+                void saveProject(updated).then(() => setProject(updated));
+              }}
+            />
+            <span>
+              同意本款匿名摘要进入质量改进池（默认关闭；下期管理后台用，不含公开分享）
+            </span>
+          </label>
           <TechPackPreview
             project={project}
             annotatedImages={annotatedImages}

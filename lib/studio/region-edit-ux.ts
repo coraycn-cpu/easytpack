@@ -36,6 +36,9 @@ export const COMM_PACK_COPY = {
   aiDraftBadge: "AI草稿",
   /** 角标前缀；完整文案见 formatAiDraftBadge（如 AI草稿-正面） */
   originalBadge: "原图",
+  /** 生图失败占位（历史数据）；新流程应避免写入 */
+  failedGenBadge: "生成失败·占位",
+  failedGenHint: "此图不是真实生成结果，请点「修正」重试或删除该画板",
   /** 写入评语的快捷说明（点选追加，不覆盖） */
   reviewGuideChips: [
     "袖长以尺寸线为准",

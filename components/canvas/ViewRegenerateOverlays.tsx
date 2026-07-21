@@ -276,8 +276,13 @@ export default function ViewRegenerateOverlays({
           canRegion ||
           canUndoImage;
 
-        const imageTopBadge =
-          meta != null
+        const isFailedPlaceholder =
+          meta?.generationStatus === "placeholder" ||
+          meta?.generationStatus === "failed";
+
+        const imageTopBadge = isFailedPlaceholder
+          ? COMM_PACK_COPY.failedGenBadge
+          : meta != null
             ? formatAiDraftBadge(ab, COMM_PACK_COPY.aiDraftBadge)
             : isPhotoReferenceArtboard(ab)
               ? COMM_PACK_COPY.originalBadge
@@ -296,7 +301,19 @@ export default function ViewRegenerateOverlays({
                 }}
                 data-no-canvas-zoom
               >
-                <span className="rounded bg-slate-800/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium text-white ${
+                    isFailedPlaceholder
+                      ? "bg-amber-600/95"
+                      : "bg-slate-800/75"
+                  }`}
+                  title={
+                    isFailedPlaceholder
+                      ? meta?.lastSynthesisError ??
+                        COMM_PACK_COPY.failedGenHint
+                      : undefined
+                  }
+                >
                   {imageTopBadge}
                 </span>
               </div>

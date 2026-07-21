@@ -115,14 +115,45 @@ async function callStructured<S extends z.ZodType>({
   schema: S;
   schemaName: string;
 }) {
-  const { object } = await generateObject({
-    model: getModel(),
-    schema,
-    schemaName,
-    instructions,
-    messages: [{ role: "user", content: buildContent(userText, imageDataUrl) }],
-  });
-  return object as z.infer<S>;
+  const { meterAiCallServer } = await import("@/lib/ai/metering");
+  const actionBySchema: Record<
+    string,
+    import("@/lib/ai/metering").AiMeterAction
+  > = {
+    size_chart_assist: "size-chart",
+    bom_assist: "bom",
+    batch_annotate: "annotate-batch",
+    size_dimension_assist: "size-dimension",
+    batch_size_dimensions: "size-dimension-batch",
+    region_annotate: "annotate-region",
+    enhance_techpack: "enhance",
+    style_review: "style-review",
+  };
+  const action = actionBySchema[schemaName] ?? "other";
+  try {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema,
+      schemaName,
+      instructions,
+      messages: [{ role: "user", content: buildContent(userText, imageDataUrl) }],
+    });
+    meterAiCallServer({
+      action,
+      ok: true,
+      model: getModel(),
+      provider: (process.env.AI_PROVIDER as string) || "gateway",
+    });
+    return object as z.infer<S>;
+  } catch (err) {
+    meterAiCallServer({
+      action,
+      ok: false,
+      model: getModel(),
+      error: err instanceof Error ? err.message : "structured failed",
+    });
+    throw err;
+  }
 }
 
 export async function generateSizeChartAssist(input: {

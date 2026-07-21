@@ -409,9 +409,9 @@ export const AI_ACTION_BUTTON_TITLES: Record<
   "annotate-process": "画布区域标注 + 工艺 tab · 基于当前画板",
   "fill-bom": "生成物料清单 → 物料 tab · 基于原参考图",
   "fill-size": "尺码表 + 尺寸线 · 基于当前画板",
-  enhance: "补全工艺/物料/尺寸空白项 · 物料基于原参考图",
+  enhance: "一键补全：只填空白项，不覆盖已有内容 · 物料基于原参考图",
   explain: "生成款式评语 · 基于主款平铺",
-  "full-collect": "问卷 + 工艺/BOM/标注/尺寸全量 · 工艺尺寸主款，物料原图",
+  "full-collect": "AI 一键标注：问卷 + 工艺/BOM/标注/尺寸初稿（可覆盖空包）",
 };
 
 /** @deprecated 使用文件顶部 FULL_COLLECT_SOURCE_HINT */

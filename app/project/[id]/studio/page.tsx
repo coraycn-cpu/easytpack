@@ -23,6 +23,8 @@ import {
 import { generateFlatFrontForPrimary } from "@/lib/studio/generate-flat-front";
 import { shouldKeepPhotoReference } from "@/lib/studio/reference-artboard";
 import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
+import { resolveComplianceNav } from "@/lib/studio/compliance-navigate";
+import { recordViewImageClientOutcome } from "@/lib/studio/record-view-gen-outcome";
 import {
   compositeRegionPatch,
   extractRegionPatch,
@@ -87,7 +89,7 @@ import {
   type ImageCropRect,
 } from "@/lib/canvas/crop-image";
 import { generateProcessId } from "@/lib/process/ids";
-import { checkCompliance, canFinalize } from "@/lib/project/compliance";
+import { checkCompliance, canFinalize, type ComplianceIssue } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
@@ -117,6 +119,21 @@ import {
   canonicalArtboardNameForKind,
   lineArtArtboardNameFromSource,
 } from "@/lib/studio/view-artboard-names";
+import {
+  getImageDimensions,
+  matchImageToSourceSize,
+} from "@/lib/studio/view-image-client";
+import {
+  appendViewGenRecord,
+  buildViewGenTrainingPayload,
+} from "@/lib/training/view-gen-log";
+import type { BomItem, ProcessItem } from "@/types/process";
+import type {
+  Annotation,
+  Artboard,
+  TechPackProject,
+  WorkflowStatus,
+} from "@/types/project";
 
 function normalizeViewArtboardNames(artboards: Artboard[]): {
   artboards: Artboard[];
@@ -139,13 +156,6 @@ function normalizeViewArtboardNames(artboards: Artboard[]): {
   });
   return { artboards: next, changed };
 }
-import { createViewPlaceholderImage, getImageDimensions, matchImageToSourceSize } from "@/lib/studio/view-image-client";
-import {
-  appendViewGenRecord,
-  buildViewGenTrainingPayload,
-} from "@/lib/training/view-gen-log";
-import type { BomItem, ProcessItem } from "@/types/process";
-import type { Annotation, Artboard, TechPackProject, WorkflowStatus } from "@/types/project";
 
 const AnnotationCanvas = dynamic(
   () => import("@/components/canvas/AnnotationCanvas"),
@@ -499,6 +509,51 @@ export default function StudioPage() {
       focusTab(tab);
     },
     [focusTab],
+  );
+
+  const handleComplianceIssue = useCallback(
+    (issue: ComplianceIssue) => {
+      const nav = resolveComplianceNav(issue);
+      if (nav.tab) focusTab(nav.tab);
+      if (nav.processId) {
+        setHighlightedProcessIds([nav.processId]);
+        const linked = project
+          ? findAnnotationsForProcessInProject(project, nav.processId)
+          : [];
+        if (linked.length > 0) {
+          const first = linked[0];
+          if (first.artboardId !== activeArtboardId) {
+            setActiveArtboardId(first.artboardId);
+            if (project) {
+              persist({
+                ...project,
+                canvas_data: {
+                  ...project.canvas_data,
+                  activeArtboardId: first.artboardId,
+                },
+              });
+            }
+          }
+          setSelectedAnnIds([first.annotation.id]);
+          setLinkedHighlightAnnIds(linked.map((l) => l.annotation.id));
+        }
+      }
+      if (nav.tip) {
+        setAiMessage(nav.tip);
+        setAiTip(nav.tip);
+      }
+      if (issue.action === "title") {
+        const next = window.prompt(
+          "请输入款式名称",
+          project?.title?.trim() || "",
+        );
+        if (next !== null && project) {
+          const title = next.trim();
+          if (title) persist({ ...project, title });
+        }
+      }
+    },
+    [focusTab, project, activeArtboardId, persist],
   );
 
   const layerVisibility: LayerVisibility =
@@ -1021,6 +1076,7 @@ export default function StudioPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            projectId: project.id,
             kind: "custom",
             customPrompt: `IMAGE EDIT: Edit ONLY this cropped garment region. Apply: ${prompt}. Keep fabric/color/identity; do not redesign the whole garment.`,
             correctionPrompt: prompt,
@@ -1169,6 +1225,7 @@ export default function StudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          projectId: project.id,
           kind: params.kind,
           customPrompt: params.customPrompt,
           correctionPrompt: params.correctionPrompt,
@@ -1186,9 +1243,8 @@ export default function StudioPage() {
       let imageDataUrl = data.imageDataUrl as string | null;
       let outcome: "success" | "placeholder" | "error" = "success";
       if (!imageDataUrl) {
-        outcome = "placeholder";
-        imageDataUrl = await createViewPlaceholderImage(effectiveSourceUrl);
-        const err = data.synthesisError as string | undefined;
+        outcome = "error";
+        const err = (data.synthesisError as string | undefined) ?? "API 未返回图片";
         const viewLabel =
           params.preferredArtboardName ??
           (params.kind === "back"
@@ -1196,24 +1252,50 @@ export default function StudioPage() {
             : params.kind === "line_art"
               ? "线稿"
               : "视角图");
-        setAiTip(
+        appendViewGenRecord(
+          buildViewGenTrainingPayload({
+            projectId: project.id,
+            viewKind: params.kind,
+            customPrompt: params.customPrompt,
+            category: project.intake.detectedCategory,
+            description: project.intake.description,
+            sourceImageUrl: imageForAi,
+            generatedPrompt: data.imagePrompt,
+            artboardName: data.artboardName,
+            provider: data.provider,
+            model: data.model,
+            outcome: "error",
+            synthesisError: err,
+          }),
+        );
+        setAiMessage(
           params.kind === "line_art"
-            ? err
-              ? `线稿生成失败：${err}。画板上仍是源彩图占位（不是线稿），请在右侧用「修正」重试或检查密钥。`
-              : `线稿 API 未返回图片，画板上仍是源彩图占位（不是线稿），请重试。`
-            : err
-              ? `${viewLabel}生图失败：${err}。当前仅为源图占位，请检查密钥后重试。`
-              : `${viewLabel} API 未返回图片，已用源图占位（非真实${viewLabel}），请重试。`,
+            ? `线稿生成失败：${err}。画板未改动，请用「修正」重试或检查密钥。`
+            : `${viewLabel}生成失败：${err}。画板未写入占位图，请重试。`,
         );
-      } else {
-        imageDataUrl = await matchImageToSourceSize(
-          imageDataUrl,
-          effectiveSourceUrl,
-        );
-        setAiTip(
-          `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图（尺寸已与源图对齐）`,
-        );
+        setAiTip(COMM_PACK_COPY.failedGenHint);
+        recordViewImageClientOutcome({
+          projectId: project.id,
+          kind: params.kind,
+          ok: false,
+          provider: data.provider,
+          model: data.model,
+          error: err,
+          category: project.intake.detectedCategory,
+          photoType: project.intake.photoType,
+          consent: project.consentQualityPool,
+          artboardName: data.artboardName,
+        });
+        return;
       }
+
+      imageDataUrl = await matchImageToSourceSize(
+        imageDataUrl,
+        effectiveSourceUrl,
+      );
+      setAiTip(
+        `已通过 ${data.provider ?? "AI"} / ${data.model ?? "model"} 生成真实款式图（尺寸已与源图对齐）`,
+      );
 
       appendViewGenRecord(
         buildViewGenTrainingPayload({
@@ -1232,6 +1314,17 @@ export default function StudioPage() {
           synthesisError: data.synthesisError,
         }),
       );
+      recordViewImageClientOutcome({
+        projectId: project.id,
+        kind: params.kind,
+        ok: true,
+        provider: data.provider,
+        model: data.model,
+        category: project.intake.detectedCategory,
+        photoType: project.intake.photoType,
+        consent: project.consentQualityPool,
+        artboardName: data.artboardName,
+      });
 
       const resolvedKind =
         (data.kind as ViewImageKind | undefined) ?? params.kind;
@@ -1244,6 +1337,7 @@ export default function StudioPage() {
         customPrompt: params.customPrompt,
         lastImagePrompt: data.imagePrompt as string | undefined,
         correctionPrompt: params.correctionPrompt,
+        generationStatus: "ok" as const,
         ...(boundSourceId ? { sourceArtboardId: boundSourceId } : {}),
       };
 
@@ -1316,6 +1410,15 @@ export default function StudioPage() {
         }),
       );
       setAiMessage(e instanceof Error ? e.message : "视角图生成失败");
+      recordViewImageClientOutcome({
+        projectId: project.id,
+        kind: params.kind,
+        ok: false,
+        error: e instanceof Error ? e.message : "视角图生成失败",
+        category: project.intake.detectedCategory,
+        photoType: project.intake.photoType,
+        consent: project.consentQualityPool,
+      });
     } finally {
       setViewGenerating(false);
       setRegeneratingArtboardId(null);
@@ -2096,6 +2199,7 @@ export default function StudioPage() {
           viewGenerating={viewGenerating || regeneratingArtboardId !== null}
           aiBusy={aiBusy}
           compliance={compliance}
+          onComplianceIssue={handleComplianceIssue}
           projectTitle={project.title}
           category={project.intake.targetGarment?.category ?? project.intake.detectedCategory}
           targetGarmentLabel={project.intake.targetGarment?.label}

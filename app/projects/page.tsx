@@ -9,31 +9,39 @@ import {
   deleteProject,
   duplicateProject,
   evacuateNonProjectStorage,
+  exportProjectJsonBackup,
   formatStorageBytes,
   getEasytpackStorageStats,
+  getProject,
   listProjects,
 } from "@/lib/project/storage";
+import {
+  downloadTextFile,
+  exportAiTelemetryJsonl,
+  getAiTelemetryStorageBytes,
+} from "@/lib/ai/telemetry";
+import { listAiMeterEvents, sumAiMeterUnits } from "@/lib/ai/metering";
 import type { TechPackProject } from "@/types/project";
 
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [filter, setFilter] = useState<"all" | "draft" | "in_review" | "finalized">("all");
-  const [storageLabel, setStorageLabel] = useState<string>("");
-  const [trainingBytes, setTrainingBytes] = useState(0);
+  const [stats, setStats] = useState(() => ({
+    projectsBytes: 0,
+    trainingBytes: 0,
+    meterBytes: 0,
+    telemetryBytes: 0,
+    totalBytes: 0,
+    projectCount: 0,
+  }));
   const [cacheNote, setCacheNote] = useState<string | null>(null);
+  const [aiUnits, setAiUnits] = useState(0);
 
   const refresh = () => {
     void listProjects().then(setProjects);
-    const stats = getEasytpackStorageStats();
-    setTrainingBytes(stats.trainingBytes);
-    setStorageLabel(
-      `约占 ${formatStorageBytes(stats.totalBytes)}（项目 ${formatStorageBytes(stats.projectsBytes)}` +
-        (stats.trainingBytes > 0
-          ? ` · 缓存 ${formatStorageBytes(stats.trainingBytes)}`
-          : "") +
-        "）",
-    );
+    setStats(getEasytpackStorageStats());
+    setAiUnits(sumAiMeterUnits());
   };
 
   useEffect(() => {
@@ -44,6 +52,9 @@ export default function ProjectsPage() {
     filter === "all" ? true : p.workflowStatus === filter,
   );
 
+  const cacheBytes =
+    stats.trainingBytes + stats.meterBytes + stats.telemetryBytes;
+
   const getHref = (p: TechPackProject) => {
     if (p.status === "collecting")
       return `/project/${p.id}/studio?fullCollect=1`;
@@ -52,39 +63,99 @@ export default function ProjectsPage() {
     return `/project/${p.id}/studio?fullCollect=1`;
   };
 
+  const handleClearCache = () => {
+    evacuateNonProjectStorage();
+    setCacheNote("已清理视角缓存、用量与质量日志；项目未删除");
+    refresh();
+  };
+
+  const handleExportBackup = async (id: string, title: string) => {
+    try {
+      const p = await getProject(id);
+      if (!p) {
+        window.alert("项目不存在或已删除");
+        return;
+      }
+      const json = exportProjectJsonBackup(p);
+      const safe = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 40) || "project";
+      downloadTextFile(`${safe}-backup.json`, json);
+      setCacheNote(`已导出「${title}」JSON 备份（图片若为 idb 引用需本机还原）`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "导出失败");
+    }
+  };
+
+  const handleExportTelemetry = () => {
+    const jsonl = exportAiTelemetryJsonl();
+    if (!jsonl.trim()) {
+      setCacheNote("暂无质量日志可导出");
+      return;
+    }
+    downloadTextFile(
+      `easytpack-ai-telemetry-${new Date().toISOString().slice(0, 10)}.jsonl`,
+      jsonl,
+    );
+    setCacheNote(`已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`);
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <AppHeader />
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="mb-6 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">我的项目</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              本地保存，共 {projects.length} 个款式
-              {storageLabel ? ` · ${storageLabel}` : ""}
+              本地保存，共 {projects.length} 个款式 · 约占{" "}
+              {formatStorageBytes(stats.totalBytes)}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <Link
-              href="/"
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          <Link
+            href="/"
+            className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          >
+            + 新建
+          </Link>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-600">
+          <p className="font-medium text-zinc-800">本机存储</p>
+          <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-500">
+            <li>
+              项目数据 {formatStorageBytes(stats.projectsBytes)} · 视角缓存{" "}
+              {formatStorageBytes(stats.trainingBytes)} · AI 用量{" "}
+              {formatStorageBytes(stats.meterBytes)} · 质量日志{" "}
+              {formatStorageBytes(stats.telemetryBytes)}
+            </li>
+            <li>
+              本期本地 AI 成功调用约 {aiUnits} 次（下期接订阅额度）
+              {getAiTelemetryStorageBytes() > 0
+                ? ` · 质量日志 ${formatStorageBytes(getAiTelemetryStorageBytes())}`
+                : ""}
+            </li>
+          </ul>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={cacheBytes === 0}
+              onClick={handleClearCache}
+              className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              + 新建
-            </Link>
-            {trainingBytes > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  evacuateNonProjectStorage();
-                  setCacheNote("已清理视角生成缓存，项目未删除");
-                  refresh();
-                }}
-                className="text-[11px] text-blue-600 hover:underline"
-              >
-                清理训练缓存（释放约 {formatStorageBytes(trainingBytes)}）
-              </button>
-            )}
+              清理缓存
+              {cacheBytes > 0 ? `（约 ${formatStorageBytes(cacheBytes)}）` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportTelemetry}
+              className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
+            >
+              导出质量日志 JSONL
+            </button>
           </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+            保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
+            备份后再删。大图会自动压缩。
+          </p>
         </div>
 
         {cacheNote && (
@@ -135,6 +206,14 @@ export default function ProjectsPage() {
                   </p>
                 </Link>
                 <div className="ml-3 flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    title="导出 JSON 备份"
+                    onClick={() => void handleExportBackup(p.id, p.title)}
+                    className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100"
+                  >
+                    备份
+                  </button>
                   <button
                     type="button"
                     title="复制"

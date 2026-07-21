@@ -188,16 +188,8 @@ export default function NewStyleEntryCard({
             >
               进入画布
             </button>
-            <button
-              type="button"
-              disabled={!canSubmit || loading}
-              onClick={() => createProject("full")}
-              className="rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              全功能 AI 标注
-            </button>
             <p className="text-center text-[10px] leading-relaxed text-slate-400">
-              进入画布：AI 识别款式类型后手动编辑 · 全功能标注：问卷 + 工艺/BOM/标注/尺寸一键生成
+              进入画布后可手动标注。需要 AI 时用顶部「AI 一键标注」生成工艺/物料/尺寸初稿；「一键补全」只补缺项、不覆盖已有内容。
             </p>
           </div>
 

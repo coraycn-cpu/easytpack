@@ -5,9 +5,8 @@ import {
   shouldKeepPhotoReference,
 } from "@/lib/studio/reference-artboard";
 import {
-  createViewPlaceholderImage,
-  getImageDimensions,
   matchImageToSourceSize,
+  getImageDimensions,
 } from "@/lib/studio/view-image-client";
 import type { TechPackProject } from "@/types/project";
 
@@ -69,6 +68,7 @@ export async function generateFlatFrontForPrimary(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      projectId: project.id,
       kind: "flat_front",
       correctionPrompt: options?.correctionPrompt,
       category:
@@ -95,17 +95,16 @@ export async function generateFlatFrontForPrimary(
   let imageDataUrl = data.imageDataUrl as string | null;
   let synthesisError = data.synthesisError as string | undefined;
 
-  // 尺寸对齐：修正时对齐当前主款；首次对齐 intake
-  const sizeMatchUrl = sourceImageUrl;
   if (!imageDataUrl) {
-    imageDataUrl = await createViewPlaceholderImage(
-      sizeMatchUrl,
-      data.artboardName ?? "平铺正面",
-    );
-    synthesisError = synthesisError ?? "生图 API 未返回图片";
-  } else {
-    imageDataUrl = await matchImageToSourceSize(imageDataUrl, sizeMatchUrl);
+    return {
+      project,
+      success: false,
+      message: `平铺正面生成失败：${synthesisError ?? "API 未返回图片"}。主款图未改动，请检查密钥后重试。`,
+      synthesisError: synthesisError ?? "API 未返回图片",
+    };
   }
+
+  imageDataUrl = await matchImageToSourceSize(imageDataUrl, sourceImageUrl);
 
   const referenceImageUrl =
     shouldKeepPhotoReference(project.intake.photoType) &&
@@ -118,6 +117,7 @@ export async function generateFlatFrontForPrimary(
     kind: "flat_front" as const,
     lastImagePrompt: data.imagePrompt as string | undefined,
     correctionPrompt: options?.correctionPrompt,
+    generationStatus: "ok" as const,
   };
 
   let artboards = project.canvas_data.artboards.map((ab) => {
@@ -157,18 +157,16 @@ export async function generateFlatFrontForPrimary(
     },
   };
 
-  const ok = Boolean(data.imageDataUrl);
+  const ok = true;
   const keptRef = shouldKeepPhotoReference(project.intake.photoType);
   return {
     project: updated,
     success: ok,
-    message: ok
-      ? useCurrentAsSource
-        ? `已按当前平铺图修正生成（${data.provider ?? "AI"}）`
-        : keptRef
-          ? `已生成平铺正面主款图，${project.intake.photoType === "model" ? "模特" : "拼贴"}原图已保留为参考画板`
-          : `已生成平铺正面主款图（${data.provider ?? "AI"}）`
-      : `平铺正面生成失败，已用占位图：${synthesisError ?? "未知错误"}`,
+    message: useCurrentAsSource
+      ? `已按当前平铺图修正生成（${data.provider ?? "AI"}）`
+      : keptRef
+        ? `已生成平铺正面主款图，${project.intake.photoType === "model" ? "模特" : "拼贴"}原图已保留为参考画板`
+        : `已生成平铺正面主款图（${data.provider ?? "AI"}）`,
     synthesisError,
   };
 }

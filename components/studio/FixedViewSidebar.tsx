@@ -25,6 +25,7 @@ type FixedViewSidebarProps = {
   /** AI 处理中锁定侧栏操作 */
   aiBusy?: boolean;
   compliance: ComplianceIssue[];
+  onComplianceIssue?: (issue: ComplianceIssue) => void;
   projectTitle: string;
   category?: string;
   targetGarmentLabel?: string;
@@ -45,6 +46,7 @@ export default function FixedViewSidebar({
   viewGenerating,
   aiBusy = false,
   compliance,
+  onComplianceIssue,
   projectTitle,
   category,
   targetGarmentLabel,
@@ -189,7 +191,12 @@ export default function FixedViewSidebar({
               complianceExpanded ? "max-h-40" : "max-h-[4.5rem]"
             }`}
           >
-            <CompliancePanel issues={compliance} flat compact />
+            <CompliancePanel
+              issues={compliance}
+              flat
+              compact
+              onIssueClick={onComplianceIssue}
+            />
           </div>
         </div>
 

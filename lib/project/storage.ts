@@ -6,6 +6,14 @@ import {
   getViewGenRecordsStorageBytes,
 } from "@/lib/training/view-gen-log";
 import {
+  clearAiMeterEvents,
+  getAiMeterStorageBytes,
+} from "@/lib/ai/metering";
+import {
+  clearAiTelemetryEvents,
+  getAiTelemetryStorageBytes,
+} from "@/lib/ai/telemetry";
+import {
   IDB_IMAGE_PREFIX,
   idbDeleteProjectImages,
   idbPutImage,
@@ -43,8 +51,13 @@ function stringStorageBytes(value: string | null): number {
  */
 export function evacuateNonProjectStorage(): boolean {
   if (typeof window === "undefined") return false;
-  const before = getViewGenRecordsStorageBytes();
+  const before =
+    getViewGenRecordsStorageBytes() +
+    getAiMeterStorageBytes() +
+    getAiTelemetryStorageBytes();
   clearViewGenRecords();
+  clearAiMeterEvents();
+  clearAiTelemetryEvents();
   return before > 0;
 }
 
@@ -284,11 +297,20 @@ export async function deleteProject(id: string): Promise<void> {
 export function getEasytpackStorageStats(): {
   projectsBytes: number;
   trainingBytes: number;
+  meterBytes: number;
+  telemetryBytes: number;
   totalBytes: number;
   projectCount: number;
 } {
   if (typeof window === "undefined") {
-    return { projectsBytes: 0, trainingBytes: 0, totalBytes: 0, projectCount: 0 };
+    return {
+      projectsBytes: 0,
+      trainingBytes: 0,
+      meterBytes: 0,
+      telemetryBytes: 0,
+      totalBytes: 0,
+      projectCount: 0,
+    };
   }
   let projectsBytes = 0;
   try {
@@ -297,12 +319,21 @@ export function getEasytpackStorageStats(): {
     projectsBytes = 0;
   }
   const trainingBytes = getViewGenRecordsStorageBytes();
+  const meterBytes = getAiMeterStorageBytes();
+  const telemetryBytes = getAiTelemetryStorageBytes();
   return {
     projectsBytes,
     trainingBytes,
-    totalBytes: projectsBytes + trainingBytes,
+    meterBytes,
+    telemetryBytes,
+    totalBytes: projectsBytes + trainingBytes + meterBytes + telemetryBytes,
     projectCount: Object.keys(readAll()).length,
   };
+}
+
+/** 导出项目 JSON（备份；图片可能为 idb: 引用，需本机才能还原） */
+export function exportProjectJsonBackup(project: TechPackProject): string {
+  return JSON.stringify(project, null, 2);
 }
 
 export function formatStorageBytes(bytes: number): string {
