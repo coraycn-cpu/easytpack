@@ -21,6 +21,10 @@ import {
   getAiTelemetryStorageBytes,
 } from "@/lib/ai/telemetry";
 import { listAiMeterEvents, sumAiMeterUnits } from "@/lib/ai/metering";
+import {
+  isLoggedInForCloud,
+  pushAllLocalProjectsToCloud,
+} from "@/lib/project/cloud-sync";
 import type { TechPackProject } from "@/types/project";
 
 export default function ProjectsPage() {
@@ -37,11 +41,14 @@ export default function ProjectsPage() {
   }));
   const [cacheNote, setCacheNote] = useState<string | null>(null);
   const [aiUnits, setAiUnits] = useState(0);
+  const [cloudLoggedIn, setCloudLoggedIn] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   const refresh = () => {
     void listProjects().then(setProjects);
     setStats(getEasytpackStorageStats());
     setAiUnits(sumAiMeterUnits());
+    void isLoggedInForCloud().then(setCloudLoggedIn);
   };
 
   useEffect(() => {
@@ -67,6 +74,16 @@ export default function ProjectsPage() {
     evacuateNonProjectStorage();
     setCacheNote("已清理视角缓存、用量与质量日志；项目未删除");
     refresh();
+  };
+
+  const handleSyncCloud = () => {
+    setSyncBusy(true);
+    void pushAllLocalProjectsToCloud(projects)
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
   };
 
   const handleExportBackup = async (id: string, title: string) => {
@@ -156,6 +173,34 @@ export default function ProjectsPage() {
             保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
             备份后再删。大图会自动压缩。
           </p>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-950">
+          <p className="font-medium">云端同步</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
+            {cloudLoggedIn
+              ? "已登录：保存工艺包时会尽量同步到网上（表数据）。大图仍主要在本机，下一步再传图。"
+              : "未登录：项目只存在当前浏览器。登录后可点下方按钮，把本机项目推到云端。"}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {cloudLoggedIn ? (
+              <button
+                type="button"
+                disabled={syncBusy}
+                onClick={handleSyncCloud}
+                className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+              >
+                {syncBusy ? "同步中…" : "把本机项目同步到云端"}
+              </button>
+            ) : (
+              <Link
+                href="/login?next=/projects"
+                className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
+              >
+                去登录
+              </Link>
+            )}
+          </div>
         </div>
 
         {cacheNote && (

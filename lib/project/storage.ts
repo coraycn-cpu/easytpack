@@ -227,12 +227,37 @@ export async function saveProject(project: TechPackProject): Promise<void> {
     all[project.id] = slim;
     writeAll(all);
   }
+
+  // 已登录则尽量同步表数据到云端（大图下一步再传；失败不挡本机）
+  void import("@/lib/project/cloud-sync")
+    .then(({ mirrorSaveToCloud }) => mirrorSaveToCloud(migrated))
+    .catch(() => {
+      /* ignore */
+    });
 }
 
 export async function getProject(id: string): Promise<TechPackProject | null> {
   const all = readAll();
   const p = all[id];
-  if (!p) return null;
+  if (!p) {
+    // 本机没有时，试试云端（换设备场景）
+    try {
+      const { fetchCloudProject } = await import("@/lib/project/cloud-sync");
+      const cloud = await fetchCloudProject(id);
+      if (!cloud) return null;
+      // 轻量缓存到本机，方便下次打开
+      try {
+        const slim = await dehydrateProject(cloud);
+        all[id] = slim;
+        writeAll(all);
+      } catch {
+        /* quota ignore */
+      }
+      return hydrateProject(migrateProject(cloud));
+    } catch {
+      return null;
+    }
+  }
   const migrated = migrateProject(p);
   const canvasMigrated =
     migrated.canvas_data.artboards.length !== p.canvas_data.artboards.length ||
@@ -253,13 +278,24 @@ export async function getProject(id: string): Promise<TechPackProject | null> {
   return hydrateProject(migrated);
 }
 
-/** List projects for UI; images may remain as idb: refs (no hydrate). */
-export async function listProjects(): Promise<TechPackProject[]> {
+/** 仅本机列表（不含云端合并，供混合仓使用） */
+export async function listLocalProjectsOnly(): Promise<TechPackProject[]> {
   return Object.values(readAll())
     .map(migrateProject)
     .sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
+}
+
+/** List projects for UI; images may remain as idb: refs (no hydrate). */
+export async function listProjects(): Promise<TechPackProject[]> {
+  const local = await listLocalProjectsOnly();
+  try {
+    const { mergeLocalWithCloud } = await import("@/lib/project/cloud-sync");
+    return await mergeLocalWithCloud(local);
+  } catch {
+    return local;
+  }
 }
 
 export async function duplicateProject(id: string): Promise<TechPackProject | null> {
@@ -291,6 +327,11 @@ export async function deleteProject(id: string): Promise<void> {
   } catch {
     // ignore IDB cleanup failures
   }
+  void import("@/lib/project/cloud-sync")
+    .then(({ mirrorDeleteFromCloud }) => mirrorDeleteFromCloud(id))
+    .catch(() => {
+      /* ignore */
+    });
 }
 
 /** Approximate localStorage usage for easytpack keys (UTF-16 bytes). */
