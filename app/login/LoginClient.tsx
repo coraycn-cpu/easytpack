@@ -12,23 +12,54 @@ import {
 type Mode = "login" | "register";
 
 function friendlyAuthError(message: string): string {
-  const m = message.toLowerCase();
+  const raw = (message || "").trim();
+  const m = raw.toLowerCase();
+
   if (m.includes("invalid login") || m.includes("invalid credentials")) {
     return "邮箱或密码不对，请再试一次。";
   }
   if (
     m.includes("user already registered") ||
-    m.includes("already been registered")
+    m.includes("already been registered") ||
+    m.includes("already registered")
   ) {
-    return "这个邮箱已经注册过了，请直接登录。";
+    return "这个邮箱已经注册过了，请点上方「登录」。";
   }
-  if (m.includes("password") && m.includes("6")) {
-    return "密码至少要 6 位。";
+  if (
+    m.includes("password should be at least") ||
+    m.includes("password is known to be weak") ||
+    (m.includes("password") && m.includes("at least 6"))
+  ) {
+    return "密码至少要 6 位，请换一个更长一点的。";
   }
-  if (m.includes("email")) {
-    return "请检查邮箱格式是否正确。";
+  if (m.includes("rate limit") || m.includes("too many requests")) {
+    return "操作太频繁了，请等一两分钟再试。";
   }
-  return message || "操作失败，请稍后重试。";
+  if (
+    m.includes("confirm") ||
+    m.includes("confirmation") ||
+    m.includes("verify") ||
+    m.includes("error sending") ||
+    m.includes("smtp")
+  ) {
+    return "注册卡住了：多半是「要先验证邮箱」。请到云端后台 Authentication → Providers → Email，关掉 Confirm email 后再试。";
+  }
+  if (m.includes("signups not allowed") || m.includes("signup is disabled")) {
+    return "云端暂时关闭了注册，请到 Authentication → Providers → Email 打开注册。";
+  }
+  // 只有明确说格式无效时，才提示邮箱格式
+  if (
+    m.includes("invalid format") ||
+    m.includes("unable to validate email") ||
+    m.includes("email address") && m.includes("invalid")
+  ) {
+    return "邮箱格式不对，请写成 名字@网站.com 这种。";
+  }
+
+  // 其它错误：白话 + 原文，方便排查
+  return raw
+    ? `注册/登录失败：${raw}`
+    : "操作失败，请稍后重试。";
 }
 
 export default function LoginClient() {
