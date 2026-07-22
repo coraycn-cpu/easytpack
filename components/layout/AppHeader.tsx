@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AuthHeaderControls from "@/components/auth/AuthHeaderControls";
 
 export default function AppHeader() {
   return (
@@ -11,7 +12,7 @@ export default function AppHeader() {
           <Link href="/projects" className="text-zinc-600 hover:text-zinc-900">
             我的项目
           </Link>
-          <span className="text-xs text-zinc-400">AI 服装工艺包</span>
+          <AuthHeaderControls />
         </nav>
       </div>
     </header>

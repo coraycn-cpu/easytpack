@@ -1,28 +1,31 @@
--- EasytPack schema（本期草稿，下期在 SQL Editor / migration 执行）
--- 图片桶：Storage UI 创建 style-images（或 pack-assets）
+-- EasytPack 云端数据库脚本（在 Supabase → SQL Editor 里整段粘贴执行）
+-- 项目 ID 用文本（如 tp_…），与本机保存一致，方便以后同步。
+-- 图片桶：见文末 Storage；也可按 docs/SUPABASE_SETUP.md 用界面创建。
 
--- ========== 工艺包主表（扩展现有 tech_packs）==========
+-- ========== 工艺包主表 ==========
 create table if not exists tech_packs (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id),
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   style_no text,
   title text not null default '未命名款式',
   category text default 't-shirt',
   status text default 'draft',
   workflow_status text default 'draft',
-  canvas_data jsonb default '{}',
-  process_items jsonb default '[]',
-  bom_items jsonb default '[]',
-  size_chart jsonb default '{}',
-  intake jsonb default '{}',
-  questionnaire jsonb default '{}',
+  canvas_data jsonb default '{}'::jsonb,
+  process_items jsonb default '[]'::jsonb,
+  bom_items jsonb default '[]'::jsonb,
+  size_chart jsonb default '{}'::jsonb,
+  intake jsonb default '{}'::jsonb,
+  questionnaire jsonb default '{}'::jsonb,
   style_review text,
-  export_history jsonb default '[]',
+  export_history jsonb default '[]'::jsonb,
   consent_quality_pool boolean default false,
   finalized_at timestamptz,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+create index if not exists tech_packs_user_idx on tech_packs (user_id, updated_at desc);
 
 create or replace function update_updated_at()
 returns trigger as $$
@@ -45,13 +48,13 @@ create policy "用户只能访问自己的工艺包"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- ========== 版本快照（AI 初稿 / 定稿）==========
+-- ========== 版本快照（以后定稿/分享用）==========
 create table if not exists pack_versions (
   id uuid primary key default gen_random_uuid(),
-  tech_pack_id uuid not null references tech_packs(id) on delete cascade,
-  user_id uuid references auth.users(id),
+  tech_pack_id text not null references tech_packs(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
   kind text not null check (kind in ('ai_draft', 'user_checkpoint', 'user_final')),
-  snapshot jsonb not null default '{}',
+  snapshot jsonb not null default '{}'::jsonb,
   source_action text,
   created_at timestamptz default now()
 );
@@ -65,11 +68,11 @@ create policy "用户只能访问自己的版本"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- ========== AI 事件流（训练/质量）==========
+-- ========== AI 质量事件（以后管理后台用）==========
 create table if not exists ai_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id),
-  tech_pack_id uuid references tech_packs(id) on delete set null,
+  user_id uuid references auth.users(id) on delete set null,
+  tech_pack_id text references tech_packs(id) on delete set null,
   action text not null,
   category text,
   photo_type text,
@@ -94,13 +97,13 @@ create policy "用户只能访问自己的 AI 事件"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- ========== AI 用量（订阅额度）==========
+-- ========== AI 用量（以后额度扣费用）==========
 create table if not exists ai_usage (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id),
+  user_id uuid not null references auth.users(id) on delete cascade,
   action text not null,
   units int not null default 1,
-  tech_pack_id uuid references tech_packs(id) on delete set null,
+  tech_pack_id text references tech_packs(id) on delete set null,
   ok boolean not null default true,
   provider text,
   model text,
@@ -116,7 +119,40 @@ create policy "用户只能访问自己的用量"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- 订阅计划（下期）：profiles / subscriptions 可另建
--- create table subscriptions (...);
+-- ========== 图片桶策略（桶名 style-images，需先在 Storage 里创建桶）==========
+-- 路径约定：{user_id}/{project_id}/xxx.png
+insert into storage.buckets (id, name, public)
+values ('style-images', 'style-images', false)
+on conflict (id) do nothing;
 
--- 图片存储桶需在 Storage UI 手动创建：style-images（Public 或按 RLS）
+drop policy if exists "用户可读自己的款式图" on storage.objects;
+create policy "用户可读自己的款式图"
+  on storage.objects for select
+  using (
+    bucket_id = 'style-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "用户可上传自己的款式图" on storage.objects;
+create policy "用户可上传自己的款式图"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'style-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "用户可更新自己的款式图" on storage.objects;
+create policy "用户可更新自己的款式图"
+  on storage.objects for update
+  using (
+    bucket_id = 'style-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "用户可删除自己的款式图" on storage.objects;
+create policy "用户可删除自己的款式图"
+  on storage.objects for delete
+  using (
+    bucket_id = 'style-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
