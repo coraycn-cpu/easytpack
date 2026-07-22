@@ -2216,6 +2216,11 @@ export default function StudioPage() {
             persist({ ...project, workflowStatus: ws });
           }}
           exportHref={`/project/${id}/export`}
+          currentProjectId={id}
+          onCloudTip={(message) => {
+            setAiMessage(message);
+            setAiTip(message);
+          }}
         />
 
         <div className="relative min-h-0 min-w-0 flex-1">

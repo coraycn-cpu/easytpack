@@ -94,11 +94,19 @@ export async function idbDeleteProjectImages(projectId: string): Promise<void> {
   await idbDeleteKeys(keys);
 }
 
-/** Resolve a data URL or idb: ref to a usable data URL (pass-through if already data). */
+/** Resolve a data URL, idb: 或云端图片引用 */
 export async function resolveImageRef(
   value: string | undefined | null,
 ): Promise<string | undefined> {
   if (!value) return undefined;
+  if (value.startsWith("sbstorage:")) {
+    try {
+      const { resolveSbStorageRef } = await import("@/lib/project/cloud-images");
+      return (await resolveSbStorageRef(value)) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
   if (!isIdbImageRef(value)) return value;
   const key = keyFromIdbRef(value);
   if (!key) return undefined;

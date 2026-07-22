@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
+import StudioCloudPanel from "@/components/studio/StudioCloudPanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
 import {
   VIEW_IMAGE_PRESETS,
@@ -36,6 +37,8 @@ type FixedViewSidebarProps = {
   workflowStatus: WorkflowStatus;
   onWorkflowChange: (status: WorkflowStatus) => void;
   exportHref: string;
+  currentProjectId: string;
+  onCloudTip?: (message: string) => void;
 };
 
 export default function FixedViewSidebar({
@@ -57,6 +60,8 @@ export default function FixedViewSidebar({
   workflowStatus,
   onWorkflowChange,
   exportHref,
+  currentProjectId,
+  onCloudTip,
 }: FixedViewSidebarProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [complianceExpanded, setComplianceExpanded] = useState(false);
@@ -78,12 +83,16 @@ export default function FixedViewSidebar({
   };
 
   return (
-    <aside
-      className={`flex h-full min-h-0 w-44 shrink-0 flex-col border-r border-slate-200 bg-white ${
-        locked ? "pointer-events-none opacity-60" : ""
-      }`}
-    >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    <aside className="flex h-full min-h-0 w-48 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <StudioCloudPanel
+        currentProjectId={currentProjectId}
+        onTip={onCloudTip}
+      />
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
+          locked ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
         {onNewStyle && (
           <div className="border-b border-slate-100 p-2.5">
             <button

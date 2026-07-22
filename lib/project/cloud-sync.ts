@@ -60,15 +60,19 @@ export async function fetchCloudProject(
   return migrateProject(rowToProject(data as TechPackRow));
 }
 
-/** 登录时把项目表数据写到云端；大图会先剥掉，下一步再传图 */
+/** 登录时：先尽量上传图片，再把表数据（含图片引用）写到云端 */
 export async function mirrorSaveToCloud(
   project: TechPackProject,
 ): Promise<{ ok: boolean; error?: string }> {
   const userId = await currentUserId();
   if (!userId) return { ok: false, error: "not_logged_in" };
   try {
+    const { uploadProjectImagesForCloud } = await import(
+      "@/lib/project/cloud-images"
+    );
+    const withImages = await uploadProjectImagesForCloud(project, userId);
     const supabase = createClient();
-    const row = projectToRow(project, userId);
+    const row = projectToRow(withImages, userId);
     const { error } = await supabase.from("tech_packs").upsert(row, {
       onConflict: "id",
     });
@@ -182,7 +186,7 @@ export async function pushAllLocalProjectsToCloud(
     skipped: false,
     message:
       fail === 0
-        ? `已同步 ${ok} 个项目到云端（大图暂留在本机浏览器，下一步再传图）。`
+        ? `已同步 ${ok} 个项目到云端（含图片上传，可能稍慢）。`
         : `成功 ${ok} 个，失败 ${fail} 个。可稍后重试。`,
   };
 }

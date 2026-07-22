@@ -25,12 +25,14 @@ export type TechPackRow = {
 
 const DATA_URL_MAX_KEEP = 8_000;
 
-/** 去掉超长图片，避免云端一行塞爆（图片下一步再传到 Storage） */
+/** 云端行里保留短图 / 云端引用；去掉超长 data 与本机 idb */
 export function stripHeavyImagesFromProject(
   project: TechPackProject,
 ): TechPackProject {
   const strip = (url?: string) => {
     if (!url) return url;
+    if (url.startsWith("sbstorage:")) return url;
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
     if (url.startsWith("idb:")) return undefined;
     if (url.startsWith("data:") && url.length > DATA_URL_MAX_KEEP) {
       return undefined;

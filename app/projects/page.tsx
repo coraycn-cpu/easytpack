@@ -179,8 +179,8 @@ export default function ProjectsPage() {
           <p className="font-medium">云端同步</p>
           <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
             {cloudLoggedIn
-              ? "已登录：保存工艺包时会尽量同步到网上（表数据）。大图仍主要在本机，下一步再传图。"
-              : "未登录：项目只存在当前浏览器。登录后可点下方按钮，把本机项目推到云端。"}
+              ? "已登录：保存或点「同步」会把项目和图片尽量传到网上。"
+              : "未登录：项目只存在当前浏览器。登录后可同步到云端。"}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {cloudLoggedIn ? (
