@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import CompliancePanel from "@/components/studio/CompliancePanel";
-import StudioCloudPanel from "@/components/studio/StudioCloudPanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
 import {
   VIEW_IMAGE_PRESETS,
@@ -37,8 +36,6 @@ type FixedViewSidebarProps = {
   workflowStatus: WorkflowStatus;
   onWorkflowChange: (status: WorkflowStatus) => void;
   exportHref: string;
-  currentProjectId: string;
-  onCloudTip?: (message: string) => void;
 };
 
 export default function FixedViewSidebar({
@@ -60,8 +57,6 @@ export default function FixedViewSidebar({
   workflowStatus,
   onWorkflowChange,
   exportHref,
-  currentProjectId,
-  onCloudTip,
 }: FixedViewSidebarProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [complianceExpanded, setComplianceExpanded] = useState(false);
@@ -83,11 +78,7 @@ export default function FixedViewSidebar({
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-48 shrink-0 flex-col border-r border-slate-200 bg-white">
-      <StudioCloudPanel
-        currentProjectId={currentProjectId}
-        onTip={onCloudTip}
-      />
+    <aside className="flex h-full min-h-0 w-44 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div
         className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
           locked ? "pointer-events-none opacity-60" : ""
@@ -210,13 +201,7 @@ export default function FixedViewSidebar({
         </div>
 
         <div className="p-2.5">
-          <Link
-            href="/projects"
-            className="text-[10px] text-slate-400 transition hover:text-slate-600"
-          >
-            ← 我的项目
-          </Link>
-          <h1 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
+          <h1 className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
             {projectTitle}
           </h1>
           <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-slate-500">

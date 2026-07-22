@@ -8,6 +8,7 @@ import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
 import InfiniteCanvas from "@/components/studio/InfiniteCanvas";
 import NewStyleEntryCard from "@/components/studio/NewStyleEntryCard";
+import StudioTopChrome from "@/components/studio/StudioTopChrome";
 import FullCollectFlowOverlay from "@/components/studio/FullCollectFlowOverlay";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
@@ -457,7 +458,9 @@ export default function StudioPage() {
     [project, persist, runFlatFrontGeneration],
   );
 
-  const handleNewStyle = () => router.push("/");
+  const [newStyleOpen, setNewStyleOpen] = useState(false);
+
+  const handleNewStyle = () => setNewStyleOpen(true);
 
   const handleFullCollect = () => {
     if (aiBusy || !project) return;
@@ -472,12 +475,12 @@ export default function StudioPage() {
     setFullCollectOpen(true);
   };
 
-  const showNewStyleOverlay = useMemo(() => {
+  const hasStyleImage = useMemo(() => {
     if (!project) return false;
-    const hasImage =
+    return (
       Boolean(project.intake.imageDataUrl) ||
-      project.canvas_data.artboards.some((a) => a.imageDataUrl);
-    return !hasImage;
+      project.canvas_data.artboards.some((a) => a.imageDataUrl)
+    );
   }, [project]);
 
   const saveLayout = useCallback(
@@ -2168,6 +2171,19 @@ export default function StudioPage() {
           </div>
         </div>
       )}
+      <StudioTopChrome
+        currentProjectId={id}
+        projectTitle={
+          project.title?.trim() ||
+          project.intake.suggestedTitle?.trim() ||
+          project.intake.targetGarment?.label?.trim() ||
+          "未命名款式"
+        }
+        onTip={(message) => {
+          setAiMessage(message);
+          setAiTip(message);
+        }}
+      />
       <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
 
       <div className="flex min-h-0 flex-1">
@@ -2216,14 +2232,17 @@ export default function StudioPage() {
             persist({ ...project, workflowStatus: ws });
           }}
           exportHref={`/project/${id}/export`}
-          currentProjectId={id}
-          onCloudTip={(message) => {
-            setAiMessage(message);
-            setAiTip(message);
-          }}
         />
 
         <div className="relative min-h-0 min-w-0 flex-1">
+          {!hasStyleImage && !newStyleOpen ? (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
+              <p className="max-w-sm rounded-lg bg-white/80 px-4 py-3 text-center text-sm leading-relaxed text-slate-600 shadow-sm backdrop-blur-sm">
+                还没有款式图。点左上角「新建款式」开始，或从顶栏切换已有项目。
+              </p>
+            </div>
+          ) : null}
+
           <InfiniteCanvas
             viewport={layout.viewport}
             onViewportChange={(viewport) =>
@@ -2458,12 +2477,21 @@ export default function StudioPage() {
             />
           )}
 
-          {showNewStyleOverlay && !aiBusy && (
+          {newStyleOpen && !aiBusy && (
             <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[1px]">
-              <div className="pointer-events-auto">
+              <div className="pointer-events-auto relative">
+                <button
+                  type="button"
+                  onClick={() => setNewStyleOpen(false)}
+                  className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow hover:text-slate-800"
+                  aria-label="关闭"
+                >
+                  ×
+                </button>
                 <NewStyleEntryCard
                   variant="overlay"
                   onCreated={(projectId, mode) => {
+                    setNewStyleOpen(false);
                     router.push(
                       mode === "full"
                         ? `/project/${projectId}/studio?fullCollect=1`
