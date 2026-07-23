@@ -65,11 +65,14 @@ function friendlyAuthError(message: string): string {
 export default function LoginClient() {
   const router = useRouter();
   const search = useSearchParams();
-  const nextPath = search.get("next") || "/projects";
+  const nextPath = search.get("next") || "/";
   const urlError = search.get("error");
+  const urlMode = search.get("mode");
 
   const configured = useMemo(() => isSupabaseConfigured(), []);
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(
+    urlMode === "register" ? "register" : "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -148,12 +151,9 @@ export default function LoginClient() {
           {mode === "login" ? "登录账号" : "注册账号"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          登录后，以后可以把工艺包存到网上，换电脑也能打开。
+          登录后可以把工艺包同步到网上，换电脑也能打开继续做。
           <br />
-          <strong className="font-medium text-zinc-700">
-            现在还没同步功能
-          </strong>
-          ，未登录也能照常在本机做款。
+          未登录也能照常在本机做款。
         </p>
 
         {!configured && (

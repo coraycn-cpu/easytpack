@@ -93,11 +93,19 @@ export default function AuthHeaderControls() {
   }
 
   return (
-    <Link
-      href="/login"
-      className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700"
-    >
-      登录
-    </Link>
+    <div className="flex items-center gap-1.5">
+      <Link
+        href={`/login?next=${encodeURIComponent("/")}`}
+        className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+      >
+        登录
+      </Link>
+      <Link
+        href={`/login?mode=register&next=${encodeURIComponent("/")}`}
+        className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700"
+      >
+        注册
+      </Link>
+    </div>
   );
 }

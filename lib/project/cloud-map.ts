@@ -1,4 +1,5 @@
-import type { TechPackProject } from "@/types/project";
+import type { Artboard, TechPackProject } from "@/types/project";
+import { toDurableImageRef } from "@/lib/project/cloud-images";
 
 /** 云端表一行（字段名与 supabase/schema.sql 对齐） */
 export type TechPackRow = {
@@ -25,19 +26,40 @@ export type TechPackRow = {
 
 const DATA_URL_MAX_KEEP = 8_000;
 
+function imageRefRank(url?: string): number {
+  if (!url) return 0;
+  if (url.startsWith("sbstorage:")) return 5;
+  if (url.startsWith("idb:")) return 4;
+  if (url.startsWith("data:")) return 3;
+  if (url.includes("/storage/v1/object/sign/")) return 1;
+  if (url.startsWith("http://") || url.startsWith("https://")) return 2;
+  return 0;
+}
+
+function pickBetterImage(
+  a?: string,
+  b?: string,
+): string | undefined {
+  return imageRefRank(a) >= imageRefRank(b) ? a || b : b || a;
+}
+
 /** 云端行里保留短图 / 云端引用；去掉超长 data 与本机 idb */
 export function stripHeavyImagesFromProject(
   project: TechPackProject,
 ): TechPackProject {
   const strip = (url?: string) => {
     if (!url) return url;
-    if (url.startsWith("sbstorage:")) return url;
-    if (url.startsWith("http://") || url.startsWith("https://")) return url;
-    if (url.startsWith("idb:")) return undefined;
-    if (url.startsWith("data:") && url.length > DATA_URL_MAX_KEEP) {
+    const durable = toDurableImageRef(url);
+    if (!durable) return undefined;
+    if (durable.startsWith("sbstorage:")) return durable;
+    if (durable.startsWith("http://") || durable.startsWith("https://")) {
+      return durable;
+    }
+    if (durable.startsWith("idb:")) return undefined;
+    if (durable.startsWith("data:") && durable.length > DATA_URL_MAX_KEEP) {
       return undefined;
     }
-    return url;
+    return durable;
   };
 
   return {
@@ -121,18 +143,12 @@ export function rowToProject(row: TechPackRow): TechPackProject {
   };
 }
 
-/** 合并本机与云端：同 id 取更新时间更晚的；图片优先保留本机有图的版本 */
+/** 合并本机与云端：同 id 取更新时间更晚的；图片优先保留更可靠的引用 */
 export function mergeProjectsPreferNewer(
   localList: TechPackProject[],
   cloudList: TechPackProject[],
 ): TechPackProject[] {
   const map = new Map<string, TechPackProject>();
-
-  const hasImage = (p: TechPackProject) =>
-    Boolean(
-      p.intake.imageDataUrl ||
-        p.canvas_data.artboards.some((a) => a.imageDataUrl),
-    );
 
   const put = (p: TechPackProject) => {
     const prev = map.get(p.id);
@@ -142,30 +158,36 @@ export function mergeProjectsPreferNewer(
     }
     const prevT = Date.parse(prev.updatedAt) || 0;
     const nextT = Date.parse(p.updatedAt) || 0;
-    let winner = nextT >= prevT ? p : prev;
-    const loser = winner === p ? prev : p;
-    // 胜者没图、败者有图 → 把败者的图补回去
-    if (!hasImage(winner) && hasImage(loser)) {
-      winner = {
-        ...winner,
-        intake: {
-          ...winner.intake,
-          imageDataUrl:
-            winner.intake.imageDataUrl || loser.intake.imageDataUrl,
-        },
-        canvas_data: {
-          ...winner.canvas_data,
-          artboards: winner.canvas_data.artboards.map((ab) => {
-            const from = loser.canvas_data.artboards.find((x) => x.id === ab.id);
-            return {
-              ...ab,
-              imageDataUrl: ab.imageDataUrl || from?.imageDataUrl,
-            };
-          }),
-        },
+    const newer = nextT >= prevT ? p : prev;
+    const older = newer === p ? prev : p;
+    // 合并图片：各槽位取更可靠的引用（sbstorage > idb > data > 普通 https > 签名链）
+    const mergedArtboards: Artboard[] = newer.canvas_data.artboards.map((ab) => {
+      const from = older.canvas_data.artboards.find((x) => x.id === ab.id);
+      return {
+        ...ab,
+        imageDataUrl: pickBetterImage(ab.imageDataUrl, from?.imageDataUrl),
       };
+    });
+    // 旧版多出来的画板也补上
+    for (const ab of older.canvas_data.artboards) {
+      if (!mergedArtboards.some((x) => x.id === ab.id)) {
+        mergedArtboards.push({ ...ab });
+      }
     }
-    map.set(p.id, winner);
+    map.set(p.id, {
+      ...newer,
+      intake: {
+        ...newer.intake,
+        imageDataUrl: pickBetterImage(
+          newer.intake.imageDataUrl,
+          older.intake.imageDataUrl,
+        ),
+      },
+      canvas_data: {
+        ...newer.canvas_data,
+        artboards: mergedArtboards,
+      },
+    });
   };
 
   localList.forEach(put);

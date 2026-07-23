@@ -22,6 +22,7 @@ import {
   resolveImageRef,
   toIdbRef,
 } from "@/lib/project/image-idb";
+import { toDurableImageRef } from "@/lib/project/cloud-images";
 
 const STORAGE_KEY = "easytpack_projects";
 
@@ -104,15 +105,14 @@ async function offloadImageField(
 
 async function dehydrateProject(project: TechPackProject): Promise<TechPackProject> {
   const id = project.id;
-  const intakeUrl = await offloadImageField(
-    id,
-    "intake",
-    project.intake.imageDataUrl,
-  );
+  // 先把临时签名链还原成 sbstorage:，避免写坏本机缓存
+  const durableIntake = toDurableImageRef(project.intake.imageDataUrl);
+  const intakeUrl = await offloadImageField(id, "intake", durableIntake);
 
   const artboards: Artboard[] = [];
   for (const ab of project.canvas_data.artboards) {
-    const imageDataUrl = await offloadImageField(id, `ab:${ab.id}`, ab.imageDataUrl);
+    const durable = toDurableImageRef(ab.imageDataUrl);
+    const imageDataUrl = await offloadImageField(id, `ab:${ab.id}`, durable);
     artboards.push({ ...ab, imageDataUrl });
   }
 
@@ -124,17 +124,31 @@ async function dehydrateProject(project: TechPackProject): Promise<TechPackProje
 }
 
 async function hydrateProject(project: TechPackProject): Promise<TechPackProject> {
-  const intakeUrl = await resolveImageRef(project.intake.imageDataUrl);
+  const intakeRaw =
+    toDurableImageRef(project.intake.imageDataUrl) ?? project.intake.imageDataUrl;
+  const intakeUrl = await resolveImageRef(intakeRaw);
   const artboards: Artboard[] = [];
   for (const ab of project.canvas_data.artboards) {
-    const imageDataUrl = await resolveImageRef(ab.imageDataUrl);
+    const raw = toDurableImageRef(ab.imageDataUrl) ?? ab.imageDataUrl;
+    const resolved = await resolveImageRef(raw);
+    // 解析失败时不要把 idb:/sbstorage: 原串当 src（会空白且难排查）
+    const imageDataUrl =
+      resolved ??
+      (raw && (isIdbImageRef(raw) || raw.startsWith("sbstorage:"))
+        ? undefined
+        : raw);
     artboards.push({ ...ab, imageDataUrl });
   }
   return {
     ...project,
     intake: {
       ...project.intake,
-      imageDataUrl: intakeUrl ?? project.intake.imageDataUrl,
+      imageDataUrl:
+        intakeUrl ??
+        (intakeRaw &&
+        (isIdbImageRef(intakeRaw) || intakeRaw.startsWith("sbstorage:"))
+          ? undefined
+          : intakeRaw),
     },
     canvas_data: { ...project.canvas_data, artboards },
   };
@@ -228,9 +242,9 @@ export async function saveProject(project: TechPackProject): Promise<void> {
     writeAll(all);
   }
 
-  // 已登录则尽量同步表数据到云端（大图下一步再传；失败不挡本机）
+  // 已登录则同步到云端：用脱水后的永久引用，避免把临时签名链写坏云端
   void import("@/lib/project/cloud-sync")
-    .then(({ mirrorSaveToCloud }) => mirrorSaveToCloud(migrated))
+    .then(({ mirrorSaveToCloud }) => mirrorSaveToCloud(slim))
     .catch(() => {
       /* ignore */
     });
@@ -238,42 +252,27 @@ export async function saveProject(project: TechPackProject): Promise<void> {
 
 export async function getProject(id: string): Promise<TechPackProject | null> {
   const all = readAll();
-  const p = all[id];
-  if (!p) {
-    // 本机没有时，试试云端（换设备场景）
-    try {
-      const { fetchCloudProject } = await import("@/lib/project/cloud-sync");
-      const cloud = await fetchCloudProject(id);
-      if (!cloud) return null;
-      // 轻量缓存到本机，方便下次打开
-      try {
-        const slim = await dehydrateProject(cloud);
-        all[id] = slim;
-        writeAll(all);
-      } catch {
-        /* quota ignore */
-      }
-      return hydrateProject(migrateProject(cloud));
-    } catch {
-      return null;
-    }
+  const localRaw = all[id] ? migrateProject(all[id]) : null;
+
+  // 有本机缓存时也和云端合并，修复本地过期签名链 / 丢图
+  let merged: TechPackProject | null = localRaw;
+  try {
+    const { mergeOneLocalWithCloud } = await import("@/lib/project/cloud-sync");
+    merged = await mergeOneLocalWithCloud(id, localRaw);
+  } catch {
+    merged = localRaw;
   }
-  const migrated = migrateProject(p);
-  const canvasMigrated =
-    migrated.canvas_data.artboards.length !== p.canvas_data.artboards.length ||
-    migrated.canvas_data.artboards.some((ab) => {
-      const prev = p.canvas_data.artboards.find((x) => x.id === ab.id);
-      return Boolean(ab.viewImageMeta) && !prev?.viewImageMeta;
-    });
-  if (canvasMigrated) {
-    // Persist structural migration without re-hydrating images into localStorage
-    const dehydrated = await dehydrateProject(migrated);
-    all[id] = { ...dehydrated, updatedAt: p.updatedAt };
-    try {
-      writeAll(all);
-    } catch {
-      // ignore quota on structural migrate
-    }
+
+  if (!merged) return null;
+
+  const migrated = migrateProject(merged);
+  try {
+    // 缓存永久引用到本机（不含临时 https）
+    const slim = await dehydrateProject(migrated);
+    all[id] = { ...slim, updatedAt: migrated.updatedAt };
+    writeAll(all);
+  } catch {
+    /* quota ignore */
   }
   return hydrateProject(migrated);
 }

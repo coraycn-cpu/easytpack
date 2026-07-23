@@ -21,6 +21,50 @@ export function pathFromSbStorageRef(ref: string): string | null {
   return ref.slice(SB_STORAGE_PREFIX.length);
 }
 
+/**
+ * 把 Supabase Storage 的临时签名/公开 URL 还原成永久 sbstorage: 引用。
+ * 避免把 1 小时过期的 https 写回本机或云端。
+ */
+export function trySbStorageRefFromUrl(url: string): string | null {
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+  try {
+    const u = new URL(url);
+    const markers = [
+      `/storage/v1/object/sign/${STYLE_IMAGES_BUCKET}/`,
+      `/storage/v1/object/public/${STYLE_IMAGES_BUCKET}/`,
+      `/storage/v1/object/authenticated/${STYLE_IMAGES_BUCKET}/`,
+    ];
+    for (const marker of markers) {
+      const idx = u.pathname.indexOf(marker);
+      if (idx >= 0) {
+        const path = decodeURIComponent(
+          u.pathname.slice(idx + marker.length),
+        );
+        if (path) return toSbStorageRef(path);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** 持久化用：尽量保留 data / idb / sbstorage，丢掉过期签名链 */
+export function toDurableImageRef(
+  url: string | undefined | null,
+): string | undefined {
+  if (!url) return undefined;
+  if (isSbStorageRef(url) || isIdbImageRef(url) || url.startsWith("data:")) {
+    return url;
+  }
+  const fromSigned = trySbStorageRefFromUrl(url);
+  if (fromSigned) return fromSigned;
+  // 已无法还原的 Storage 临时链，不要当有效图存
+  if (url.includes("/storage/v1/object/")) return undefined;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return url;
+}
+
 function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
   const m = /^data:(image\/[\w+.-]+);base64,(.+)$/i.exec(dataUrl);
   if (!m) {
@@ -47,10 +91,18 @@ async function uploadOne(
   slot: string,
   sourceUrl: string,
 ): Promise<string> {
+  // 已是永久引用：绝不要先 resolve 成临时 https 再写回
+  if (isSbStorageRef(sourceUrl)) return sourceUrl;
+
+  const fromSigned = trySbStorageRefFromUrl(sourceUrl);
+  if (fromSigned) return fromSigned;
+
   const resolved = (await resolveImageRef(sourceUrl)) ?? sourceUrl;
   if (isSbStorageRef(resolved)) return resolved;
+  const resolvedSigned = trySbStorageRefFromUrl(resolved);
+  if (resolvedSigned) return resolvedSigned;
   if (resolved.startsWith("http://") || resolved.startsWith("https://")) {
-    // 已是网络地址，不重复上传
+    // 外部网络图：保留原地址（非本桶签名链）
     return resolved;
   }
   if (!resolved.startsWith("data:")) {
@@ -83,13 +135,16 @@ export async function uploadProjectImagesForCloud(
     intakeUrl &&
     (intakeUrl.startsWith("data:") ||
       isIdbImageRef(intakeUrl) ||
-      isSbStorageRef(intakeUrl))
+      isSbStorageRef(intakeUrl) ||
+      Boolean(trySbStorageRefFromUrl(intakeUrl)))
   ) {
     try {
       intakeUrl = await uploadOne(userId, project.id, "intake", intakeUrl);
     } catch (err) {
       console.warn("[cloud-images] intake upload", err);
     }
+  } else {
+    intakeUrl = toDurableImageRef(intakeUrl);
   }
 
   const artboards = [];
@@ -99,7 +154,8 @@ export async function uploadProjectImagesForCloud(
       imageDataUrl &&
       (imageDataUrl.startsWith("data:") ||
         isIdbImageRef(imageDataUrl) ||
-        isSbStorageRef(imageDataUrl))
+        isSbStorageRef(imageDataUrl) ||
+        Boolean(trySbStorageRefFromUrl(imageDataUrl)))
     ) {
       try {
         imageDataUrl = await uploadOne(
@@ -111,6 +167,8 @@ export async function uploadProjectImagesForCloud(
       } catch (err) {
         console.warn("[cloud-images] artboard upload", ab.id, err);
       }
+    } else {
+      imageDataUrl = toDurableImageRef(imageDataUrl);
     }
     artboards.push({ ...ab, imageDataUrl });
   }
