@@ -110,13 +110,18 @@ export default function StudioTopChrome({
   const loginHref = `/login?next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
 
   return (
-    <div className="z-20 flex shrink-0 items-center gap-2 border-b border-[#cbd5e1] bg-white px-3 py-1.5">
-      <div className="relative min-w-0 flex-1" ref={menuRef}>
+    <div
+      className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-[#cbd5e1] bg-white px-3 py-1.5 ${
+        menuOpen ? "z-50" : "z-30"
+      }`}
+    >
+      <div className="relative min-w-0 flex-1 overflow-visible" ref={menuRef}>
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           className="flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-slate-50"
           title="切换项目"
+          aria-expanded={menuOpen}
         >
           <span className="truncate text-sm font-semibold text-slate-800">
             {projectTitle?.trim() || "未命名款式"}
@@ -126,7 +131,7 @@ export default function StudioTopChrome({
           </span>
         </button>
         {menuOpen && (
-          <div className="absolute left-0 top-full z-50 mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+          <div className="absolute left-0 top-full z-[60] mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
             <p className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500">
               我的项目
             </p>

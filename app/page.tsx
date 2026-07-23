@@ -9,6 +9,7 @@ import NewStyleEntryCard, {
 import AuthHeaderControls from "@/components/auth/AuthHeaderControls";
 import Link from "next/link";
 import { listProjects } from "@/lib/project/storage";
+import type { TechPackProject } from "@/types/project";
 
 function studioHref(p: { id: string; status: string }) {
   return p.status === "collecting"
@@ -16,26 +17,30 @@ function studioHref(p: { id: string; status: string }) {
     : `/project/${p.id}/studio`;
 }
 
-/** 首页：有旧款直接进最近画布；无款显示空白壳，点新建才上传 */
+/** 首页：始终空白画布壳；不自动打开最近项目，需用户点选或新建 */
 export default function CanvasHomePage() {
   const router = useRouter();
   const [booting, setBooting] = useState(true);
+  const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void listProjects().then((list) => {
-      if (cancelled) return;
-      if (list.length > 0) {
-        router.replace(studioHref(list[0]));
-        return;
-      }
-      setBooting(false);
-    });
+    void listProjects()
+      .then((list) => {
+        if (cancelled) return;
+        setProjects(list);
+        setBooting(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProjects([]);
+        setBooting(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
   const handleCreated = (projectId: string, mode: NewStyleMode) => {
     setNewOpen(false);
@@ -53,6 +58,8 @@ export default function CanvasHomePage() {
       </div>
     );
   }
+
+  const recent = projects.slice(0, 6);
 
   return (
     <div className="relative h-screen overflow-hidden">
@@ -78,10 +85,12 @@ export default function CanvasHomePage() {
       </header>
 
       <div className="relative z-10 flex h-full flex-col items-center justify-center gap-4 p-4 pt-16">
-        <div className="max-w-sm rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-8 text-center shadow-sm backdrop-blur">
-          <p className="text-base font-semibold text-slate-800">开始做工艺包</p>
+        <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-8 text-center shadow-sm backdrop-blur">
+          <p className="text-base font-semibold text-slate-800">空白画布</p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            还没有款式。点下方新建，上传图片后再进画布编辑。
+            {projects.length > 0
+              ? "不会自动打开旧款。请选择下方项目，或新建一款。"
+              : "还没有款式。点下方新建，上传图片后再进画布编辑。"}
           </p>
           <button
             type="button"
@@ -90,6 +99,34 @@ export default function CanvasHomePage() {
           >
             新建款式
           </button>
+
+          {recent.length > 0 ? (
+            <div className="mt-5 border-t border-slate-100 pt-4 text-left">
+              <p className="mb-2 text-[11px] font-medium text-slate-500">
+                选择已有项目
+              </p>
+              <ul className="max-h-40 space-y-1 overflow-y-auto">
+                {recent.map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      href={studioHref(p)}
+                      className="block truncate rounded-lg px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      {p.title?.trim() || "未命名款式"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {projects.length > recent.length ? (
+                <Link
+                  href="/projects"
+                  className="mt-2 inline-block text-[11px] text-blue-600 hover:underline"
+                >
+                  查看全部项目 →
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

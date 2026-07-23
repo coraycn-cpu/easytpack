@@ -2184,7 +2184,10 @@ export default function StudioPage() {
           setAiTip(message);
         }}
       />
-      <div id={STUDIO_TOOLBAR_ANCHOR_ID} className="z-20 shrink-0 border-b border-[#cbd5e1] bg-white" />
+      <div
+        id={STUDIO_TOOLBAR_ANCHOR_ID}
+        className="relative z-10 shrink-0 border-b border-[#cbd5e1] bg-white"
+      />
 
       <div className="flex min-h-0 flex-1">
         <FixedViewSidebar
