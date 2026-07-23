@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
   chatWithAssistant,
   type ChatImageAttachment,
 } from "@/lib/ai/chat";
 import type { ChatProjectContext } from "@/lib/ai/chat-context";
 import { buildChatProjectContext } from "@/lib/ai/chat-context";
+import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
 import type { TechPackProject } from "@/types/project";
 
 function sanitizeImages(raw: unknown): ChatImageAttachment[] | undefined {
@@ -29,51 +30,36 @@ function sanitizeImages(raw: unknown): ChatImageAttachment[] | undefined {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { message, history, context, project, imageDataUrl, images } =
-      body as {
-        message?: string;
-        history?: Array<{ role: "user" | "assistant"; content: string }>;
-        context?: ChatProjectContext;
-        /** @deprecated 兼容旧客户端整包上传；优先用 context */
-        project?: TechPackProject;
-        imageDataUrl?: string;
-        images?: unknown;
-      };
-
-    if (!message?.trim()) {
-      return NextResponse.json({ error: "message 必填" }, { status: 400 });
-    }
-
-    const chatContext =
-      context ??
-      (project ? buildChatProjectContext(project) : undefined);
-
-    if (!chatContext) {
-      return NextResponse.json(
-        { error: "context 或 project 必填" },
-        { status: 400 },
-      );
-    }
-
-    const result = await chatWithAssistant({
-      message: message.trim(),
-      history: history ?? [],
-      context: chatContext,
-      images: sanitizeImages(images),
-      imageDataUrl:
-        typeof imageDataUrl === "string" && imageDataUrl.startsWith("data:")
-          ? imageDataUrl
-          : undefined,
-    });
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("[AI chat]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "对话失败" },
-      { status: 500 },
-    );
-  }
+  return runMeteredAiJsonRoute(req, {
+    action: "chat",
+    run: async (body) => {
+      const message = body.message;
+      if (typeof message !== "string" || !message.trim()) {
+        throw new Error("message 必填");
+      }
+      const project = body.project as TechPackProject | undefined;
+      const context =
+        (body.context as ChatProjectContext | undefined) ??
+        (project ? buildChatProjectContext(project) : undefined);
+      if (!context) {
+        throw new Error("context 或 project 必填");
+      }
+      return chatWithAssistant({
+        message: message.trim(),
+        history: Array.isArray(body.history)
+          ? (body.history as Array<{
+              role: "user" | "assistant";
+              content: string;
+            }>)
+          : [],
+        context,
+        images: sanitizeImages(body.images),
+        imageDataUrl:
+          typeof body.imageDataUrl === "string" &&
+          body.imageDataUrl.startsWith("data:")
+            ? body.imageDataUrl
+            : undefined,
+      });
+    },
+  });
 }

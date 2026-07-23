@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateProcessItems, getAiConfigStatus } from "@/lib/ai/router";
+import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
 import type { AiProvider } from "@/types/process";
 
 export async function GET() {
@@ -7,31 +8,21 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { prompt, imageUrl, imageDataUrl, provider } = body as {
-      prompt?: string;
-      imageUrl?: string;
-      imageDataUrl?: string;
-      provider?: AiProvider;
-    };
-
-    if (!prompt?.trim()) {
-      return NextResponse.json({ error: "prompt 必填" }, { status: 400 });
-    }
-
-    const result = await generateProcessItems(prompt, {
-      imageUrl: imageUrl ?? imageDataUrl,
-      provider,
-    });
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("[AI generate]", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "AI 调用失败",
-      },
-      { status: 500 },
-    );
-  }
+  return runMeteredAiJsonRoute(req, {
+    action: "generate",
+    run: async (body) => {
+      const prompt = body.prompt;
+      if (typeof prompt !== "string" || !prompt.trim()) {
+        throw new Error("prompt 必填");
+      }
+      return generateProcessItems(prompt, {
+        imageUrl:
+          (typeof body.imageUrl === "string" ? body.imageUrl : undefined) ??
+          (typeof body.imageDataUrl === "string"
+            ? body.imageDataUrl
+            : undefined),
+        provider: body.provider as AiProvider | undefined,
+      });
+    },
+  });
 }

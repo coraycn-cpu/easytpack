@@ -99,6 +99,14 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ---
 
+## 第 7 步（可选）：免费 AI 额度
+
+登录用户的 AI 调用会计入 Supabase 表 `ai_usage`。默认每月 **200** 点（可用 Vercel 环境变量 `AI_FREE_MONTHLY_UNITS` 调整）。超额返回 429，本机未登录仍可试用（不写云端额度）。
+
+用户中心 `/account` 可查看本月用量；「升级为团队」入口已预留。
+
+---
+
 ## 常见问题（白话）
 
 | 现象 | 怎么办 |

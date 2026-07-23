@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import {
   duplicateProject,
@@ -27,7 +28,6 @@ import {
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
-  setCloudSyncMode,
   subscribeCloudSyncMode,
   type CloudSyncMode,
 } from "@/lib/project/sync-preference";
@@ -232,38 +232,10 @@ export default function ProjectsPage() {
           </p>
 
           {cloudLoggedIn ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-blue-900/70">同步方式</span>
-              <div className="inline-flex overflow-hidden rounded-md border border-blue-200 bg-white">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCloudSyncMode("auto");
-                    setCacheNote("已改为自动同步：之后登录/保存会自动上传");
-                  }}
-                  className={`px-2.5 py-1 text-[11px] ${
-                    syncMode === "auto"
-                      ? "bg-blue-600 text-white"
-                      : "text-blue-800 hover:bg-blue-50"
-                  }`}
-                >
-                  自动
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCloudSyncMode("manual");
-                    setCacheNote("已改为手动同步：保存只留本机，需点同步才上传");
-                  }}
-                  className={`px-2.5 py-1 text-[11px] ${
-                    syncMode === "manual"
-                      ? "bg-blue-600 text-white"
-                      : "text-blue-800 hover:bg-blue-50"
-                  }`}
-                >
-                  手动
-                </button>
-              </div>
+            <div className="mt-2">
+              <SyncPreferenceControls
+                onChanged={(_m, msg) => setCacheNote(msg)}
+              />
             </div>
           ) : null}
 

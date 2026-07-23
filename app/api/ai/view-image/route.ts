@@ -5,6 +5,10 @@ import {
   synthesizeViewImage,
 } from "@/lib/ai/view-image";
 import { meterAiCallServer } from "@/lib/ai/metering";
+import {
+  assertWithinAiQuota,
+  persistCloudAiUsage,
+} from "@/lib/ai/quota";
 import { isViewImageKind } from "@/lib/studio/view-types";
 
 export async function GET() {
@@ -14,6 +18,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const started = Date.now();
   let projectId: string | undefined;
+  const quota = await assertWithinAiQuota(1);
+  if (!quota.ok) return quota.response;
+
   try {
     const body = await req.json();
     projectId =
@@ -52,6 +59,14 @@ export async function POST(req: NextRequest) {
       model: synthesis.model,
       error: ok ? undefined : synthesis.error,
     });
+    await persistCloudAiUsage({
+      userId: quota.userId,
+      action: "view-image",
+      projectId,
+      ok,
+      provider: synthesis.provider,
+      model: synthesis.model,
+    });
 
     const res = NextResponse.json({
       imageDataUrl: synthesis.imageDataUrl,
@@ -65,18 +80,30 @@ export async function POST(req: NextRequest) {
     });
     res.headers.set("x-ai-action", "view-image");
     res.headers.set("x-ai-ms", String(Date.now() - started));
+    if (quota.userId) {
+      res.headers.set(
+        "x-ai-quota-used",
+        String(quota.used + (ok ? 1 : 0)),
+      );
+      res.headers.set("x-ai-quota-limit", String(quota.limit));
+    }
     return res;
   } catch (error) {
     console.error("[AI view-image]", error);
+    const message =
+      error instanceof Error ? error.message : "视角图生成失败";
     meterAiCallServer({
       action: "view-image",
       projectId,
       ok: false,
-      error: error instanceof Error ? error.message : "视角图生成失败",
+      error: message,
     });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "视角图生成失败" },
-      { status: 500 },
-    );
+    await persistCloudAiUsage({
+      userId: quota.userId,
+      action: "view-image",
+      projectId,
+      ok: false,
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

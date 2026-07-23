@@ -12,6 +12,9 @@ export default function AppHeader() {
           <Link href="/projects" className="text-zinc-600 hover:text-zinc-900">
             我的项目
           </Link>
+          <Link href="/account" className="text-zinc-600 hover:text-zinc-900">
+            用户中心
+          </Link>
           <AuthHeaderControls />
         </nav>
       </div>

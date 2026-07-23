@@ -74,12 +74,19 @@ export default function AuthHeaderControls() {
   if (user) {
     return (
       <div className="flex items-center gap-2">
-        <span
-          className="hidden max-w-[10rem] truncate text-[11px] text-zinc-500 sm:inline"
-          title={user.email ?? ""}
+        <Link
+          href="/account"
+          className="hidden max-w-[10rem] truncate text-[11px] text-zinc-500 hover:text-zinc-800 sm:inline"
+          title="打开用户中心"
         >
           {user.email ?? "已登录"}
-        </span>
+        </Link>
+        <Link
+          href="/account"
+          className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 sm:hidden"
+        >
+          账号
+        </Link>
         <button
           type="button"
           disabled={busy}

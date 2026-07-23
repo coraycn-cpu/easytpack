@@ -112,6 +112,14 @@ export default function CanvasHomePage() {
         <div className="pointer-events-auto flex items-center gap-2">
           {loggedIn ? (
             <Link
+              href="/account"
+              className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur hover:text-blue-600"
+            >
+              用户中心
+            </Link>
+          ) : null}
+          {loggedIn ? (
+            <Link
               href="/projects"
               className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur hover:text-blue-600"
             >

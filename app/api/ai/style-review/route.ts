@@ -1,21 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { generateStyleReview } from "@/lib/ai/assist";
+import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const result = await generateStyleReview(body);
-    const review = typeof result.review === "string" ? result.review.trim() : "";
-    if (review.length < 20) {
-      return NextResponse.json({ error: "AI 未返回有效评语，请重试" }, { status: 502 });
-    }
-    return NextResponse.json({ review: review.slice(0, STYLE_REVIEW_MAX) });
-  } catch (error) {
-    console.error("[AI style-review]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "款式评语生成失败" },
-      { status: 500 },
-    );
-  }
+  return runMeteredAiJsonRoute(req, {
+    action: "style-review",
+    run: async (body) => {
+      const result = await generateStyleReview(body as never);
+      const review =
+        typeof result.review === "string" ? result.review.trim() : "";
+      if (review.length < 20) {
+        throw new Error("AI 未返回有效评语，请重试");
+      }
+      return { review: review.slice(0, STYLE_REVIEW_MAX) };
+    },
+  });
 }
