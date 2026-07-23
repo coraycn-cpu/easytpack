@@ -12,6 +12,7 @@ import {
   exportProjectJsonBackup,
   formatStorageBytes,
   getEasytpackStorageStats,
+  importProjectJsonBackup,
 } from "@/lib/project/storage";
 import {
   downloadTextFile,
@@ -56,6 +57,7 @@ export default function ProjectsPage() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
   const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
+  const [importBusy, setImportBusy] = useState(false);
 
   const refresh = () => {
     void (async () => {
@@ -160,6 +162,37 @@ export default function ProjectsPage() {
     setCacheNote(`已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`);
   };
 
+  const handleImportBackup = async (file: File | null) => {
+    if (!file || importBusy) return;
+    setImportBusy(true);
+    try {
+      if (file.size > 20 * 1024 * 1024) {
+        throw new Error("文件过大（超过 20MB），请换较小备份或先压缩图片");
+      }
+      const text = await file.text();
+      const result = await importProjectJsonBackup(text);
+      refresh();
+      const warn =
+        result.warnings.length > 0
+          ? `（注意：${result.warnings.join(" ")}）`
+          : "";
+      setCacheNote(`已恢复「${result.project.title}」${warn}`);
+      if (
+        window.confirm(
+          `已恢复「${result.project.title}」。是否打开 Studio？${
+            result.warnings[0] ? `\n\n${result.warnings[0]}` : ""
+          }`,
+        )
+      ) {
+        router.push(`/project/${result.project.id}/studio`);
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "导入失败");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <AppHeader />
@@ -214,10 +247,24 @@ export default function ProjectsPage() {
             >
               导出质量日志 JSONL
             </button>
+            <label className="cursor-pointer rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
+              {importBusy ? "导入中…" : "导入 JSON 备份"}
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                disabled={importBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  void handleImportBackup(f);
+                }}
+              />
+            </label>
           </div>
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
             保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
-            备份后再删。大图会自动压缩。断网时仍可本机编辑，恢复网络后再同步。
+            备份后再删。可用「导入 JSON 备份」恢复。大图会自动压缩。断网时仍可本机编辑，恢复网络后再同步。
           </p>
         </div>
 

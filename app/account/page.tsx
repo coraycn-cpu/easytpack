@@ -15,6 +15,7 @@ import {
   sumAiMeterUnits,
 } from "@/lib/ai/metering";
 import { getCloudSyncMode } from "@/lib/project/sync-preference";
+import { consumeInviteClaimTip } from "@/lib/invite/claim-pending";
 
 type AiUsageItem = {
   id: string;
@@ -78,6 +79,11 @@ export default function AccountPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const tip = consumeInviteClaimTip();
+    if (tip) setTip(tip);
+  }, []);
 
   useEffect(() => {
     if (!configured) {

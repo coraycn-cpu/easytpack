@@ -428,6 +428,82 @@ export function exportProjectJsonBackup(project: TechPackProject): string {
   return JSON.stringify(project, null, 2);
 }
 
+export type ImportBackupResult = {
+  project: TechPackProject;
+  warnings: string[];
+};
+
+/**
+ * 从 JSON 备份恢复为新项目（新 id，避免覆盖现有款）。
+ * 若图片是 idb: / 失效引用，会提示但尽量保留其它字段。
+ */
+export function parseProjectJsonBackup(raw: string): ImportBackupResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("不是有效的 JSON 文件");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("备份格式不对：需要单个项目对象");
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (!obj.canvas_data || typeof obj.canvas_data !== "object") {
+    throw new Error("备份缺少 canvas_data，无法恢复");
+  }
+  if (!obj.intake || typeof obj.intake !== "object") {
+    throw new Error("备份缺少 intake，无法恢复");
+  }
+
+  const warnings: string[] = [];
+  const now = new Date().toISOString();
+  const baseTitle =
+    typeof obj.title === "string" && obj.title.trim()
+      ? obj.title.trim()
+      : "未命名款式";
+
+  const restored = migrateProject({
+    ...(obj as unknown as TechPackProject),
+    id: generateProjectId(),
+    title: baseTitle.includes("（恢复）") ? baseTitle : `${baseTitle}（恢复）`,
+    createdAt: now,
+    updatedAt: now,
+    workflowStatus:
+      (obj.workflowStatus as TechPackProject["workflowStatus"]) ?? "draft",
+  });
+
+  const refs: string[] = [];
+  if (restored.intake.imageDataUrl) refs.push(restored.intake.imageDataUrl);
+  for (const ab of restored.canvas_data.artboards) {
+    if (ab.imageDataUrl) refs.push(ab.imageDataUrl);
+  }
+  const missingIdb = refs.some((r) => isIdbImageRef(r));
+  if (missingIdb) {
+    warnings.push(
+      "备份里含本机图片引用（idb:…）。换浏览器/清缓存后图可能丢失，请在 Studio 重新上传。",
+    );
+  }
+  if (refs.some((r) => r.startsWith("sbstorage:"))) {
+    warnings.push(
+      "含云端图片引用。需登录同一账号并同步后才可能重新拉图。",
+    );
+  }
+
+  return { project: restored, warnings };
+}
+
+export async function importProjectJsonBackup(
+  raw: string,
+): Promise<ImportBackupResult> {
+  const result = parseProjectJsonBackup(raw);
+  // 粗略体积保护：过大时仍可试，但先提示空间风险
+  if (raw.length > 8_000_000) {
+    result.warnings.push("文件较大，若保存失败请先清理缓存或删旧款。");
+  }
+  await saveProject(result.project);
+  return result;
+}
+
 export function formatStorageBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;

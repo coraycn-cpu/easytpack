@@ -4,12 +4,51 @@ import {
   savePendingInviteCode,
 } from "@/lib/invite/constants";
 
+const CLAIM_TIP_KEY = "easytpack_invite_claim_tip";
+
 /** 从 URL ?ref= 写入本机待领取邀请码 */
 export function captureInviteRefFromSearch(
   ref: string | null | undefined,
 ): void {
   if (!ref) return;
   savePendingInviteCode(ref);
+}
+
+export function stashInviteClaimTip(message: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(CLAIM_TIP_KEY, message);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumeInviteClaimTip(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const tip = sessionStorage.getItem(CLAIM_TIP_KEY);
+    if (tip) sessionStorage.removeItem(CLAIM_TIP_KEY);
+    return tip;
+  } catch {
+    return null;
+  }
+}
+
+function friendlyClaimError(code: string | undefined): string {
+  switch (code) {
+    case "already_claimed":
+      return "这个账号已经领过邀请奖励了";
+    case "invalid_code":
+      return "邀请码无效，请向好友重新要链接";
+    case "self_invite":
+      return "不能用自己的邀请码";
+    case "inviter_limit":
+      return "对方邀请名额已满，可换一位好友的邀请链接再注册";
+    case "missing_code":
+      return "缺少邀请码";
+    default:
+      return "邀请奖励未能自动领取，可稍后在用户中心查看积分";
+  }
 }
 
 /**
@@ -21,7 +60,6 @@ export async function claimPendingInviteAfterAuth(): Promise<{
   error?: string;
 }> {
   try {
-    // 先确保自己有档案（含邀请码）
     await fetch("/api/account/profile").catch(() => null);
 
     const code = readPendingInviteCode();
@@ -35,6 +73,7 @@ export async function claimPendingInviteAfterAuth(): Promise<{
     const json = (await res.json().catch(() => null)) as {
       ok?: boolean;
       error?: string;
+      invitee_points?: number;
     } | null;
 
     const err = json?.error || (!res.ok ? "claim_failed" : undefined);
@@ -46,10 +85,14 @@ export async function claimPendingInviteAfterAuth(): Promise<{
       err === "inviter_limit" ||
       err === "missing_code";
 
-    // 终态才清本机码；缺表/网络错误保留以便下次重试
     if (definitive) clearPendingInviteCode();
 
-    if (json?.ok) return { claimed: true };
+    if (json?.ok) {
+      const pts = json.invitee_points ?? 50;
+      stashInviteClaimTip(`邀请奖励已到账：你获得 ${pts} 积分`);
+      return { claimed: true };
+    }
+    if (err) stashInviteClaimTip(friendlyClaimError(err));
     return { claimed: false, error: err };
   } catch {
     return { claimed: false, error: "claim_failed" };

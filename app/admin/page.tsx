@@ -198,6 +198,22 @@ export default function AdminPage() {
           <p className="mb-4 text-xs text-amber-700">{error}</p>
         ) : null}
 
+        {data?.errors &&
+        Object.values(data.errors).some((v) => Boolean(v)) ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <p className="font-medium">部分查询失败</p>
+            <ul className="mt-1 list-disc pl-4">
+              {Object.entries(data.errors)
+                .filter(([, v]) => Boolean(v))
+                .map(([k, v]) => (
+                  <li key={k}>
+                    {k}: {v}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : null}
+
         <section className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: "注册档案", value: stats?.profileCount },

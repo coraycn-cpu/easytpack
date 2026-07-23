@@ -54,6 +54,8 @@
 - [ ] 用户中心复制邀请链接 → 另一邮箱注册 → **双方各 +50**，邀请人成功数最多计到 6，积分不超过 300
 - [ ] AI 额度上限 = 免费档 + 邀请积分（用户中心用量行可核对）
 - [ ]（可选）配置 `SUPABASE_SERVICE_ROLE_KEY` + `ADMIN_EMAILS` 后，`/admin` 可看总览；非白名单账号 403
+- [ ] 「我的项目」可导出 / 导入 JSON 备份；导入后能打开 Studio
+- [ ] 导出页对 failed / placeholder 视角有红色提示，导出前确认
 - [ ] Supabase **tech_packs** 出现对应行
 - [ ] **style-images** 桶内出现 `{userId}/{projectId}/…` 文件
 - [ ] 换浏览器 / 无痕：登录同一账号 → 拉取后能打开旧款且**图片正常**

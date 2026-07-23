@@ -275,9 +275,13 @@ begin
   -- 确保自己有档案
   perform ensure_user_profile();
 
-  if exists (select 1 from referrals where invitee_id = uid) then
+  -- 已成功领过奖则不可再领；零分占位行（旧 bug）可删掉以便换邀请码
+  if exists (
+    select 1 from referrals where invitee_id = uid and points_awarded > 0
+  ) then
     return jsonb_build_object('ok', false, 'error', 'already_claimed');
   end if;
+  delete from referrals where invitee_id = uid and points_awarded = 0;
 
   select * into inviter from profiles where invite_code = code;
   if not found then
@@ -292,9 +296,7 @@ begin
   where inviter_id = inviter.user_id and points_awarded > 0;
 
   if success_count >= max_success or inviter.points >= points_cap then
-    insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
-    values (inviter.user_id, uid, code, 0)
-    on conflict (invitee_id) do nothing;
+    -- 不写 referrals，避免挡住被邀请人换用其他邀请码
     return jsonb_build_object(
       'ok', false,
       'error', 'inviter_limit',
@@ -305,9 +307,6 @@ begin
   inviter_before := inviter.points;
   inviter_gain := least(reward, points_cap - inviter_before);
   if inviter_gain < reward then
-    insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
-    values (inviter.user_id, uid, code, 0)
-    on conflict (invitee_id) do nothing;
     return jsonb_build_object(
       'ok', false,
       'error', 'inviter_limit',
