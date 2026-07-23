@@ -247,24 +247,31 @@ export async function saveProject(
 
   if (options?.skipCloudMirror) return;
 
-  // 已登录则同步到云端：用脱水后的永久引用，避免把临时签名链写坏云端
-  void import("@/lib/project/cloud-sync")
-    .then(async ({ mirrorSaveToCloud }) => {
-      const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
-      const res = await mirrorSaveToCloud(slim);
-      if (res.ok) {
-        reportCloudSyncResult({ ok: true, message: "已同步到云端" });
-      } else if (res.error === "not_logged_in") {
-        /* 未登录不提示 */
-      } else {
-        reportCloudSyncResult({
-          ok: false,
-          message: res.error
-            ? `云端同步失败：${res.error}（本机已保存，可稍后重试）`
-            : "云端同步失败（本机已保存，可稍后重试）",
-          offlineHint: true,
-        });
-      }
+  // 手动同步模式：只写本机，等用户点「同步」
+  void import("@/lib/project/sync-preference")
+    .then(({ isCloudSyncAuto }) => {
+      if (!isCloudSyncAuto()) return;
+      return import("@/lib/project/cloud-sync").then(
+        async ({ mirrorSaveToCloud }) => {
+          const { reportCloudSyncResult } = await import(
+            "@/lib/project/sync-status"
+          );
+          const res = await mirrorSaveToCloud(slim);
+          if (res.ok) {
+            reportCloudSyncResult({ ok: true, message: "已自动同步到云端" });
+          } else if (res.error === "not_logged_in") {
+            /* 未登录不提示 */
+          } else {
+            reportCloudSyncResult({
+              ok: false,
+              message: res.error
+                ? `云端同步失败：${res.error}（本机已保存，可稍后重试）`
+                : "云端同步失败（本机已保存，可稍后重试）",
+              offlineHint: true,
+            });
+          }
+        },
+      );
     })
     .catch(() => {
       /* ignore */

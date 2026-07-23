@@ -13,6 +13,11 @@ import {
 } from "@/lib/project/cloud-sync";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
+  getCloudSyncMode,
+  subscribeCloudSyncMode,
+  type CloudSyncMode,
+} from "@/lib/project/sync-preference";
+import {
   getCloudSyncStatus,
   subscribeCloudSyncStatus,
 } from "@/lib/project/sync-status";
@@ -39,6 +44,7 @@ export default function StudioTopChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
 
   const refresh = useCallback(async () => {
     const ok = isSupabaseConfigured();
@@ -77,6 +83,11 @@ export default function StudioTopChrome({
     });
     return () => sub.subscription.unsubscribe();
   }, [refresh]);
+
+  useEffect(() => {
+    setSyncMode(getCloudSyncMode());
+    return subscribeCloudSyncMode(setSyncMode);
+  }, []);
 
   useEffect(() => {
     return subscribeCloudSyncStatus((s) => {
@@ -200,10 +211,28 @@ export default function StudioTopChrome({
           type="button"
           disabled={syncBusy || !ready}
           onClick={() => void handleSync()}
+          title={
+            syncMode === "auto"
+              ? "立即双向同步（当前为自动同步）"
+              : "手动同步到云端（当前不会自动上传）"
+          }
           className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-50"
         >
-          {syncBusy ? "同步中…" : "同步到网上"}
+          {syncBusy
+            ? "同步中…"
+            : syncMode === "manual"
+              ? "手动同步"
+              : "同步到网上"}
         </button>
+        {email ? (
+          <Link
+            href="/projects"
+            className="hidden rounded-md px-1.5 py-1 text-[10px] text-slate-400 hover:text-blue-600 sm:inline"
+            title="在「我的项目」里改自动/手动"
+          >
+            {syncMode === "auto" ? "自动" : "手动"}
+          </Link>
+        ) : null}
 
         {!ready ? (
           <span className="px-1 text-[11px] text-slate-300">…</span>

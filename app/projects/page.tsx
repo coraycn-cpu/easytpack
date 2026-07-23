@@ -26,6 +26,12 @@ import {
 } from "@/lib/project/cloud-sync";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
+  getCloudSyncMode,
+  setCloudSyncMode,
+  subscribeCloudSyncMode,
+  type CloudSyncMode,
+} from "@/lib/project/sync-preference";
+import {
   getCloudSyncStatus,
   subscribeCloudSyncStatus,
   type CloudSyncStatus,
@@ -49,6 +55,7 @@ export default function ProjectsPage() {
   const [cloudLoggedIn, setCloudLoggedIn] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
+  const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
 
   const refresh = () => {
     void (async () => {
@@ -62,8 +69,14 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
+    setSyncMode(getCloudSyncMode());
     refresh();
-    return subscribeCloudSyncStatus(setSyncStatus);
+    const unsubStatus = subscribeCloudSyncStatus(setSyncStatus);
+    const unsubMode = subscribeCloudSyncMode(setSyncMode);
+    return () => {
+      unsubStatus();
+      unsubMode();
+    };
   }, []);
 
   const filtered = projects.filter((p) =>
@@ -212,9 +225,48 @@ export default function ProjectsPage() {
           <p className="font-medium">云端同步</p>
           <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
             {cloudLoggedIn
-              ? "已登录：可双向同步。同款冲突时取更新时间较新的版本，并尽量保留更可靠的图片引用。"
+              ? syncMode === "auto"
+                ? "当前：自动同步。登录与保存时会尽量传到云端；也可手动点下方按钮。"
+                : "当前：手动同步。保存只写本机，需要时再点下方按钮传到云端。"
               : "未登录：项目只存在当前浏览器。登录后可同步到云端、换设备继续。"}
           </p>
+
+          {cloudLoggedIn ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-blue-900/70">同步方式</span>
+              <div className="inline-flex overflow-hidden rounded-md border border-blue-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCloudSyncMode("auto");
+                    setCacheNote("已改为自动同步：之后登录/保存会自动上传");
+                  }}
+                  className={`px-2.5 py-1 text-[11px] ${
+                    syncMode === "auto"
+                      ? "bg-blue-600 text-white"
+                      : "text-blue-800 hover:bg-blue-50"
+                  }`}
+                >
+                  自动
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCloudSyncMode("manual");
+                    setCacheNote("已改为手动同步：保存只留本机，需点同步才上传");
+                  }}
+                  className={`px-2.5 py-1 text-[11px] ${
+                    syncMode === "manual"
+                      ? "bg-blue-600 text-white"
+                      : "text-blue-800 hover:bg-blue-50"
+                  }`}
+                >
+                  手动
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-2 flex flex-wrap gap-2">
             {cloudLoggedIn ? (
               <>
