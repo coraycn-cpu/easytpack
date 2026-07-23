@@ -199,8 +199,8 @@ export default function LoginClient() {
         </p>
         {inviteRef ? (
           <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-            你正在通过好友邀请注册。注册成功后，对方可获得邀请积分（每人最多邀请 5
-            人）。
+            你正在通过好友邀请注册。注册成功后，双方各得 50
+            积分（邀请人最多可成功邀请 6 人，上限 300 分）。
           </p>
         ) : null}
 

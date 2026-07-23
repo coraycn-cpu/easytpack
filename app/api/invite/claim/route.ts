@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
-/** 被邀请人登录/注册后领取邀请奖励（给邀请人加积分） */
+/** 被邀请人登录/注册后领取邀请奖励（双方各得积分） */
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "未配置云端" }, { status: 503 });

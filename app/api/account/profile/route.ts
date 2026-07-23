@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   INVITE_MAX_SUCCESS,
+  INVITE_POINTS_CAP,
   INVITE_REWARD_POINTS,
 } from "@/lib/invite/constants";
 
@@ -14,6 +15,7 @@ export type ProfilePayload = {
   inviteRemaining: number;
   rewardPoints: number;
   maxSuccess: number;
+  pointsCap: number;
 };
 
 /** 确保档案存在，并返回邀请统计 */
@@ -65,6 +67,7 @@ export async function GET() {
       inviteRemaining: Math.max(0, INVITE_MAX_SUCCESS - inviteSuccessCount),
       rewardPoints: INVITE_REWARD_POINTS,
       maxSuccess: INVITE_MAX_SUCCESS,
+      pointsCap: INVITE_POINTS_CAP,
     };
     return NextResponse.json(payload);
   } catch (err) {

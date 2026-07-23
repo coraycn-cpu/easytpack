@@ -9,7 +9,7 @@ export function getFreeMonthlyAiUnits(): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200;
 }
 
-/** 邀请好友注册获得的积分（计入 AI 额度上限） */
+/** 邀请好友注册获得的积分（计入 AI 额度上限，最高 300） */
 export async function getInviteBonusPoints(userId: string): Promise<number> {
   if (!isSupabaseConfigured()) return 0;
   try {
@@ -21,7 +21,9 @@ export async function getInviteBonusPoints(userId: string): Promise<number> {
       .maybeSingle();
     if (error || !data) return 0;
     const n = Number(data.points);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    const { INVITE_POINTS_CAP } = await import("@/lib/invite/constants");
+    return Math.min(Math.floor(n), INVITE_POINTS_CAP);
   } catch {
     return 0;
   }

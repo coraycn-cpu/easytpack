@@ -13,7 +13,7 @@ export function captureInviteRefFromSearch(
 }
 
 /**
- * 登录/注册成功后：确保档案存在，并用待领取邀请码给邀请人加积分。
+ * 登录/注册成功后：确保档案存在，并用待领取邀请码给双方加积分。
  * 失败不抛错（不挡进入产品）。
  */
 export async function claimPendingInviteAfterAuth(): Promise<{

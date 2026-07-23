@@ -46,6 +46,7 @@ type InviteProfile = {
   inviteRemaining: number;
   rewardPoints: number;
   maxSuccess: number;
+  pointsCap: number;
 };
 
 const PAGE_SIZE = 10;
@@ -145,6 +146,7 @@ export default function AccountPage() {
         inviteRemaining: json.inviteRemaining,
         rewardPoints: json.rewardPoints,
         maxSuccess: json.maxSuccess,
+        pointsCap: json.pointsCap,
       });
     } catch (e) {
       setInviteError(e instanceof Error ? e.message : "读取邀请信息失败");
@@ -401,9 +403,11 @@ export default function AccountPage() {
             </button>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-            分享注册链接给好友。对方成功注册后，你获得{" "}
-            {invite?.rewardPoints ?? 50} 积分（计入 AI
-            额度），最多成功邀请 {invite?.maxSuccess ?? 5} 人。
+            分享注册链接给好友。对方成功注册后，双方各得{" "}
+            {invite?.rewardPoints ?? 50}{" "}
+            积分（计入 AI 额度）。每人最多成功邀请{" "}
+            {invite?.maxSuccess ?? 6} 人，邀请积分上限{" "}
+            {invite?.pointsCap ?? 300} 分。
           </p>
 
           {inviteError ? (
@@ -417,6 +421,7 @@ export default function AccountPage() {
                 <span className="font-semibold tabular-nums text-zinc-900">
                   {invite.points}
                 </span>
+                <span className="text-zinc-400"> / {invite.pointsCap}</span>
               </p>
               <p>
                 已成功邀请：

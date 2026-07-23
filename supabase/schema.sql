@@ -157,7 +157,7 @@ create policy "用户可删除自己的款式图"
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
--- ========== 邀请好友注册积分（每人最多成功邀请 5 人，各得 50 积分）==========
+-- ========== 邀请好友注册积分（双方各得 50；每人最多成功邀请 6 人；积分上限 300）==========
 create table if not exists profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -244,7 +244,7 @@ $$;
 revoke all on function ensure_user_profile() from public;
 grant execute on function ensure_user_profile() to authenticated;
 
--- 被邀请人注册后领取：给邀请人 +50，最多成功 5 人
+-- 被邀请人注册后领取：双方各 +50；邀请人最多成功 6 人；积分上限 300
 create or replace function claim_invite_reward(p_code text)
 returns jsonb
 language plpgsql
@@ -255,9 +255,15 @@ declare
   uid uuid := auth.uid();
   code text := lower(trim(p_code));
   inviter profiles;
+  invitee profiles;
   success_count int;
   reward int := 50;
-  max_success int := 5;
+  max_success int := 6;
+  points_cap int := 300;
+  inviter_before int;
+  invitee_before int;
+  inviter_gain int;
+  invitee_gain int;
 begin
   if uid is null then
     return jsonb_build_object('ok', false, 'error', 'not_authenticated');
@@ -285,29 +291,52 @@ begin
   from referrals
   where inviter_id = inviter.user_id and points_awarded > 0;
 
-  if success_count >= max_success then
-    -- 仍记录关系但不发积分
+  if success_count >= max_success or inviter.points >= points_cap then
     insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
     values (inviter.user_id, uid, code, 0)
     on conflict (invitee_id) do nothing;
     return jsonb_build_object(
       'ok', false,
       'error', 'inviter_limit',
-      'message', '对方邀请名额已满（最多 5 人）'
+      'message', '对方邀请名额已满（最多 6 人 / 上限 300 分）'
     );
   end if;
+
+  inviter_before := inviter.points;
+  inviter_gain := least(reward, points_cap - inviter_before);
+  if inviter_gain < reward then
+    insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
+    values (inviter.user_id, uid, code, 0)
+    on conflict (invitee_id) do nothing;
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'inviter_limit',
+      'message', '对方邀请积分已达上限（300 分）'
+    );
+  end if;
+
+  select * into invitee from profiles where user_id = uid;
+  invitee_before := coalesce(invitee.points, 0);
+  invitee_gain := least(reward, greatest(0, points_cap - invitee_before));
 
   insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
   values (inviter.user_id, uid, code, reward);
 
   update profiles
-  set points = points + reward,
+  set points = least(points + reward, points_cap),
       updated_at = now()
   where user_id = inviter.user_id;
+
+  update profiles
+  set points = least(points + reward, points_cap),
+      updated_at = now()
+  where user_id = uid;
 
   return jsonb_build_object(
     'ok', true,
     'points_awarded', reward,
+    'inviter_points', inviter_gain,
+    'invitee_points', invitee_gain,
     'inviter_id', inviter.user_id
   );
 exception
