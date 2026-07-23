@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  getFreeMonthlyAiUnits,
+  getEffectiveAiLimit,
   getServerAuthUserId,
   sumCloudAiUsageThisMonth,
 } from "@/lib/ai/quota";
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const to = from + pageSize - 1;
 
   const used = await sumCloudAiUsageThisMonth(userId);
-  const limit = getFreeMonthlyAiUnits();
+  const { limit, base, bonus } = await getEffectiveAiLimit(userId);
 
   try {
     const supabase = await createClient();
@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       used,
       limit,
+      base,
+      bonus,
       page,
       pageSize,
       total,
@@ -97,6 +99,8 @@ export async function GET(req: NextRequest) {
         error: err instanceof Error ? err.message : "读取用量失败",
         used,
         limit,
+        base,
+        bonus,
         page,
         pageSize,
         total: 0,

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
@@ -8,6 +8,10 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import {
+  captureInviteRefFromSearch,
+  claimPendingInviteAfterAuth,
+} from "@/lib/invite/claim-pending";
 
 type Mode = "login" | "register";
 
@@ -68,11 +72,16 @@ export default function LoginClient() {
   const nextPath = search.get("next") || "/";
   const urlError = search.get("error");
   const urlMode = search.get("mode");
+  const inviteRef = search.get("ref");
 
   const configured = useMemo(() => isSupabaseConfigured(), []);
   const [mode, setMode] = useState<Mode>(
-    urlMode === "register" ? "register" : "login",
+    urlMode === "register" || Boolean(inviteRef) ? "register" : "login",
   );
+
+  useEffect(() => {
+    captureInviteRefFromSearch(inviteRef);
+  }, [inviteRef]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -126,6 +135,7 @@ export default function LoginClient() {
         } catch {
           /* 同步失败不挡进入首页 */
         }
+        await claimPendingInviteAfterAuth();
         router.replace(nextPath);
         router.refresh();
         return;
@@ -156,6 +166,7 @@ export default function LoginClient() {
         } catch {
           /* ignore */
         }
+        await claimPendingInviteAfterAuth();
         router.replace(nextPath);
         router.refresh();
         return;
@@ -186,6 +197,12 @@ export default function LoginClient() {
           <br />
           未登录也能照常在本机做款。
         </p>
+        {inviteRef ? (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            你正在通过好友邀请注册。注册成功后，对方可获得邀请积分（每人最多邀请 5
+            人）。
+          </p>
+        ) : null}
 
         {!configured && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

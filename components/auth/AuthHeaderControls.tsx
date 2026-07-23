@@ -36,12 +36,24 @@ export default function AuthHeaderControls() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ? { email: session.user.email ?? null } : null);
+      if (session?.user) {
+        void import("@/lib/invite/claim-pending").then(({ claimPendingInviteAfterAuth }) =>
+          claimPendingInviteAfterAuth(),
+        );
+      }
     });
 
     return () => {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void import("@/lib/invite/claim-pending").then(({ claimPendingInviteAfterAuth }) =>
+      claimPendingInviteAfterAuth(),
+    );
+  }, [user]);
 
   const handleSignOut = async () => {
     if (!configured || busy) return;

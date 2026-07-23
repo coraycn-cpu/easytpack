@@ -30,11 +30,22 @@ type AiUsageItem = {
 type CloudUsagePage = {
   used: number;
   limit: number;
+  base?: number;
+  bonus?: number;
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
   items: AiUsageItem[];
+};
+
+type InviteProfile = {
+  inviteCode: string;
+  points: number;
+  inviteSuccessCount: number;
+  inviteRemaining: number;
+  rewardPoints: number;
+  maxSuccess: number;
 };
 
 const PAGE_SIZE = 10;
@@ -62,15 +73,9 @@ export default function AccountPage() {
   const [usageLoading, setUsageLoading] = useState(false);
   const [cloudUsage, setCloudUsage] = useState<CloudUsagePage | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
-  const [sharesLoading, setSharesLoading] = useState(false);
-  const [shareItems, setShareItems] = useState<
-    Array<{
-      id: string;
-      title: string;
-      created_at: string;
-      revoked_at: string | null;
-    }>
-  >([]);
+  const [invite, setInvite] = useState<InviteProfile | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!configured) {
@@ -121,48 +126,47 @@ export default function AccountPage() {
     void loadUsage(1);
   }, [ready, email, configured, loadUsage]);
 
-  const loadShares = useCallback(async () => {
-    setSharesLoading(true);
+  const loadInvite = useCallback(async () => {
+    setInviteLoading(true);
+    setInviteError(null);
     try {
-      const res = await fetch("/api/share");
-      if (!res.ok) return;
-      const json = (await res.json()) as {
-        items?: Array<{
-          id: string;
-          title: string;
-          created_at: string;
-          revoked_at: string | null;
-        }>;
-      };
-      setShareItems(json.items ?? []);
-    } catch {
-      /* ignore */
+      const res = await fetch("/api/account/profile");
+      const json = (await res.json().catch(() => null)) as
+        | (InviteProfile & { error?: string })
+        | null;
+      if (!res.ok) {
+        throw new Error(json?.error || "读取邀请信息失败");
+      }
+      if (!json?.inviteCode) throw new Error("未返回邀请码");
+      setInvite({
+        inviteCode: json.inviteCode,
+        points: json.points,
+        inviteSuccessCount: json.inviteSuccessCount,
+        inviteRemaining: json.inviteRemaining,
+        rewardPoints: json.rewardPoints,
+        maxSuccess: json.maxSuccess,
+      });
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "读取邀请信息失败");
     } finally {
-      setSharesLoading(false);
+      setInviteLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!ready || !email || !configured) return;
-    void loadShares();
-  }, [ready, email, configured, loadShares]);
+    void loadInvite();
+  }, [ready, email, configured, loadInvite]);
 
-  const revokeShare = async (id: string) => {
+  const copyInviteLink = async () => {
+    if (!invite?.inviteCode) return;
+    const { buildInviteRegisterUrl } = await import("@/lib/invite/constants");
+    const url = buildInviteRegisterUrl(invite.inviteCode);
     try {
-      const res = await fetch(`/api/share/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setTip(json?.error || "撤销失败");
-        return;
-      }
-      setTip("已撤销该分享链接");
-      await loadShares();
+      await navigator.clipboard.writeText(url);
+      setTip("邀请链接已复制，发给好友注册即可");
     } catch {
-      setTip("撤销失败");
+      setTip(`请手动复制：${url}`);
     }
   };
 
@@ -290,7 +294,11 @@ export default function AccountPage() {
             <li>
               云端本月：
               {cloudUsage
-                ? ` ${cloudUsage.used} / ${cloudUsage.limit} 点（免费档）`
+                ? ` ${cloudUsage.used} / ${cloudUsage.limit} 点${
+                    cloudUsage.bonus
+                      ? `（免费 ${cloudUsage.base ?? "—"} + 邀请 ${cloudUsage.bonus}）`
+                      : "（免费档）"
+                  }`
                 : usageLoading
                   ? " 加载中…"
                   : " —"}
@@ -374,77 +382,70 @@ export default function AccountPage() {
           </div>
 
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
-            登录后 AI 调用会计入云端额度；超额会暂时无法调用。付费加量下期开放。
+            登录后 AI 调用会计入云端额度；邀请好友注册获得的积分会叠加到上限。超额会暂时无法调用。
           </p>
         </section>
 
         <section className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-              我的分享
+              邀请好友
             </p>
             <button
               type="button"
-              disabled={sharesLoading}
-              onClick={() => void loadShares()}
+              disabled={inviteLoading}
+              onClick={() => void loadInvite()}
               className="text-[11px] text-blue-600 hover:underline disabled:opacity-40"
             >
-              {sharesLoading ? "刷新中…" : "刷新"}
+              {inviteLoading ? "刷新中…" : "刷新"}
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-zinc-500">
-            在导出页可生成只读链接；对方打开无需登录。
+          <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+            分享注册链接给好友。对方成功注册后，你获得{" "}
+            {invite?.rewardPoints ?? 50} 积分（计入 AI
+            额度），最多成功邀请 {invite?.maxSuccess ?? 5} 人。
           </p>
-          {shareItems.length === 0 ? (
-            <p className="mt-3 text-[11px] text-zinc-400">
-              暂无分享。打开某款「导出」→「生成分享链接」。
-            </p>
+
+          {inviteError ? (
+            <p className="mt-2 text-[11px] text-amber-700">{inviteError}</p>
+          ) : null}
+
+          {invite ? (
+            <div className="mt-3 space-y-2 text-[11px] text-zinc-700">
+              <p>
+                当前积分：
+                <span className="font-semibold tabular-nums text-zinc-900">
+                  {invite.points}
+                </span>
+              </p>
+              <p>
+                已成功邀请：
+                <span className="font-semibold tabular-nums">
+                  {invite.inviteSuccessCount}/{invite.maxSuccess}
+                </span>
+                {invite.inviteRemaining > 0
+                  ? ` · 还可邀请 ${invite.inviteRemaining} 人`
+                  : " · 名额已满"}
+              </p>
+              <p className="break-all text-zinc-500">
+                邀请码：
+                <code className="rounded bg-zinc-100 px-1 text-zinc-800">
+                  {invite.inviteCode}
+                </code>
+              </p>
+              <button
+                type="button"
+                disabled={invite.inviteRemaining <= 0}
+                onClick={() => void copyInviteLink()}
+                className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-[11px] font-medium text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                复制邀请链接
+              </button>
+            </div>
           ) : (
-            <ul className="mt-3 divide-y divide-zinc-100">
-              {shareItems.map((item) => {
-                const href = `/share/${item.id}`;
-                const revoked = Boolean(item.revoked_at);
-                return (
-                  <li
-                    key={item.id}
-                    className="flex items-center justify-between gap-2 py-2 text-[11px]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-zinc-800">
-                        {item.title}
-                        {revoked ? (
-                          <span className="ml-1 text-amber-600">已撤销</span>
-                        ) : null}
-                      </p>
-                      <p className="text-zinc-400">
-                        {new Date(item.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      {!revoked ? (
-                        <>
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded border border-zinc-200 px-2 py-1 text-zinc-600 hover:bg-zinc-50"
-                          >
-                            打开
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => void revokeShare(item.id)}
-                            className="rounded border border-zinc-200 px-2 py-1 text-red-500 hover:bg-red-50"
-                          >
-                            撤销
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <p className="mt-3 text-[11px] text-zinc-400">
+              {inviteLoading ? "加载邀请信息…" : "暂无邀请信息"}
+            </p>
           )}
         </section>
 

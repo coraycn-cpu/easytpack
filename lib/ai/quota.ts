@@ -9,6 +9,36 @@ export function getFreeMonthlyAiUnits(): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200;
 }
 
+/** 邀请好友注册获得的积分（计入 AI 额度上限） */
+export async function getInviteBonusPoints(userId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("points")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error || !data) return 0;
+    const n = Number(data.points);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 本月可用上限 = 免费档 + 邀请积分 */
+export async function getEffectiveAiLimit(userId: string | null): Promise<{
+  base: number;
+  bonus: number;
+  limit: number;
+}> {
+  const base = getFreeMonthlyAiUnits();
+  if (!userId) return { base, bonus: 0, limit: base };
+  const bonus = await getInviteBonusPoints(userId);
+  return { base, bonus, limit: base + bonus };
+}
+
 function startOfMonthIso(): string {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
@@ -60,8 +90,8 @@ export type AiQuotaBlocked = {
 export async function assertWithinAiQuota(
   unitsNeeded = 1,
 ): Promise<AiQuotaOk | AiQuotaBlocked> {
-  const limit = getFreeMonthlyAiUnits();
   const userId = await getServerAuthUserId();
+  const { limit, base, bonus } = await getEffectiveAiLimit(userId);
   if (!userId) {
     return { ok: true, userId: null, used: 0, limit };
   }
@@ -71,10 +101,12 @@ export async function assertWithinAiQuota(
       ok: false,
       response: NextResponse.json(
         {
-          error: `本月免费 AI 额度已用完（已用 ${used}/${limit}）。可下月再试；付费升级将在后续版本开放。`,
+          error: `本月 AI 额度已用完（已用 ${used}/${limit}，含邀请积分 ${bonus}）。可下月再试或邀请好友加分；付费升级将在后续版本开放。`,
           code: "AI_QUOTA_EXCEEDED",
           used,
           limit,
+          base,
+          bonus,
         },
         { status: 429 },
       ),

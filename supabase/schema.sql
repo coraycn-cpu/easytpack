@@ -157,7 +157,169 @@ create policy "用户可删除自己的款式图"
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
--- ========== 公开分享链接（只读快照；未登录可按 id 查看）==========
+-- ========== 邀请好友注册积分（每人最多成功邀请 5 人，各得 50 积分）==========
+create table if not exists profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  invite_code text not null unique,
+  points int not null default 0 check (points >= 0),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists profiles_invite_code_idx on profiles (invite_code);
+
+alter table profiles enable row level security;
+
+drop policy if exists "用户读写自己的档案" on profiles;
+create policy "用户读写自己的档案"
+  on profiles for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table if not exists referrals (
+  id uuid primary key default gen_random_uuid(),
+  inviter_id uuid not null references auth.users(id) on delete cascade,
+  invitee_id uuid not null unique references auth.users(id) on delete cascade,
+  invite_code text not null,
+  points_awarded int not null default 0,
+  created_at timestamptz default now()
+);
+
+create index if not exists referrals_inviter_idx on referrals (inviter_id, created_at desc);
+
+alter table referrals enable row level security;
+
+drop policy if exists "用户可读自己相关的邀请" on referrals;
+create policy "用户可读自己相关的邀请"
+  on referrals for select
+  using (auth.uid() = inviter_id or auth.uid() = invitee_id);
+
+-- 确保当前用户有档案（含邀请码）
+create or replace function ensure_user_profile()
+returns profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  row profiles;
+  code text;
+begin
+  if uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select * into row from profiles where user_id = uid;
+  if found then
+    return row;
+  end if;
+
+  code := lower(substr(replace(uid::text, '-', ''), 1, 8));
+  begin
+    insert into profiles (user_id, email, invite_code, points)
+    values (
+      uid,
+      coalesce(auth.jwt() ->> 'email', null),
+      code,
+      0
+    )
+    returning * into row;
+  exception when unique_violation then
+    -- 邀请码极低概率冲突时加后缀
+    insert into profiles (user_id, email, invite_code, points)
+    values (
+      uid,
+      coalesce(auth.jwt() ->> 'email', null),
+      code || substr(md5(random()::text), 1, 4),
+      0
+    )
+    returning * into row;
+  end;
+  return row;
+end;
+$$;
+
+revoke all on function ensure_user_profile() from public;
+grant execute on function ensure_user_profile() to authenticated;
+
+-- 被邀请人注册后领取：给邀请人 +50，最多成功 5 人
+create or replace function claim_invite_reward(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  code text := lower(trim(p_code));
+  inviter profiles;
+  success_count int;
+  reward int := 50;
+  max_success int := 5;
+begin
+  if uid is null then
+    return jsonb_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+  if code is null or code = '' then
+    return jsonb_build_object('ok', false, 'error', 'missing_code');
+  end if;
+
+  -- 确保自己有档案
+  perform ensure_user_profile();
+
+  if exists (select 1 from referrals where invitee_id = uid) then
+    return jsonb_build_object('ok', false, 'error', 'already_claimed');
+  end if;
+
+  select * into inviter from profiles where invite_code = code;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'invalid_code');
+  end if;
+  if inviter.user_id = uid then
+    return jsonb_build_object('ok', false, 'error', 'self_invite');
+  end if;
+
+  select count(*) into success_count
+  from referrals
+  where inviter_id = inviter.user_id and points_awarded > 0;
+
+  if success_count >= max_success then
+    -- 仍记录关系但不发积分
+    insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
+    values (inviter.user_id, uid, code, 0)
+    on conflict (invitee_id) do nothing;
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'inviter_limit',
+      'message', '对方邀请名额已满（最多 5 人）'
+    );
+  end if;
+
+  insert into referrals (inviter_id, invitee_id, invite_code, points_awarded)
+  values (inviter.user_id, uid, code, reward);
+
+  update profiles
+  set points = points + reward,
+      updated_at = now()
+  where user_id = inviter.user_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'points_awarded', reward,
+    'inviter_id', inviter.user_id
+  );
+exception
+  when unique_violation then
+    return jsonb_build_object('ok', false, 'error', 'already_claimed');
+end;
+$$;
+
+revoke all on function claim_invite_reward(text) from public;
+grant execute on function claim_invite_reward(text) to authenticated;
+
+-- ========== 工艺包公开分享表（旧实验能力，可保留表结构；产品主路径改为邀请注册）==========
 create table if not exists share_links (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

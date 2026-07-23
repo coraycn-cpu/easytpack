@@ -101,13 +101,13 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ## 第 7 步（可选）：免费 AI 额度
 
-登录用户的 AI 调用会计入 Supabase 表 `ai_usage`。默认每月 **200** 点（可用 Vercel 环境变量 `AI_FREE_MONTHLY_UNITS` 调整）。超额返回 429，本机未登录仍可试用（不写云端额度）。
+登录用户的 AI 调用会计入 Supabase 表 `ai_usage`。默认每月 **200** 点（可用 Vercel 环境变量 `AI_FREE_MONTHLY_UNITS` 调整）。**邀请好友成功注册**后，邀请人积分会计入额度上限（每人 +50，最多 5 人）。超额返回 429，本机未登录仍可试用（不写云端额度）。
 
-用户中心 `/account` 可查看本月用量；「升级为团队」入口已预留。
+用户中心 `/account` 可查看本月用量与邀请链接；「升级为团队」入口已预留。
 
-## 第 8 步（可选）：分享链接表
+## 第 8 步：邀请注册积分表
 
-若导出页「生成分享链接」报错缺表，请再跑一遍最新 `supabase/schema.sql`（含 `share_links`）。分享页路径：`/share/sh_…`，对方无需登录。
+请再跑一遍最新 `supabase/schema.sql`（含 `profiles`、`referrals`、`ensure_user_profile`、`claim_invite_reward`）。用户中心可复制邀请链接：`/login?mode=register&ref=邀请码`。好友注册并登录后，邀请人自动 +50 积分（最多 5 人）。
 
 ---
 
@@ -122,6 +122,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 | 打开旧款没图 | 再点一次「同步到网上」后重开；确认 Storage 里有对应文件、桶策略已建 |
 | 同步失败黄字提示 | 本机稿还在；检查网络 / RLS / 桶是否存在后重试 |
 | 想改自动/手动 | 「我的项目」→ 云端同步 → 同步方式 |
+| 邀请不加分 / 读档案失败 | 在 Supabase SQL 编辑器重新执行最新 `schema.sql`（含 profiles 段） |
 
 ---
 
