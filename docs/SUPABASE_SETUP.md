@@ -113,14 +113,20 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 只读后台路径：`/admin`（用量 / 邀请 / 已同意质量池的 AI 事件）。
 
-在 Vercel → Environment Variables（Preview 也要勾）增加：
+在 Vercel → Environment Variables（**Preview 也要勾**）增加：
 
 | 名字 | 值 |
 |------|----|
+| `ADMIN_EMAILS` | 管理员邮箱，如 `test@qq.com`（多个用逗号分隔，不要加引号） |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → API → **service_role**（机密，不要用 anon） |
-| `ADMIN_EMAILS` | 管理员邮箱，逗号分隔，如 `you@example.com` |
 
-改完后 Redeploy。用白名单里的邮箱登录 → 用户中心会出现「打开管理后台」，或直接访问 `/admin`。
+改完后必须 **Redeploy** 一次 Preview。用白名单邮箱登录 → 用户中心底部会出现「打开管理后台」。
+
+排查：
+1. 变量是否勾了 **Preview**（不只 Production）
+2. 值是否就是登录邮箱，例如 `test@qq.com`（不要写成 `"test@qq.com"`）
+3. 是否 Redeploy 过；改环境变量不 Redeploy 线上读不到
+4. 入口只依赖 `ADMIN_EMAILS`；若缺 `SUPABASE_SERVICE_ROLE_KEY`，入口会出现，但打开后台拉数据会提示补密钥
 
 > `claim_invite_reward` / `ensure_user_profile` 是 **函数**，不是表。表侧看 `profiles`、`referrals`；函数在 Database → Functions，或 SQL：`select proname from pg_proc where proname like '%invite%';`
 

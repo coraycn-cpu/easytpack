@@ -80,18 +80,16 @@ export default function AdminPage() {
         const json = (await res.json().catch(() => null)) as {
           isAdmin?: boolean;
           error?: string;
+          hint?: string | null;
         } | null;
-        if (!res.ok) {
-          setError(json?.error || "无法校验管理员权限");
-          setReady(true);
-          return;
-        }
         if (!json?.isAdmin) {
           setAllowed(false);
+          setError(json?.hint || json?.error || "当前账号无权限");
           setReady(true);
           return;
         }
         setAllowed(true);
+        if (json.hint) setError(json.hint);
         setReady(true);
       } catch {
         setError("无法校验管理员权限");

@@ -79,6 +79,7 @@ export default function AccountPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminHint, setAdminHint] = useState<string | null>(null);
 
   useEffect(() => {
     const tip = consumeInviteClaimTip();
@@ -169,10 +170,16 @@ export default function AccountPage() {
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as {
           isAdmin?: boolean;
+          hint?: string | null;
+          serviceRoleConfigured?: boolean;
         } | null;
         setIsAdmin(Boolean(json?.isAdmin));
+        setAdminHint(json?.hint ?? null);
       })
-      .catch(() => setIsAdmin(false));
+      .catch(() => {
+        setIsAdmin(false);
+        setAdminHint(null);
+      });
   }, [ready, email, configured, loadInvite]);
 
   const copyInviteLink = async () => {
@@ -491,6 +498,9 @@ export default function AccountPage() {
             <p className="mt-1 text-[11px] text-zinc-500">
               当前账号在管理员白名单中，可查看用量与 consent 事件。
             </p>
+            {adminHint ? (
+              <p className="mt-2 text-[11px] text-amber-700">{adminHint}</p>
+            ) : null}
             <Link
               href="/admin"
               className="mt-3 inline-block rounded-md border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-800 hover:bg-zinc-50"

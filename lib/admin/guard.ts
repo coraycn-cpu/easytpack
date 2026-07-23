@@ -3,19 +3,110 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isSupabaseServiceRoleConfigured } from "@/lib/supabase/admin";
 
-function parseAdminEmails(): Set<string> {
+/** 解析 ADMIN_EMAILS；兼容引号、空格、换行 */
+export function parseAdminEmails(): string[] {
   const raw = process.env.ADMIN_EMAILS || "";
-  return new Set(
-    raw
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  return raw
+    .split(/[,;\n]/)
+    .map((s) =>
+      s
+        .trim()
+        .replace(/^['"]+|['"]+$/g, "")
+        .toLowerCase(),
+    )
+    .filter((s) => s.includes("@"));
 }
 
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  return parseAdminEmails().has(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  return parseAdminEmails().includes(normalized);
+}
+
+export type AdminIdentity =
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      adminEmailsConfigured: boolean;
+      serviceRoleConfigured: boolean;
+    }
+  | {
+      ok: false;
+      status: 401 | 403 | 503;
+      error: string;
+      email?: string | null;
+      adminEmailsConfigured: boolean;
+      serviceRoleConfigured: boolean;
+    };
+
+/**
+ * 仅判断「当前登录邮箱是否在白名单」。
+ * 不要求 service role——入口显示用这个，避免缺密钥时入口整段消失。
+ */
+export async function getAdminIdentity(): Promise<AdminIdentity> {
+  const adminEmailsConfigured = parseAdminEmails().length > 0;
+  const serviceRoleConfigured = isSupabaseServiceRoleConfigured();
+
+  if (!isSupabaseConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      error: "未配置云端",
+      adminEmailsConfigured,
+      serviceRoleConfigured,
+    };
+  }
+  if (!adminEmailsConfigured) {
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "未配置 ADMIN_EMAILS。在 Vercel 填入管理员邮箱（如 test@qq.com）并勾选 Preview 后 Redeploy。",
+      adminEmailsConfigured,
+      serviceRoleConfigured,
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      return {
+        ok: false,
+        status: 401,
+        error: "请先登录",
+        adminEmailsConfigured,
+        serviceRoleConfigured,
+      };
+    }
+    const email = data.user.email ?? null;
+    if (!isAdminEmail(email)) {
+      return {
+        ok: false,
+        status: 403,
+        error: "无管理后台权限（当前邮箱不在 ADMIN_EMAILS）",
+        email,
+        adminEmailsConfigured,
+        serviceRoleConfigured,
+      };
+    }
+    return {
+      ok: true,
+      userId: data.user.id,
+      email: email!,
+      adminEmailsConfigured,
+      serviceRoleConfigured,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 503,
+      error: err instanceof Error ? err.message : "鉴权失败",
+      adminEmailsConfigured,
+      serviceRoleConfigured,
+    };
+  }
 }
 
 export type AdminSessionOk = {
@@ -29,74 +120,35 @@ export type AdminSessionBlocked = {
   response: NextResponse;
 };
 
-/** 校验当前登录用户是否在 ADMIN_EMAILS 白名单 */
+/** 数据接口：白名单 + service role */
 export async function requireAdminSession(): Promise<
   AdminSessionOk | AdminSessionBlocked
 > {
-  if (!isSupabaseConfigured()) {
+  const identity = await getAdminIdentity();
+  if (!identity.ok) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "未配置云端" }, { status: 503 }),
+      response: NextResponse.json(
+        { error: identity.error },
+        { status: identity.status },
+      ),
     };
   }
-  if (!isSupabaseServiceRoleConfigured()) {
+  if (!identity.serviceRoleConfigured) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error:
-            "管理后台需要 SUPABASE_SERVICE_ROLE_KEY（Vercel 环境变量，勿暴露到前端）",
+            "已识别管理员，但缺少 SUPABASE_SERVICE_ROLE_KEY。请在 Vercel 配置 service_role（勾选 Preview）后 Redeploy。",
         },
         { status: 503 },
       ),
     };
   }
-  if (parseAdminEmails().size === 0) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error:
-            "未配置 ADMIN_EMAILS。在 Vercel 填入管理员邮箱（逗号分隔）后 Redeploy。",
-        },
-        { status: 503 },
-      ),
-    };
-  }
-
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      return {
-        ok: false,
-        response: NextResponse.json({ error: "请先登录" }, { status: 401 }),
-      };
-    }
-    const email = data.user.email ?? null;
-    if (!isAdminEmail(email)) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: "无管理后台权限" },
-          { status: 403 },
-        ),
-      };
-    }
-    return {
-      ok: true,
-      userId: data.user.id,
-      email: email!,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: err instanceof Error ? err.message : "鉴权失败",
-        },
-        { status: 500 },
-      ),
-    };
-  }
+  return {
+    ok: true,
+    userId: identity.userId,
+    email: identity.email,
+  };
 }
