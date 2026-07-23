@@ -12,6 +12,7 @@ import StudioTopChrome from "@/components/studio/StudioTopChrome";
 import FullCollectFlowOverlay from "@/components/studio/FullCollectFlowOverlay";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
+import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
 import {
@@ -2394,35 +2395,33 @@ export default function StudioPage() {
             }}
           />
 
-          <div className="pointer-events-none fixed top-14 right-4 z-30 w-[min(100vw-1.5rem,340px)]">
-            <div className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-              <StudioDataPanel
-                project={project}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                onPersist={persist}
-                highlightedProcessIds={highlightedProcessIds}
-                onProcessRowSelect={handleProcessRowSelect}
-                selectedAnnIds={selectedAnnIds}
-                selectedAnns={selectedAnns}
-                linkedProcessIdsForSelection={linkedProcessIdsForSelection}
-                onToggleProcessLink={handleToggleProcessLink}
-                onRegionAiFill={handleRegionAiFill}
-                regionAiLoading={aiTask === "region-annotate"}
-                onDimensionAiFill={handleDimensionAiFill}
-                dimensionAiLoading={aiTask === "size-dimension"}
-                onMarkManual={handleMarkManualSelected}
-                onToggleLock={handleToggleLockSelected}
-                onDeleteSelected={handleDeleteSelectedAnnotations}
-                linkedSizePartForSelection={linkedSizePartForSelection}
-                onToggleSizeLink={handleToggleSizeLink}
-                highlightedSizePart={highlightedSizePart}
-                onSizeRowSelect={handleSizeRowSelect}
-                highlightTab={aiHighlightTab}
-                interactionLocked={aiBusy}
-              />
-            </div>
-          </div>
+          <DraggableFloatPanel storageKey="easytpack-studio-data-panel-pos">
+            <StudioDataPanel
+              project={project}
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              onPersist={persist}
+              highlightedProcessIds={highlightedProcessIds}
+              onProcessRowSelect={handleProcessRowSelect}
+              selectedAnnIds={selectedAnnIds}
+              selectedAnns={selectedAnns}
+              linkedProcessIdsForSelection={linkedProcessIdsForSelection}
+              onToggleProcessLink={handleToggleProcessLink}
+              onRegionAiFill={handleRegionAiFill}
+              regionAiLoading={aiTask === "region-annotate"}
+              onDimensionAiFill={handleDimensionAiFill}
+              dimensionAiLoading={aiTask === "size-dimension"}
+              onMarkManual={handleMarkManualSelected}
+              onToggleLock={handleToggleLockSelected}
+              onDeleteSelected={handleDeleteSelectedAnnotations}
+              linkedSizePartForSelection={linkedSizePartForSelection}
+              onToggleSizeLink={handleToggleSizeLink}
+              highlightedSizePart={highlightedSizePart}
+              onSizeRowSelect={handleSizeRowSelect}
+              highlightTab={aiHighlightTab}
+              interactionLocked={aiBusy}
+            />
+          </DraggableFloatPanel>
 
           {fullCollectOpen && project && !garmentBlocked && (
             <FullCollectFlowOverlay
