@@ -9,7 +9,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 
-type Tab = "overview" | "users" | "events" | "storage" | "config";
+type Tab = "overview" | "users" | "events" | "storage" | "logs" | "config";
 
 type OverviewPayload = {
   adminEmail: string;
@@ -86,6 +86,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "users", label: "用户" },
   { id: "events", label: "训练" },
   { id: "storage", label: "存储" },
+  { id: "logs", label: "日志" },
   { id: "config", label: "配置" },
 ];
 
@@ -124,6 +125,22 @@ export default function AdminPage() {
     note?: string;
   } | null>(null);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
+  const [logKind, setLogKind] = useState<
+    "audit" | "usage" | "invites" | "ai_errors" | "consent"
+  >("audit");
+  const [logItems, setLogItems] = useState<
+    Array<{
+      id: string;
+      at: string;
+      title: string;
+      subtitle?: string;
+      ok?: boolean;
+    }>
+  >([]);
+  const [logPage, setLogPage] = useState(1);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+  const [logQ, setLogQ] = useState("");
+  const [logHint, setLogHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (!configured) {
@@ -283,12 +300,59 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadLogs = useCallback(
+    async (
+      page: number,
+      kind: "audit" | "usage" | "invites" | "ai_errors" | "consent",
+      q: string,
+    ) => {
+      setLoading(true);
+      setError(null);
+      setLogHint(null);
+      try {
+        const qs = new URLSearchParams({
+          kind,
+          page: String(page),
+          pageSize: "30",
+        });
+        if (q.trim()) qs.set("q", q.trim());
+        const res = await fetch(`/api/admin/logs?${qs}`);
+        const json = (await res.json().catch(() => null)) as {
+          items?: Array<{
+            id: string;
+            at: string;
+            title: string;
+            subtitle?: string;
+            ok?: boolean;
+          }>;
+          page?: number;
+          totalPages?: number;
+          error?: string;
+          hint?: string;
+        } | null;
+        if (!res.ok) {
+          setLogHint(json?.hint ?? null);
+          throw new Error(json?.error || "读取日志失败");
+        }
+        setLogItems(json?.items ?? []);
+        setLogPage(json?.page ?? page);
+        setLogTotalPages(json?.totalPages ?? 1);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "读取日志失败");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!ready || !allowed) return;
     if (tab === "overview") void loadOverview();
     if (tab === "users") void loadUsers(1, userQ);
     if (tab === "events") void loadEvents(1, eventConsent);
     if (tab === "storage") void loadStorage();
+    if (tab === "logs") void loadLogs(1, logKind, logQ);
     if (tab === "config") void loadConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tab switch loads; search has own triggers
   }, [ready, allowed, tab]);
@@ -659,6 +723,118 @@ export default function AdminPage() {
                   ))}
                 </ul>
               )}
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "logs" ? (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={logKind}
+                onChange={(e) => {
+                  const v = e.target.value as typeof logKind;
+                  setLogKind(v);
+                  void loadLogs(1, v, logQ);
+                }}
+                className="rounded-lg border border-zinc-200 px-2 py-1.5 text-[11px]"
+              >
+                <option value="audit">管理操作审计</option>
+                <option value="usage">AI 用量日志</option>
+                <option value="ai_errors">AI 失败日志</option>
+                <option value="invites">邀请日志</option>
+                <option value="consent">Consent 训练日志</option>
+              </select>
+              {logKind === "audit" || logKind === "usage" ? (
+                <>
+                  <input
+                    value={logQ}
+                    onChange={(e) => setLogQ(e.target.value)}
+                    placeholder={
+                      logKind === "audit" ? "搜操作 / 邮箱" : "搜 action / 用户ID"
+                    }
+                    className="min-w-[10rem] flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs"
+                  />
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void loadLogs(1, logKind, logQ)}
+                    className="rounded-md border border-zinc-200 px-2.5 py-1.5 text-[11px] hover:bg-zinc-50"
+                  >
+                    搜索
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void loadLogs(1, logKind, "")}
+                  className="rounded-md border border-zinc-200 px-2.5 py-1.5 text-[11px] hover:bg-zinc-50"
+                >
+                  {loading ? "刷新中…" : "刷新"}
+                </button>
+              )}
+            </div>
+            {logHint ? (
+              <p className="text-[11px] text-amber-700">{logHint}</p>
+            ) : null}
+            <p className="text-[10px] text-zinc-400">
+              审计表记录：导出训练数据、搜索用户、查看存储等操作。写操作（加额度/暂停）将在
+              M2 一并记入。
+            </p>
+            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+              {logItems.length === 0 ? (
+                <p className="px-3 py-6 text-center text-[11px] text-zinc-400">
+                  {loading ? "加载中…" : "暂无日志"}
+                </p>
+              ) : (
+                <ul className="divide-y divide-zinc-50">
+                  {logItems.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-start justify-between gap-2 px-3 py-2 text-[11px]"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-zinc-800">
+                          {item.title}
+                          {item.ok === false ? (
+                            <span className="ml-1 text-amber-600">失败</span>
+                          ) : null}
+                        </p>
+                        {item.subtitle ? (
+                          <p className="truncate text-[10px] text-zinc-400">
+                            {item.subtitle}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 tabular-nums text-zinc-400">
+                        {formatTime(item.at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+              <button
+                type="button"
+                disabled={loading || logPage <= 1}
+                onClick={() => void loadLogs(logPage - 1, logKind, logQ)}
+                className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span>
+                第 {logPage} / {logTotalPages} 页
+              </span>
+              <button
+                type="button"
+                disabled={loading || logPage >= logTotalPages}
+                onClick={() => void loadLogs(logPage + 1, logKind, logQ)}
+                className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
+              >
+                下一页
+              </button>
             </div>
           </section>
         ) : null}

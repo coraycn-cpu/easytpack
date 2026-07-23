@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/admin/guard";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
+import {
+  clientIpFromRequest,
+  writeAdminAuditLog,
+} from "@/lib/admin/audit";
 
 /** 管理端：训练 / consent 事件列表与导出 */
 export async function GET(req: NextRequest) {
@@ -45,6 +49,20 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       const rows = data ?? [];
+      await writeAdminAuditLog({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "admin.events.export",
+        targetType: "ai_events",
+        meta: {
+          format: exportFmt,
+          count: rows.length,
+          consent: consentParam || "true(default)",
+          action: action || null,
+          outcome: outcome || null,
+        },
+        ip: clientIpFromRequest(req),
+      });
       if (exportFmt === "jsonl") {
         const body = rows.map((r) => JSON.stringify(r)).join("\n");
         return new NextResponse(body + (body ? "\n" : ""), {

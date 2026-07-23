@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/admin/guard";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { getFreeMonthlyAiUnits } from "@/lib/ai/quota";
+import {
+  clientIpFromRequest,
+  writeAdminAuditLog,
+} from "@/lib/admin/audit";
 
 function startOfMonthIso(): string {
   const d = new Date();
@@ -112,6 +116,16 @@ export async function GET(req: NextRequest) {
     });
 
     const total = count ?? items.length;
+    if (q) {
+      await writeAdminAuditLog({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "admin.users.search",
+        targetType: "profiles",
+        meta: { q, page, total },
+        ip: clientIpFromRequest(req),
+      });
+    }
     return NextResponse.json({
       page,
       pageSize,

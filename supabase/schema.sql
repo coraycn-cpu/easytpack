@@ -347,6 +347,29 @@ $$;
 revoke all on function claim_invite_reward(text) from public;
 grant execute on function claim_invite_reward(text) to authenticated;
 
+-- ========== 管理操作审计日志（仅 service role 读写）==========
+create table if not exists admin_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references auth.users(id) on delete set null,
+  actor_email text,
+  action text not null,
+  target_type text,
+  target_id text,
+  meta jsonb not null default '{}'::jsonb,
+  ip text,
+  created_at timestamptz default now()
+);
+
+create index if not exists admin_audit_log_created_idx
+  on admin_audit_log (created_at desc);
+create index if not exists admin_audit_log_actor_idx
+  on admin_audit_log (actor_id, created_at desc);
+create index if not exists admin_audit_log_action_idx
+  on admin_audit_log (action, created_at desc);
+
+alter table admin_audit_log enable row level security;
+-- 不建 authenticated 策略：普通用户不可读；管理端用 service role
+
 -- ========== 工艺包公开分享表（已下线产品入口；表可保留兼容旧数据）==========
 create table if not exists share_links (
   id text primary key,

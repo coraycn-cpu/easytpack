@@ -127,6 +127,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 2. 值是否就是登录邮箱，例如 `test@qq.com`（不要写成 `"test@qq.com"`）
 3. 是否 Redeploy 过；改环境变量不 Redeploy 线上读不到
 4. 入口只依赖 `ADMIN_EMAILS`；若缺 `SUPABASE_SERVICE_ROLE_KEY`，入口会出现，但打开后台拉数据会提示补密钥
+5. 「日志 → 管理操作审计」若报缺表：再执行最新 `schema.sql`（含 `admin_audit_log`）
 
 > `claim_invite_reward` / `ensure_user_profile` 是 **函数**，不是表。表侧看 `profiles`、`referrals`；函数在 Database → Functions，或 SQL：`select proname from pg_proc where proname like '%invite%';`
 
