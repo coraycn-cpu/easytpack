@@ -109,6 +109,21 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 请再跑一遍最新 `supabase/schema.sql`（含 `profiles`、`referrals`、`ensure_user_profile`、`claim_invite_reward`）。用户中心可复制邀请链接：`/login?mode=register&ref=邀请码`。好友注册并登录后，**双方各 +50** 积分（邀请人最多 6 人 / 上限 300 分）。
 
+## 第 9 步（可选）：管理后台
+
+只读后台路径：`/admin`（用量 / 邀请 / 已同意质量池的 AI 事件）。
+
+在 Vercel → Environment Variables（Preview 也要勾）增加：
+
+| 名字 | 值 |
+|------|----|
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → API → **service_role**（机密，不要用 anon） |
+| `ADMIN_EMAILS` | 管理员邮箱，逗号分隔，如 `you@example.com` |
+
+改完后 Redeploy。用白名单里的邮箱登录 → 用户中心会出现「打开管理后台」，或直接访问 `/admin`。
+
+> `claim_invite_reward` / `ensure_user_profile` 是 **函数**，不是表。表侧看 `profiles`、`referrals`；函数在 Database → Functions，或 SQL：`select proname from pg_proc where proname like '%invite%';`
+
 ---
 
 ## 常见问题（白话）

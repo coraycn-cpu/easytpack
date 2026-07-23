@@ -68,7 +68,7 @@ create policy "用户只能访问自己的版本"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- ========== AI 质量事件（以后管理后台用）==========
+-- ========== AI 质量事件（管理后台 /admin 只读浏览 consent=true）==========
 create table if not exists ai_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
@@ -348,7 +348,7 @@ $$;
 revoke all on function claim_invite_reward(text) from public;
 grant execute on function claim_invite_reward(text) to authenticated;
 
--- ========== 工艺包公开分享表（旧实验能力，可保留表结构；产品主路径改为邀请注册）==========
+-- ========== 工艺包公开分享表（已下线产品入口；表可保留兼容旧数据）==========
 create table if not exists share_links (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

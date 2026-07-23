@@ -77,6 +77,7 @@ export default function AccountPage() {
   const [invite, setInvite] = useState<InviteProfile | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!configured) {
@@ -158,6 +159,14 @@ export default function AccountPage() {
   useEffect(() => {
     if (!ready || !email || !configured) return;
     void loadInvite();
+    void fetch("/api/admin/me")
+      .then(async (res) => {
+        const json = (await res.json().catch(() => null)) as {
+          isAdmin?: boolean;
+        } | null;
+        setIsAdmin(Boolean(json?.isAdmin));
+      })
+      .catch(() => setIsAdmin(false));
   }, [ready, email, configured, loadInvite]);
 
   const copyInviteLink = async () => {
@@ -467,6 +476,23 @@ export default function AccountPage() {
             即将开放
           </button>
         </section>
+
+        {isAdmin ? (
+          <section className="mt-4 rounded-xl border border-zinc-200 bg-white px-4 py-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+              管理
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              当前账号在管理员白名单中，可查看用量与 consent 事件。
+            </p>
+            <Link
+              href="/admin"
+              className="mt-3 inline-block rounded-md border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-800 hover:bg-zinc-50"
+            >
+              打开管理后台 →
+            </Link>
+          </section>
+        ) : null}
       </main>
     </div>
   );
