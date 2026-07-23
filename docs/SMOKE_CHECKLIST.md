@@ -55,7 +55,8 @@
 - [ ] AI 额度上限 = 免费档 + 邀请积分（用户中心用量行可核对）
 - [ ]（可选）配置 `SUPABASE_SERVICE_ROLE_KEY` + `ADMIN_EMAILS` 后，`/admin` 可看总览；非白名单账号 403
 - [ ] `/admin` 分区：用户可搜索、训练可筛选/导出、存储有占用列表、日志可切换类型、配置页可见免费额度
-- [ ] 导出训练 JSONL 后，「日志 → 管理操作审计」出现 `admin.events.export`（需已建 `admin_audit_log`）
+- [ ] `/admin` 用户：可设加赠额度 / paused；用户中心上限含加赠；暂停后 AI 返回 AI_PAUSED
+- [ ] 保存权益后「日志 → 管理操作审计」出现 `admin.entitlement.update`
 - [ ] 「我的项目」可导出 / 导入 JSON 备份；导入后能打开 Studio
 - [ ] 导出页对 failed / placeholder 视角有红色提示，导出前确认
 - [ ] Supabase **tech_packs** 出现对应行

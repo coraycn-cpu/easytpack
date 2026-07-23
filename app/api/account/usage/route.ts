@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
   const to = from + pageSize - 1;
 
   const used = await sumCloudAiUsageThisMonth(userId);
-  const { limit, base, bonus } = await getEffectiveAiLimit(userId);
+  const { limit, base, bonus, inviteBonus, adminBonus, plan, paused } =
+    await getEffectiveAiLimit(userId);
 
   try {
     const supabase = await createClient();
@@ -87,6 +88,10 @@ export async function GET(req: NextRequest) {
       limit,
       base,
       bonus,
+      inviteBonus,
+      adminBonus,
+      plan,
+      paused,
       page,
       pageSize,
       total,
@@ -101,6 +106,10 @@ export async function GET(req: NextRequest) {
         limit,
         base,
         bonus,
+        inviteBonus,
+        adminBonus,
+        plan,
+        paused,
         page,
         pageSize,
         total: 0,

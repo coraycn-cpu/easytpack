@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import type { AiMeterAction } from "@/lib/ai/metering";
+import {
+  DEFAULT_ENTITLEMENT,
+  getUserEntitlement,
+  type UserEntitlement,
+} from "@/lib/ai/entitlements";
 
 /** 免费档每月 AI 点数（可用环境变量覆盖；未接付费） */
 export function getFreeMonthlyAiUnits(): number {
@@ -29,16 +34,51 @@ export async function getInviteBonusPoints(userId: string): Promise<number> {
   }
 }
 
-/** 本月可用上限 = 免费档 + 邀请积分 */
-export async function getEffectiveAiLimit(userId: string | null): Promise<{
+export type EffectiveAiLimit = {
   base: number;
+  /** 邀请积分 */
+  inviteBonus: number;
+  /** 管理端人工加赠 */
+  adminBonus: number;
+  /** invite + admin（兼容旧字段名 bonus = 两者之和） */
   bonus: number;
   limit: number;
-}> {
+  plan: UserEntitlement["plan"];
+  paused: boolean;
+};
+
+/** 本月可用上限 = 免费档 + 邀请积分 + 人工加赠；paused 则 limit=0 */
+export async function getEffectiveAiLimit(
+  userId: string | null,
+): Promise<EffectiveAiLimit> {
   const base = getFreeMonthlyAiUnits();
-  if (!userId) return { base, bonus: 0, limit: base };
-  const bonus = await getInviteBonusPoints(userId);
-  return { base, bonus, limit: base + bonus };
+  if (!userId) {
+    return {
+      base,
+      inviteBonus: 0,
+      adminBonus: 0,
+      bonus: 0,
+      limit: base,
+      plan: "free",
+      paused: false,
+    };
+  }
+  const [inviteBonus, entitlement] = await Promise.all([
+    getInviteBonusPoints(userId),
+    getUserEntitlement(userId),
+  ]);
+  const adminBonus = entitlement.aiMonthlyBonus;
+  const bonus = inviteBonus + adminBonus;
+  const paused = entitlement.plan === "paused";
+  return {
+    base,
+    inviteBonus,
+    adminBonus,
+    bonus,
+    limit: paused ? 0 : base + bonus,
+    plan: entitlement.plan,
+    paused,
+  };
 }
 
 function startOfMonthIso(): string {
@@ -93,9 +133,25 @@ export async function assertWithinAiQuota(
   unitsNeeded = 1,
 ): Promise<AiQuotaOk | AiQuotaBlocked> {
   const userId = await getServerAuthUserId();
-  const { limit, base, bonus } = await getEffectiveAiLimit(userId);
+  const { limit, base, bonus, inviteBonus, adminBonus, paused, plan } =
+    await getEffectiveAiLimit(userId);
   if (!userId) {
     return { ok: true, userId: null, used: 0, limit };
+  }
+  if (paused) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "账号 AI 能力已暂停，请联系管理员恢复。",
+          code: "AI_PAUSED",
+          used: 0,
+          limit: 0,
+          plan,
+        },
+        { status: 403 },
+      ),
+    };
   }
   const used = await sumCloudAiUsageThisMonth(userId);
   if (used + unitsNeeded > limit) {
@@ -103,12 +159,14 @@ export async function assertWithinAiQuota(
       ok: false,
       response: NextResponse.json(
         {
-          error: `本月 AI 额度已用完（已用 ${used}/${limit}，含邀请积分 ${bonus}）。可下月再试或邀请好友加分；付费升级将在后续版本开放。`,
+          error: `本月 AI 额度已用完（已用 ${used}/${limit}，免费 ${base} + 邀请 ${inviteBonus} + 加赠 ${adminBonus}）。可下月再试或邀请好友加分；付费升级将在后续版本开放。`,
           code: "AI_QUOTA_EXCEEDED",
           used,
           limit,
           base,
           bonus,
+          inviteBonus,
+          adminBonus,
         },
         { status: 429 },
       ),
@@ -139,7 +197,6 @@ export async function persistCloudAiUsage(input: {
       model: input.model ?? null,
     };
     let { error } = await supabase.from("ai_usage").insert(row);
-    // 项目尚未上云时外键会失败：去掉 tech_pack_id 再记一笔
     if (error && input.projectId) {
       const retry = await supabase.from("ai_usage").insert({
         ...row,
@@ -152,3 +209,5 @@ export async function persistCloudAiUsage(input: {
     console.warn("[ai-usage]", err);
   }
 }
+
+export { DEFAULT_ENTITLEMENT };

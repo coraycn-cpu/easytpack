@@ -64,7 +64,7 @@
 | 日志 | 管理审计 + AI 用量/失败 + 邀请 + consent 聚合查看 | `/admin`「日志」分区可切换类型 |
 | 导航 | `/admin` 分区：总览 / 用户 / 训练 / 存储 / 日志 / 配置 | 分区可点 |
 
-**本阶段仍可不做写操作**（除导出下载）。
+**状态：✅ 已落地**
 
 ---
 
@@ -72,7 +72,7 @@
 
 **目标：** 客服/运营能处理「加额度、停用、备注」，所有动作可审计。
 
-**Schema 草案（`user_entitlements` 或扩 `profiles`）：**
+**Schema（`user_entitlements`）：**
 
 ```text
 plan: free | comped | paused     -- 档位；paused = 禁止 AI
@@ -85,18 +85,15 @@ updated_at / updated_by
 |------|------|------|
 | 额度 | 管理端给用户 +N 月额度；`getEffectiveAiLimit` = 免费 + 邀请 + bonus | 用户中心立刻看到新上限 |
 | 暂停 | `plan=paused` → AI 路由硬拦 | 该用户调用返回明确文案 |
-| 档案 | 改备注、必要时调积分（谨慎、需确认） | `admin_audit_log` 有记录 |
-| 训练 | 单条事件标记 reviewed / rejected；批量导出「已审」 | 拒绝项不进导出 |
-| 审计 | 表 `admin_audit_log`：谁、何时、对谁、改了什么 | 每次写必落库 |
+| 档案 | 改备注；写操作审计 | `admin_audit_log` 有 `admin.entitlement.update` |
+| 审计 | 表 `admin_audit_log` | 每次写必落库 |
 
 **支付条件限制（无 Stripe）：**
 
-- 用 `plan` / feature flags 挡住「团队」「更高额度」等入口（已有占位可接）  
-- 文案：付费即将开放；权益表已能表示 `comped`（内部赠送）  
-- **不接** Checkout、Customer Portal、Webhook
+- `plan=comped` 表示内部赠送；团队入口仍 disabled  
+- **不接** Checkout、Customer Portal、Webhook  
 
----
-
+**状态：✅ 本轮落地（训练事件审核队列仍可后续补）**
 ### M3 — 可靠与资产（备份 / 存储治理 / 训练队列）
 
 | 模块 | 交付 | 验收 |

@@ -370,6 +370,29 @@ create index if not exists admin_audit_log_action_idx
 alter table admin_audit_log enable row level security;
 -- 不建 authenticated 策略：普通用户不可读；管理端用 service role
 
+-- ========== 用户权益（人工加赠 / 暂停；支付接口未接，先用 plan 条件位）==========
+create table if not exists user_entitlements (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  plan text not null default 'free'
+    check (plan in ('free', 'comped', 'paused')),
+  ai_monthly_bonus int not null default 0 check (ai_monthly_bonus >= 0),
+  notes text,
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create index if not exists user_entitlements_plan_idx
+  on user_entitlements (plan);
+
+alter table user_entitlements enable row level security;
+
+drop policy if exists "用户可读自己的权益" on user_entitlements;
+create policy "用户可读自己的权益"
+  on user_entitlements for select
+  using (auth.uid() = user_id);
+-- 写入仅 service role（管理端）
+
 -- ========== 工艺包公开分享表（已下线产品入口；表可保留兼容旧数据）==========
 create table if not exists share_links (
   id text primary key,

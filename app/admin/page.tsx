@@ -42,6 +42,11 @@ type UserItem = {
   email: string | null;
   inviteCode: string;
   points: number;
+  inviteBonus?: number;
+  adminBonus?: number;
+  plan?: string;
+  notes?: string | null;
+  paused?: boolean;
   monthUsed: number;
   monthLimit: number;
   packCount: number;
@@ -105,6 +110,12 @@ export default function AdminPage() {
   const [userQ, setUserQ] = useState("");
   const [userPage, setUserPage] = useState(1);
   const [userTotalPages, setUserTotalPages] = useState(1);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [entPlan, setEntPlan] = useState<"free" | "comped" | "paused">("free");
+  const [entBonus, setEntBonus] = useState("0");
+  const [entNotes, setEntNotes] = useState("");
+  const [entBusy, setEntBusy] = useState(false);
+  const [entTip, setEntTip] = useState<string | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventConsent, setEventConsent] = useState<"all" | "true" | "false">(
     "true",
@@ -216,6 +227,60 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  const openUserEntitlement = (u: UserItem) => {
+    setSelectedUserId(u.userId);
+    setEntPlan(
+      u.plan === "comped" || u.plan === "paused" || u.plan === "free"
+        ? u.plan
+        : "free",
+    );
+    setEntBonus(String(u.adminBonus ?? 0));
+    setEntNotes(u.notes ?? "");
+    setEntTip(null);
+  };
+
+  const saveUserEntitlement = async () => {
+    if (!selectedUserId || entBusy) return;
+    const bonus = Number(entBonus);
+    if (!Number.isFinite(bonus) || bonus < 0) {
+      setEntTip("加赠额度须为非负数字");
+      return;
+    }
+    setEntBusy(true);
+    setEntTip(null);
+    try {
+      const res = await fetch(
+        `/api/admin/users/${encodeURIComponent(selectedUserId)}/entitlement`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plan: entPlan,
+            aiMonthlyBonus: Math.floor(bonus),
+            notes: entNotes.trim() || null,
+          }),
+        },
+      );
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        hint?: string;
+        ok?: boolean;
+      } | null;
+      if (!res.ok) {
+        throw new Error(
+          [json?.error, json?.hint].filter(Boolean).join(" · ") ||
+            "保存失败",
+        );
+      }
+      setEntTip("已保存权益（已写审计日志）");
+      await loadUsers(userPage, userQ);
+    } catch (e) {
+      setEntTip(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setEntBusy(false);
+    }
+  };
 
   const loadEvents = useCallback(
     async (page: number, consent: "all" | "true" | "false") => {
@@ -513,12 +578,15 @@ export default function AdminPage() {
                 搜索
               </button>
             </div>
+            <p className="text-[10px] text-zinc-400">
+              点击用户可设置人工加赠额度、暂停 AI（不接支付；comped=内部赠送）。
+            </p>
             <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-              <div className="grid grid-cols-[1.4fr_0.6fr_0.7fr_0.5fr_0.5fr] gap-2 border-b border-zinc-100 bg-zinc-50 px-3 py-2 text-[10px] font-medium text-zinc-500">
+              <div className="grid grid-cols-[1.3fr_0.5fr_0.7fr_0.55fr_0.45fr] gap-2 border-b border-zinc-100 bg-zinc-50 px-3 py-2 text-[10px] font-medium text-zinc-500">
                 <span>用户</span>
-                <span>积分</span>
+                <span>档位</span>
                 <span>本月 AI</span>
-                <span>款数</span>
+                <span>加赠</span>
                 <span>邀请</span>
               </div>
               {users.length === 0 ? (
@@ -528,33 +596,113 @@ export default function AdminPage() {
               ) : (
                 <ul className="divide-y divide-zinc-50">
                   {users.map((u) => (
-                    <li
-                      key={u.userId}
-                      className="grid grid-cols-[1.4fr_0.6fr_0.7fr_0.5fr_0.5fr] gap-2 px-3 py-2 text-[11px]"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-zinc-800">
-                          {u.email || shortId(u.userId)}
-                        </p>
-                        <p className="truncate text-[10px] text-zinc-400">
-                          码 {u.inviteCode} · {formatTime(u.createdAt)}
-                        </p>
-                      </div>
-                      <span className="tabular-nums text-zinc-700">{u.points}</span>
-                      <span className="tabular-nums text-zinc-700">
-                        {u.monthUsed}/{u.monthLimit}
-                      </span>
-                      <span className="tabular-nums text-zinc-700">
-                        {u.packCount}
-                      </span>
-                      <span className="tabular-nums text-zinc-700">
-                        {u.inviteSuccess}
-                      </span>
+                    <li key={u.userId}>
+                      <button
+                        type="button"
+                        onClick={() => openUserEntitlement(u)}
+                        className={`grid w-full grid-cols-[1.3fr_0.5fr_0.7fr_0.55fr_0.45fr] gap-2 px-3 py-2 text-left text-[11px] hover:bg-zinc-50 ${
+                          selectedUserId === u.userId ? "bg-blue-50/60" : ""
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-zinc-800">
+                            {u.email || shortId(u.userId)}
+                          </p>
+                          <p className="truncate text-[10px] text-zinc-400">
+                            码 {u.inviteCode} · 积分 {u.points}
+                          </p>
+                        </div>
+                        <span
+                          className={`tabular-nums ${
+                            u.paused ? "text-amber-700" : "text-zinc-700"
+                          }`}
+                        >
+                          {u.plan === "paused"
+                            ? "暂停"
+                            : u.plan === "comped"
+                              ? "赠送"
+                              : "免费"}
+                        </span>
+                        <span className="tabular-nums text-zinc-700">
+                          {u.monthUsed}/{u.monthLimit}
+                        </span>
+                        <span className="tabular-nums text-zinc-700">
+                          {u.adminBonus ?? 0}
+                        </span>
+                        <span className="tabular-nums text-zinc-700">
+                          {u.inviteSuccess}
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
+
+            {selectedUserId ? (
+              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                <p className="text-xs font-medium text-zinc-800">
+                  编辑权益 · {shortId(selectedUserId)}
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="block text-[11px] text-zinc-600">
+                    档位
+                    <select
+                      value={entPlan}
+                      onChange={(e) =>
+                        setEntPlan(e.target.value as typeof entPlan)
+                      }
+                      className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs"
+                    >
+                      <option value="free">free 免费</option>
+                      <option value="comped">comped 内部赠送</option>
+                      <option value="paused">paused 暂停 AI</option>
+                    </select>
+                  </label>
+                  <label className="block text-[11px] text-zinc-600">
+                    人工加赠月额度
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      value={entBonus}
+                      onChange={(e) => setEntBonus(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs"
+                    />
+                  </label>
+                  <label className="block text-[11px] text-zinc-600 sm:col-span-1">
+                    备注
+                    <input
+                      value={entNotes}
+                      onChange={(e) => setEntNotes(e.target.value)}
+                      placeholder="运营备注"
+                      className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={entBusy}
+                    onClick={() => void saveUserEntitlement()}
+                    className="rounded-md bg-zinc-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                  >
+                    {entBusy ? "保存中…" : "保存"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserId(null)}
+                    className="rounded-md border border-zinc-200 px-3 py-1.5 text-[11px] text-zinc-600 hover:bg-zinc-50"
+                  >
+                    收起
+                  </button>
+                  {entTip ? (
+                    <span className="text-[11px] text-zinc-500">{entTip}</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between text-[11px] text-zinc-500">
               <button
                 type="button"
@@ -873,7 +1021,7 @@ export default function AdminPage() {
                     : ""}
                 </li>
                 <li className="pt-2 text-zinc-400">
-                  下一步（M2）：人工加赠额度、暂停用户、审计日志；支付只做条件位，不接接口。
+                  M2 已支持：用户档位 free/comped/paused、人工加赠月额度；操作写入审计日志。支付接口仍不接入。
                 </li>
               </ul>
             ) : (

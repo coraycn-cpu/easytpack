@@ -33,6 +33,10 @@ type CloudUsagePage = {
   limit: number;
   base?: number;
   bonus?: number;
+  inviteBonus?: number;
+  adminBonus?: number;
+  plan?: string;
+  paused?: boolean;
   page: number;
   pageSize: number;
   total: number;
@@ -272,8 +276,14 @@ export default function AccountPage() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-zinc-900">用户中心</h1>
-            <p className="mt-1 truncate text-sm text-zinc-500">
-              {email ?? "已登录"} · 个人版 · 同步
+            <p className="mt-1 text-sm text-zinc-500">
+              {email ?? "已登录"} ·{" "}
+              {cloudUsage?.plan === "paused"
+                ? "已暂停"
+                : cloudUsage?.plan === "comped"
+                  ? "内部赠送"
+                  : "个人版"}{" "}
+              · 同步
               {syncMode === "auto" ? "自动" : "手动"}
             </p>
           </div>
@@ -338,15 +348,19 @@ export default function AccountPage() {
             <StatTile
               label="AI 已用"
               value={
-                cloudUsage
-                  ? `${cloudUsage.used}/${cloudUsage.limit}`
-                  : usageLoading
-                    ? "…"
-                    : "—"
+                cloudUsage?.paused
+                  ? "已暂停"
+                  : cloudUsage
+                    ? `${cloudUsage.used}/${cloudUsage.limit}`
+                    : usageLoading
+                      ? "…"
+                      : "—"
               }
               hint={
                 cloudUsage
-                  ? `已用 ${usagePct}% · 免费 ${cloudUsage.base ?? "—"} + 邀请 ${cloudUsage.bonus ?? 0}`
+                  ? cloudUsage.paused
+                    ? "管理员已暂停 AI"
+                    : `已用 ${usagePct}% · 免费 ${cloudUsage.base ?? "—"} + 邀请 ${cloudUsage.inviteBonus ?? cloudUsage.bonus ?? 0} + 加赠 ${cloudUsage.adminBonus ?? 0}`
                   : "云端月额度"
               }
             />
