@@ -242,12 +242,20 @@ export default function StudioTopChrome({
           </span>
         ) : email ? (
           <>
-            <span
-              className="hidden max-w-[9rem] truncate text-[11px] text-slate-500 md:inline"
-              title={email}
+            <Link
+              href="/account"
+              className="hidden max-w-[9rem] truncate text-[11px] text-slate-500 hover:text-blue-600 md:inline"
+              title="打开用户中心"
             >
               {email}
-            </span>
+            </Link>
+            <Link
+              href="/account"
+              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 md:hidden"
+              title="打开用户中心"
+            >
+              账号
+            </Link>
             <button
               type="button"
               disabled={authBusy}
