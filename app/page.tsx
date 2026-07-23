@@ -13,6 +13,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import { listProjects } from "@/lib/project/storage";
+import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
 
 function studioHref(p: { id: string; status: string }) {
@@ -37,10 +38,16 @@ export default function CanvasHomePage() {
 
     const loadProjects = async () => {
       try {
-        const list = await listProjects();
+        const repo = await resolveProjectRepository();
+        const list = await repo.list();
         if (!cancelled) setProjects(list);
       } catch {
-        if (!cancelled) setProjects([]);
+        try {
+          const list = await listProjects();
+          if (!cancelled) setProjects(list);
+        } catch {
+          if (!cancelled) setProjects([]);
+        }
       } finally {
         if (!cancelled) setBooting(false);
       }
@@ -192,7 +199,7 @@ export default function CanvasHomePage() {
                 </ul>
               ) : (
                 <p className="rounded-lg bg-slate-50 px-3 py-3 text-[11px] text-slate-500">
-                  还没有项目。点上方「新建款式」开始；若已在其它设备做过，可先点顶栏「同步」或打开「我的项目」。
+                  还没有项目。点上方「新建款式」开始；若已在其它设备做过，打开「我的项目」点「从云端拉取」。
                 </p>
               )}
             </div>

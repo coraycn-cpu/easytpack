@@ -92,6 +92,10 @@ export async function mirrorDeleteFromCloud(
   const userId = await currentUserId();
   if (!userId) return { ok: false, error: "not_logged_in" };
   try {
+    const { removeStyleImagesForProject } = await import(
+      "@/lib/project/cloud-images"
+    );
+    await removeStyleImagesForProject(userId, id);
     const supabase = createClient();
     const { error } = await supabase
       .from("tech_packs")
@@ -133,6 +137,67 @@ export async function mergeOneLocalWithCloud(
   } catch {
     return local;
   }
+}
+
+/** 从云端拉取并写入本机缓存（登录后 / 换设备） */
+export async function pullAllFromCloudAndCache(): Promise<{
+  pulled: number;
+  cached: number;
+  message: string;
+  ok: boolean;
+}> {
+  if (!(await isLoggedInForCloud())) {
+    return {
+      pulled: 0,
+      cached: 0,
+      ok: false,
+      message: "还没登录，请先登录再从云端拉取。",
+    };
+  }
+  try {
+    const { listLocalProjectsOnly, cacheProjectsDurable } = await import(
+      "@/lib/project/storage"
+    );
+    const cloud = await fetchCloudProjects();
+    const local = await listLocalProjectsOnly();
+    const merged = mergeProjectsPreferNewer(local, cloud);
+    const cached = await cacheProjectsDurable(merged);
+    const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
+    const message =
+      cloud.length === 0
+        ? "云端暂时没有项目。本机有的仍在；可点「同步到云端」上传。"
+        : `已从云端合并 ${cloud.length} 个项目到本机缓存（共 ${cached} 条）。`;
+    reportCloudSyncResult({ ok: true, message });
+    return { pulled: cloud.length, cached, message, ok: true };
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? `拉取失败：${err.message}（请检查网络后重试）`
+        : "拉取失败，请检查网络后重试。";
+    const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
+    reportCloudSyncResult({ ok: false, message, offlineHint: true });
+    return { pulled: 0, cached: 0, message, ok: false };
+  }
+}
+
+/** 登录后：先拉云端到本机，再把本机差额推上去 */
+export async function syncAfterLogin(): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  const pull = await pullAllFromCloudAndCache();
+  const { listLocalProjectsOnly } = await import("@/lib/project/storage");
+  const local = await listLocalProjectsOnly();
+  const push = await pushAllLocalProjectsToCloud(local);
+  const ok = pull.ok && (push.skipped || push.fail === 0);
+  const message = `${pull.message} ${push.message}`;
+  const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
+  reportCloudSyncResult({
+    ok,
+    message,
+    offlineHint: !ok,
+  });
+  return { ok, message };
 }
 
 /** 把本机全部项目尽量推到云端（登录后一键用） */
@@ -180,14 +245,21 @@ export async function pushAllLocalProjectsToCloud(
     if (res.ok) ok += 1;
     else fail += 1;
   }
+  const message =
+    fail === 0
+      ? `已同步 ${ok} 个项目到云端（含图片上传，可能稍慢）。`
+      : `成功 ${ok} 个，失败 ${fail} 个。本机未丢，可稍后重试。`;
+  const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
+  reportCloudSyncResult({
+    ok: fail === 0,
+    message,
+    offlineHint: fail > 0,
+  });
   return {
     ok,
     fail,
     skipped: false,
-    message:
-      fail === 0
-        ? `已同步 ${ok} 个项目到云端（含图片上传，可能稍慢）。`
-        : `成功 ${ok} 个，失败 ${fail} 个。可稍后重试。`,
+    message,
   };
 }
 

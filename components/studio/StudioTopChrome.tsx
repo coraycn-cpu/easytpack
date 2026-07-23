@@ -9,9 +9,13 @@ import {
 } from "@/lib/supabase/client";
 import {
   isLoggedInForCloud,
-  pushAllLocalProjectsToCloud,
+  syncAfterLogin,
 } from "@/lib/project/cloud-sync";
-import { listProjects } from "@/lib/project/storage";
+import { resolveProjectRepository } from "@/lib/project/repository";
+import {
+  getCloudSyncStatus,
+  subscribeCloudSyncStatus,
+} from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
 
 type StudioTopChromeProps = {
@@ -51,7 +55,8 @@ export default function StudioTopChrome({
       setEmail(null);
     }
     try {
-      const list = await listProjects();
+      const repo = await resolveProjectRepository();
+      const list = await repo.list();
       setProjects(list.slice(0, 16));
     } catch {
       setProjects([]);
@@ -62,6 +67,22 @@ export default function StudioTopChrome({
   useEffect(() => {
     void refresh();
   }, [refresh, currentProjectId]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user?.email ?? null);
+      void refresh();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [refresh]);
+
+  useEffect(() => {
+    return subscribeCloudSyncStatus((s) => {
+      if (s && !s.ok) onTip?.(s.message);
+    });
+  }, [onTip]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -95,11 +116,12 @@ export default function StudioTopChrome({
       return;
     }
     setSyncBusy(true);
-    onTip?.("正在同步到云端（含图片，请稍候）…");
+    onTip?.("正在双向同步（含图片，请稍候）…");
     try {
-      const all = await listProjects();
-      const res = await pushAllLocalProjectsToCloud(all);
+      const res = await syncAfterLogin();
       onTip?.(res.message);
+      const status = getCloudSyncStatus();
+      if (status && !status.ok) onTip?.(status.message);
       await refresh();
     } finally {
       setSyncBusy(false);

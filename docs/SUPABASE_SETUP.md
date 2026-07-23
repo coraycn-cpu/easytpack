@@ -1,7 +1,7 @@
 # 云端账号准备（新手一步一步 · Vercel 优先）
 
-目标：让 EasytPack 以后能「登录后把工艺包存到网上」，换电脑也能打开。  
-**没配好之前，网站照常能用**——只是工艺包还存在「你当前浏览器」里，没有真正上云。
+目标：让 EasytPack「登录后把工艺包存到网上」，换电脑也能打开。  
+**没配好之前，网站照常能用**——只是工艺包还存在「你当前浏览器」里。
 
 > 你主要在 **Vercel** 上测试，下面按这个习惯写。本地一般不用开预览。
 
@@ -47,7 +47,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ---
 
-## 第 3 步：创建数据表（在 Supabase 网页执行脚本）
+## 第 3 步：创建数据表 + 图片桶（在 Supabase 网页执行脚本）
 
 1. Supabase 左侧点 **SQL Editor**  
 2. 点 **New query**  
@@ -56,7 +56,9 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 5. 点 **Run**  
 6. 下方出现成功提示即可  
 
-这一步会建好：工艺包表、版本表、AI 用量/事件表，以及图片存放规则（文件夹名 `style-images`）。
+这一步会建好：工艺包表、版本表、AI 用量/事件表，以及图片存放桶 **`style-images`**（私有）和读写规则。
+
+**自检：** 左侧 **Storage → Buckets** 应能看到 `style-images`。若没有：再跑一遍脚本；或在 Storage 界面新建同名私有桶后，只重跑脚本里 `storage.objects` 的几条 policy。
 
 ---
 
@@ -85,10 +87,15 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 ## 第 6 步：在 Vercel 预览上自检
 
 - [ ] Vercel 里两行钥匙已填，且对 **Preview** 生效，并 Redeploy 过  
-- [ ] Supabase 里 SQL 跑成功  
+- [ ] Supabase 里 SQL 跑成功，Storage 有 `style-images`  
 - [ ] 打开 **`feat/phase2-cloud`** 的 Preview 链接  
-- [ ] 顶栏能看到「登录」（没配好会显示「本机模式」）  
+- [ ] 顶栏能看到「登录 / 注册」（没配好会显示「本机模式」）  
 - [ ] 能注册 / 登录；未登录时仍能做工艺包  
+- [ ] 登录后保存或点「同步到网上」→ Supabase **Table Editor → tech_packs** 有行  
+- [ ] **Storage → style-images** 下有 `{用户id}/{项目id}/…` 图片  
+- [ ] 换浏览器 / 无痕窗口登录同一账号 →「我的项目」能看到并打开（图能出来）
+
+更细的路径见 `docs/SMOKE_CHECKLIST.md` 第 7 节。
 
 ---
 
@@ -99,7 +106,9 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 | 顶栏一直是「本机模式」 | Vercel 变量名不对、只勾了 Production 却在 Preview 测、或填完没 Redeploy |
 | 登录失败 / 跳转怪 | 检查第 5 步回调地址；测试期关掉「确认邮箱」 |
 | SQL 报错 table already exists | 多半表已建过，可当成功 |
-| 登录后项目还是只有浏览器本地的 | 正常：真正「存到网上」还在后面几步 |
+| 登录后列表是空的 | 点「我的项目」→「从云端拉取」或「双向同步」；确认另一台曾同步成功 |
+| 打开旧款没图 | 再点一次「同步到网上」后重开；确认 Storage 里有对应文件、桶策略已建 |
+| 同步失败黄字提示 | 本机稿还在；检查网络 / RLS / 桶是否存在后重试 |
 
 ---
 

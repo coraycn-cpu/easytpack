@@ -183,7 +183,10 @@ export function createEmptyProject(
   };
 }
 
-export async function saveProject(project: TechPackProject): Promise<void> {
+export async function saveProject(
+  project: TechPackProject,
+  options?: { skipCloudMirror?: boolean },
+): Promise<void> {
   const migrated = migrateProject({
     ...project,
     updatedAt: new Date().toISOString(),
@@ -242,12 +245,50 @@ export async function saveProject(project: TechPackProject): Promise<void> {
     writeAll(all);
   }
 
+  if (options?.skipCloudMirror) return;
+
   // 已登录则同步到云端：用脱水后的永久引用，避免把临时签名链写坏云端
   void import("@/lib/project/cloud-sync")
-    .then(({ mirrorSaveToCloud }) => mirrorSaveToCloud(slim))
+    .then(async ({ mirrorSaveToCloud }) => {
+      const { reportCloudSyncResult } = await import("@/lib/project/sync-status");
+      const res = await mirrorSaveToCloud(slim);
+      if (res.ok) {
+        reportCloudSyncResult({ ok: true, message: "已同步到云端" });
+      } else if (res.error === "not_logged_in") {
+        /* 未登录不提示 */
+      } else {
+        reportCloudSyncResult({
+          ok: false,
+          message: res.error
+            ? `云端同步失败：${res.error}（本机已保存，可稍后重试）`
+            : "云端同步失败（本机已保存，可稍后重试）",
+          offlineHint: true,
+        });
+      }
+    })
     .catch(() => {
       /* ignore */
     });
+}
+
+/** 把合并后的项目以永久引用写入本机缓存（登录拉取用） */
+export async function cacheProjectsDurable(
+  projects: TechPackProject[],
+): Promise<number> {
+  if (projects.length === 0) return 0;
+  const all = readAll();
+  let n = 0;
+  for (const p of projects) {
+    try {
+      const slim = await dehydrateProject(migrateProject(p));
+      all[p.id] = slim;
+      n += 1;
+    } catch {
+      /* skip one */
+    }
+  }
+  writeAll(all);
+  return n;
 }
 
 export async function getProject(id: string): Promise<TechPackProject | null> {
@@ -317,7 +358,10 @@ export async function duplicateProject(id: string): Promise<TechPackProject | nu
   return copy;
 }
 
-export async function deleteProject(id: string): Promise<void> {
+export async function deleteProject(
+  id: string,
+  options?: { skipCloudMirror?: boolean },
+): Promise<void> {
   const all = readAll();
   delete all[id];
   writeAll(all);
@@ -326,6 +370,7 @@ export async function deleteProject(id: string): Promise<void> {
   } catch {
     // ignore IDB cleanup failures
   }
+  if (options?.skipCloudMirror) return;
   void import("@/lib/project/cloud-sync")
     .then(({ mirrorDeleteFromCloud }) => mirrorDeleteFromCloud(id))
     .catch(() => {

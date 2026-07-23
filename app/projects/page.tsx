@@ -6,14 +6,11 @@ import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import {
-  deleteProject,
   duplicateProject,
   evacuateNonProjectStorage,
   exportProjectJsonBackup,
   formatStorageBytes,
   getEasytpackStorageStats,
-  getProject,
-  listProjects,
 } from "@/lib/project/storage";
 import {
   downloadTextFile,
@@ -23,8 +20,16 @@ import {
 import { listAiMeterEvents, sumAiMeterUnits } from "@/lib/ai/metering";
 import {
   isLoggedInForCloud,
+  pullAllFromCloudAndCache,
   pushAllLocalProjectsToCloud,
+  syncAfterLogin,
 } from "@/lib/project/cloud-sync";
+import { resolveProjectRepository } from "@/lib/project/repository";
+import {
+  getCloudSyncStatus,
+  subscribeCloudSyncStatus,
+  type CloudSyncStatus,
+} from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
 
 export default function ProjectsPage() {
@@ -43,16 +48,22 @@ export default function ProjectsPage() {
   const [aiUnits, setAiUnits] = useState(0);
   const [cloudLoggedIn, setCloudLoggedIn] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
 
   const refresh = () => {
-    void listProjects().then(setProjects);
+    void (async () => {
+      const repo = await resolveProjectRepository();
+      setProjects(await repo.list());
+    })();
     setStats(getEasytpackStorageStats());
     setAiUnits(sumAiMeterUnits());
     void isLoggedInForCloud().then(setCloudLoggedIn);
+    setSyncStatus(getCloudSyncStatus());
   };
 
   useEffect(() => {
     refresh();
+    return subscribeCloudSyncStatus(setSyncStatus);
   }, []);
 
   const filtered = projects.filter((p) =>
@@ -76,7 +87,27 @@ export default function ProjectsPage() {
     refresh();
   };
 
-  const handleSyncCloud = () => {
+  const handleSyncBoth = () => {
+    setSyncBusy(true);
+    void syncAfterLogin()
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
+  };
+
+  const handlePull = () => {
+    setSyncBusy(true);
+    void pullAllFromCloudAndCache()
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
+  };
+
+  const handlePush = () => {
     setSyncBusy(true);
     void pushAllLocalProjectsToCloud(projects)
       .then((res) => {
@@ -88,7 +119,8 @@ export default function ProjectsPage() {
 
   const handleExportBackup = async (id: string, title: string) => {
     try {
-      const p = await getProject(id);
+      const repo = await resolveProjectRepository();
+      const p = await repo.get(id);
       if (!p) {
         window.alert("项目不存在或已删除");
         return;
@@ -123,8 +155,9 @@ export default function ProjectsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">我的项目</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              本地保存，共 {projects.length} 个款式 · 约占{" "}
-              {formatStorageBytes(stats.totalBytes)}
+              {cloudLoggedIn
+                ? `云端 + 本机缓存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`
+                : `本机保存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
             </p>
           </div>
           <Link
@@ -171,7 +204,7 @@ export default function ProjectsPage() {
           </div>
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
             保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
-            备份后再删。大图会自动压缩。
+            备份后再删。大图会自动压缩。断网时仍可本机编辑，恢复网络后再同步。
           </p>
         </div>
 
@@ -179,19 +212,37 @@ export default function ProjectsPage() {
           <p className="font-medium">云端同步</p>
           <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
             {cloudLoggedIn
-              ? "已登录：保存或点「同步」会把项目和图片尽量传到网上。"
-              : "未登录：项目只存在当前浏览器。登录后可同步到云端。"}
+              ? "已登录：可双向同步。同款冲突时取更新时间较新的版本，并尽量保留更可靠的图片引用。"
+              : "未登录：项目只存在当前浏览器。登录后可同步到云端、换设备继续。"}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {cloudLoggedIn ? (
-              <button
-                type="button"
-                disabled={syncBusy}
-                onClick={handleSyncCloud}
-                className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
-              >
-                {syncBusy ? "同步中…" : "把本机项目同步到云端"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handleSyncBoth}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  {syncBusy ? "同步中…" : "双向同步"}
+                </button>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handlePull}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  从云端拉取
+                </button>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handlePush}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  推到云端
+                </button>
+              </>
             ) : (
               <Link
                 href="/login?next=/projects"
@@ -201,6 +252,14 @@ export default function ProjectsPage() {
               </Link>
             )}
           </div>
+          {syncStatus && !syncStatus.ok ? (
+            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+              {syncStatus.message}
+              {syncStatus.offlineHint
+                ? " 本机稿件还在，恢复网络后点「双向同步」即可。"
+                : ""}
+            </p>
+          ) : null}
         </div>
 
         {cacheNote && (
@@ -289,7 +348,11 @@ export default function ProjectsPage() {
                     title="删除"
                     onClick={() => {
                       if (window.confirm(`确定删除「${p.title}」？`)) {
-                        void deleteProject(p.id).then(() => refresh());
+                        void (async () => {
+                          const repo = await resolveProjectRepository();
+                          await repo.delete(p.id);
+                          refresh();
+                        })();
                       }
                     }}
                     className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50"

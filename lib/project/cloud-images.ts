@@ -123,6 +123,29 @@ async function uploadOne(
   return toSbStorageRef(objectPath);
 }
 
+/** 删除某项目在云端 Storage 下的图片（尽力而为） */
+export async function removeStyleImagesForProject(
+  userId: string,
+  projectId: string,
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const supabase = createClient();
+    const prefix = `${userId}/${projectId}`;
+    const { data, error } = await supabase.storage
+      .from(STYLE_IMAGES_BUCKET)
+      .list(prefix, { limit: 100 });
+    if (error || !data?.length) return;
+    const paths = data
+      .map((f) => (f.name ? `${prefix}/${f.name}` : null))
+      .filter((p): p is string => Boolean(p));
+    if (paths.length === 0) return;
+    await supabase.storage.from(STYLE_IMAGES_BUCKET).remove(paths);
+  } catch (err) {
+    console.warn("[cloud-images] remove project images", err);
+  }
+}
+
 /** 把项目里的大图上传到云端文件夹，字段改成 sbstorage: 引用 */
 export async function uploadProjectImagesForCloud(
   project: TechPackProject,

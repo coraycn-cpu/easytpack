@@ -110,6 +110,17 @@ export default function LoginClient() {
           password,
         });
         if (error) throw error;
+        // 登录后先拉云端再推本机，方便换设备
+        try {
+          const { syncAfterLogin } = await import("@/lib/project/cloud-sync");
+          const { resolveProjectRepository } = await import(
+            "@/lib/project/repository"
+          );
+          await resolveProjectRepository();
+          await syncAfterLogin();
+        } catch {
+          /* 同步失败不挡进入首页 */
+        }
         router.replace(nextPath);
         router.refresh();
         return;
@@ -125,6 +136,16 @@ export default function LoginClient() {
       if (error) throw error;
 
       if (data.session) {
+        try {
+          const { syncAfterLogin } = await import("@/lib/project/cloud-sync");
+          const { resolveProjectRepository } = await import(
+            "@/lib/project/repository"
+          );
+          await resolveProjectRepository();
+          await syncAfterLogin();
+        } catch {
+          /* ignore */
+        }
         router.replace(nextPath);
         router.refresh();
         return;
