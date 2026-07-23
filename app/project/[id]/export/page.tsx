@@ -116,8 +116,8 @@ export default function ExportPage() {
   }, [project, annotatedImages, coverHeroUrl, coverHeroLabel]);
 
   const persistHistory = async (
-    kind: "pdf" | "xlsx" | "composite",
-    extra?: { pageCount?: number },
+    kind: "pdf" | "xlsx" | "composite" | "share",
+    extra?: { pageCount?: number; shareId?: string; shareSnapshotHash?: string },
   ) => {
     if (!project) return;
     const entry = {
@@ -126,12 +126,55 @@ export default function ExportPage() {
       basename: styleExportBasename(project),
       pageCount: extra?.pageCount,
       imageMode: IMAGE_MODE,
-      shareSnapshotHash: buildShareSnapshotHash(project),
+      shareSnapshotHash:
+        extra?.shareSnapshotHash ?? buildShareSnapshotHash(project),
+      shareId: extra?.shareId,
     };
     const history = [...(project.exportHistory ?? []), entry].slice(-20);
     const updated = { ...project, exportHistory: history };
     await saveProject(updated);
     setProject(updated);
+  };
+
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareTip, setShareTip] = useState<string | null>(null);
+
+  const handleCreateShare = async () => {
+    if (!project || busy) return;
+    setBusy("share");
+    setShareTip(null);
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project, projectId: project.id }),
+      });
+      const json = (await res.json()) as {
+        url?: string;
+        id?: string;
+        shareHash?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(json.error || "生成分享失败");
+      }
+      if (!json.url || !json.id) throw new Error("未返回分享链接");
+      setShareUrl(json.url);
+      await persistHistory("share", {
+        shareId: json.id,
+        shareSnapshotHash: json.shareHash,
+      });
+      try {
+        await navigator.clipboard.writeText(json.url);
+        setShareTip("分享链接已复制到剪贴板");
+      } catch {
+        setShareTip("分享已生成，请手动复制下方链接");
+      }
+    } catch (e) {
+      setShareTip(e instanceof Error ? e.message : "生成分享失败");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const handleExportPdf = () => {
@@ -219,11 +262,36 @@ export default function ExportPage() {
               >
                 {busy === "composite" ? "…" : "下载合拼大图"}
               </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void handleCreateShare()}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-40"
+              >
+                {busy === "share" ? "生成中…" : "生成分享链接"}
+              </button>
             </div>
           </div>
         </header>
 
         <main className="mx-auto max-w-5xl px-4 py-6">
+          {shareTip || shareUrl ? (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-[11px] text-emerald-950">
+              {shareTip ? <p className="font-medium">{shareTip}</p> : null}
+              {shareUrl ? (
+                <p className="mt-1 break-all">
+                  <a
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-800 underline"
+                  >
+                    {shareUrl}
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-[11px] leading-relaxed text-amber-950">
             <p className="font-semibold text-amber-900">发给版师前自检</p>
             <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-amber-900/90">
@@ -239,6 +307,9 @@ export default function ExportPage() {
               </li>
               <li>
                 <strong>合拼大图</strong>：适合微信预览，不替代正式表
+              </li>
+              <li>
+                <strong>分享链接</strong>：生成只读网页（工艺/物料/尺寸/评语），需先登录；对方打开无需账号
               </li>
             </ol>
             <p className="mt-2 text-amber-800/80">{COMM_PACK_COPY.exportHint}</p>

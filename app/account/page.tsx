@@ -62,6 +62,15 @@ export default function AccountPage() {
   const [usageLoading, setUsageLoading] = useState(false);
   const [cloudUsage, setCloudUsage] = useState<CloudUsagePage | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [shareItems, setShareItems] = useState<
+    Array<{
+      id: string;
+      title: string;
+      created_at: string;
+      revoked_at: string | null;
+    }>
+  >([]);
 
   useEffect(() => {
     if (!configured) {
@@ -111,6 +120,51 @@ export default function AccountPage() {
     if (!ready || !email || !configured) return;
     void loadUsage(1);
   }, [ready, email, configured, loadUsage]);
+
+  const loadShares = useCallback(async () => {
+    setSharesLoading(true);
+    try {
+      const res = await fetch("/api/share");
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        items?: Array<{
+          id: string;
+          title: string;
+          created_at: string;
+          revoked_at: string | null;
+        }>;
+      };
+      setShareItems(json.items ?? []);
+    } catch {
+      /* ignore */
+    } finally {
+      setSharesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !email || !configured) return;
+    void loadShares();
+  }, [ready, email, configured, loadShares]);
+
+  const revokeShare = async (id: string) => {
+    try {
+      const res = await fetch(`/api/share/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setTip(json?.error || "撤销失败");
+        return;
+      }
+      setTip("已撤销该分享链接");
+      await loadShares();
+    } catch {
+      setTip("撤销失败");
+    }
+  };
 
   const handleSignOut = async () => {
     if (!configured || busy) return;
@@ -322,6 +376,76 @@ export default function AccountPage() {
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
             登录后 AI 调用会计入云端额度；超额会暂时无法调用。付费加量下期开放。
           </p>
+        </section>
+
+        <section className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+              我的分享
+            </p>
+            <button
+              type="button"
+              disabled={sharesLoading}
+              onClick={() => void loadShares()}
+              className="text-[11px] text-blue-600 hover:underline disabled:opacity-40"
+            >
+              {sharesLoading ? "刷新中…" : "刷新"}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            在导出页可生成只读链接；对方打开无需登录。
+          </p>
+          {shareItems.length === 0 ? (
+            <p className="mt-3 text-[11px] text-zinc-400">
+              暂无分享。打开某款「导出」→「生成分享链接」。
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y divide-zinc-100">
+              {shareItems.map((item) => {
+                const href = `/share/${item.id}`;
+                const revoked = Boolean(item.revoked_at);
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 py-2 text-[11px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-zinc-800">
+                        {item.title}
+                        {revoked ? (
+                          <span className="ml-1 text-amber-600">已撤销</span>
+                        ) : null}
+                      </p>
+                      <p className="text-zinc-400">
+                        {new Date(item.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {!revoked ? (
+                        <>
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded border border-zinc-200 px-2 py-1 text-zinc-600 hover:bg-zinc-50"
+                          >
+                            打开
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => void revokeShare(item.id)}
+                            className="rounded border border-zinc-200 px-2 py-1 text-red-500 hover:bg-red-50"
+                          >
+                            撤销
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
 
         <section className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-4">

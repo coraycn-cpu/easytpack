@@ -105,6 +105,10 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 用户中心 `/account` 可查看本月用量；「升级为团队」入口已预留。
 
+## 第 8 步（可选）：分享链接表
+
+若导出页「生成分享链接」报错缺表，请再跑一遍最新 `supabase/schema.sql`（含 `share_links`）。分享页路径：`/share/sh_…`，对方无需登录。
+
 ---
 
 ## 常见问题（白话）

@@ -156,3 +156,40 @@ create policy "用户可删除自己的款式图"
     bucket_id = 'style-images'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- ========== 公开分享链接（只读快照；未登录可按 id 查看）==========
+create table if not exists share_links (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  tech_pack_id text,
+  title text not null default '未命名款式',
+  snapshot jsonb not null default '{}'::jsonb,
+  share_hash text,
+  created_at timestamptz default now(),
+  revoked_at timestamptz
+);
+
+create index if not exists share_links_user_idx on share_links (user_id, created_at desc);
+
+alter table share_links enable row level security;
+
+drop policy if exists "公开可读未撤销分享" on share_links;
+create policy "公开可读未撤销分享"
+  on share_links for select
+  using (revoked_at is null);
+
+drop policy if exists "用户可创建自己的分享" on share_links;
+create policy "用户可创建自己的分享"
+  on share_links for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "用户可更新自己的分享" on share_links;
+create policy "用户可更新自己的分享"
+  on share_links for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "用户可删除自己的分享" on share_links;
+create policy "用户可删除自己的分享"
+  on share_links for delete
+  using (auth.uid() = user_id);

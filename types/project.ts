@@ -202,12 +202,14 @@ export type TechPackProject = {
   /** 导出记录（轻量沉淀） */
   exportHistory?: Array<{
     at: string;
-    kind: "pdf" | "xlsx" | "composite";
+    kind: "pdf" | "xlsx" | "composite" | "share";
     basename: string;
     pageCount?: number;
     imageMode?: "merged" | "split";
-    /** 下期分享激励用：匿名摘要 hash（本期可选写入） */
+    /** 分享激励用：匿名摘要 hash */
     shareSnapshotHash?: string;
+    /** 分享链接 id（kind=share） */
+    shareId?: string;
   }>;
   /**
    * 是否同意进入质量/检索池（下期管理后台与训练整理用）。
