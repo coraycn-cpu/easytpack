@@ -36,4 +36,4 @@ npm run dev
 
 ## 发布分支提醒
 
-当前云端能力在 `feat/phase2-cloud`（及含 M3 的 PR 分支）上；旧 `main` 若尚未合并，**不要直接当正式站**。详见 `docs/GO_LIVE.md`。
+云端能力（登录同步、额度邀请、管理后台等）**已在 `main`**。日常测 **Vercel Preview**；上线清单见 `docs/GO_LIVE.md`。

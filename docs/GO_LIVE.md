@@ -11,15 +11,14 @@
 
 | 分支 | 现在有什么 |
 |------|------------|
-| `main` | **旧站**：没有用户中心 / 云同步 / 管理后台（不要直接当正式站） |
-| `feat/phase2-cloud` | 云端一期（到 M2） |
-| `cursor/admin-m3-backup-restore-7a03`（PR #2） | 在上面 + **M3 备份/孤儿/训练审核** |
+| `main` | **当前正式代码线**：云同步 · 用户中心 · AI 额度/邀请 · 管理后台 M1–M3 · 近期体验优化（品牌 Packflow、项目库、导出英文等）都已合入 |
+| `feat/phase2-cloud` 等历史分支 | 已合并进 `main`，**不要再当发布源**；新改动请从 `main` 开分支 |
 
-**建议发布顺序：**
+**怎么测 / 怎么上线：**
 
-1. 合并 PR #2 → `feat/phase2-cloud`  
-2. 在 Preview 按本清单冒烟通过  
-3. 再把 `feat/phase2-cloud` 合进正式发布线（如 `main`），或把正式域名指到含云端的部署  
+1. 推送到 GitHub → 打开 **Vercel Preview** 链接测（不要依赖本机 `npm run dev`）  
+2. Preview 按本清单冒烟通过  
+3. Production 环境变量勾齐 → Redeploy；或把正式域名指到已通过的 `main` 部署  
 
 ---
 
@@ -92,16 +91,16 @@
 | Phase2 登录/同步/额度/邀请 | ✅ |
 | Admin M1 可读 | ✅ |
 | Admin M2 加赠/暂停 | ✅ |
-| Admin M3 备份/孤儿/审核 | ✅（在 PR #2） |
+| Admin M3 备份/孤儿/审核 | ✅（已合入 `main`） |
 | Stripe / 团队 / LoRA | 明确暂缓 |
 
 ---
 
 ## 五、上线当天最短路径（白话）
 
-1. 合并 M3 PR → 等 Vercel Preview 绿勾  
+1. 确认测的是 **`main` 对应的 Vercel Preview / Production**（不是旧历史分支）  
 2. Production 环境变量勾齐 → Redeploy 正式部署  
-3. 正式 Supabase 再跑一遍 `schema.sql` + 确认回调域名  
+3. 正式云端数据库再跑一遍 `schema.sql` + 确认登录回调域名  
 4. 用自己邮箱走一遍：注册 → 做款 → 同步 → 导出 → `/admin` 看一眼  
 5. 没大问题再把正式域名流量切过去  
 
