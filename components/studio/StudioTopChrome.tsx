@@ -27,6 +27,7 @@ import {
   subscribeCloudSyncStatus,
 } from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
+import { RECENT_PROJECTS_LIMIT, shortProjectTitle } from "@/lib/project/library-display";
 
 type StudioTopChromeProps = {
   currentProjectId: string;
@@ -68,7 +69,7 @@ export default function StudioTopChrome({
     try {
       const repo = await resolveProjectRepository();
       const list = await repo.list();
-      setProjects(list.slice(0, 16));
+      setProjects(list.slice(0, RECENT_PROJECTS_LIMIT + 1));
     } catch {
       setProjects([]);
     }
@@ -148,7 +149,9 @@ export default function StudioTopChrome({
     }
   };
 
-  const others = projects.filter((p) => p.id !== currentProjectId);
+  const others = projects
+    .filter((p) => p.id !== currentProjectId)
+    .slice(0, RECENT_PROJECTS_LIMIT);
   const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 
@@ -178,7 +181,7 @@ export default function StudioTopChrome({
         {menuOpen && (
           <div className="absolute left-0 top-full z-[60] mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
             <p className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500">
-              我的项目
+              最近更新（最多 {RECENT_PROJECTS_LIMIT} 个）
             </p>
             <ul className="max-h-56 overflow-y-auto py-1">
               <li>
@@ -196,23 +199,24 @@ export default function StudioTopChrome({
                     }
                     className="block truncate px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
                     onClick={() => setMenuOpen(false)}
+                    title={p.title}
                   >
-                    {p.title || "未命名"}
+                    {shortProjectTitle(p.title, 18)}
                   </Link>
                 </li>
               ))}
               {others.length === 0 && (
                 <li className="px-3 py-1.5 text-[11px] text-slate-400">
-                  暂无其它项目
+                  暂无其它最近项目
                 </li>
               )}
             </ul>
             <Link
               href="/projects"
-              className="block border-t border-slate-100 px-3 py-2 text-xs text-blue-600 hover:bg-blue-50"
+              className="block border-t border-slate-100 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50"
               onClick={() => setMenuOpen(false)}
             >
-              打开全部项目 →
+              查看全部项目（项目库）→
             </Link>
           </div>
         )}

@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import ProjectThumb from "@/components/projects/ProjectThumb";
 import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
+import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   duplicateProject,
   evacuateNonProjectStorage,
@@ -28,7 +30,6 @@ import {
   pushAllLocalProjectsToCloud,
   syncAfterLogin,
 } from "@/lib/project/cloud-sync";
-import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
   subscribeCloudSyncMode,
@@ -40,11 +41,26 @@ import {
   type CloudSyncStatus,
 } from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
+import {
+  LIBRARY_PAGE_SIZE,
+  LIBRARY_UNCATEGORIZED,
+  collectLibraryCategories,
+  formatProjectDateTime,
+  getProjectLibraryCategory,
+  getProjectThumbRef,
+  shortProjectTitle,
+  studioHrefForProject,
+} from "@/lib/project/library-display";
+
+type WorkflowFilter = "all" | "draft" | "in_review" | "finalized";
 
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
-  const [filter, setFilter] = useState<"all" | "draft" | "in_review" | "finalized">("all");
+  const [workflowFilter, setWorkflowFilter] = useState<WorkflowFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [stats, setStats] = useState(() => ({
     projectsBytes: 0,
     trainingBytes: 0,
@@ -60,6 +76,7 @@ export default function ProjectsPage() {
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
   const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
   const [importBusy, setImportBusy] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
 
   const refresh = () => {
     void (async () => {
@@ -83,20 +100,47 @@ export default function ProjectsPage() {
     };
   }, []);
 
-  const filtered = projects.filter((p) =>
-    filter === "all" ? true : p.workflowStatus === filter,
+  const categories = useMemo(
+    () => collectLibraryCategories(projects),
+    [projects],
   );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects
+      .filter((p) =>
+        workflowFilter === "all" ? true : p.workflowStatus === workflowFilter,
+      )
+      .filter((p) => {
+        if (categoryFilter === "all") return true;
+        return getProjectLibraryCategory(p) === categoryFilter;
+      })
+      .filter((p) => {
+        if (!q) return true;
+        const title = (p.title || "").toLowerCase();
+        const cat = getProjectLibraryCategory(p).toLowerCase();
+        const style = (p.styleNo || "").toLowerCase();
+        return title.includes(q) || cat.includes(q) || style.includes(q);
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  }, [projects, workflowFilter, categoryFilter, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice(
+    (safePage - 1) * LIBRARY_PAGE_SIZE,
+    safePage * LIBRARY_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [workflowFilter, categoryFilter, query]);
 
   const cacheBytes =
     stats.trainingBytes + stats.meterBytes + stats.telemetryBytes;
-
-  const getHref = (p: TechPackProject) => {
-    if (p.status === "collecting")
-      return `/project/${p.id}/studio?fullCollect=1`;
-    if (p.status === "studio" || p.status === "completed")
-      return `/project/${p.id}/studio`;
-    return `/project/${p.id}/studio?fullCollect=1`;
-  };
 
   const handleClearCache = () => {
     evacuateNonProjectStorage();
@@ -161,7 +205,9 @@ export default function ProjectsPage() {
       `easytpack-ai-telemetry-${new Date().toISOString().slice(0, 10)}.jsonl`,
       jsonl,
     );
-    setCacheNote(`已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`);
+    setCacheNote(
+      `已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`,
+    );
   };
 
   const handleImportBackup = async (file: File | null) => {
@@ -195,30 +241,63 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleSetCategory = async (id: string, category: string) => {
+    const current = projects.find((p) => p.id === id);
+    if (!current) return;
+    const nextCat = category.trim();
+    const updated: TechPackProject = {
+      ...current,
+      updatedAt: new Date().toISOString(),
+      intake: {
+        ...current.intake,
+        libraryCategory:
+          !nextCat || nextCat === LIBRARY_UNCATEGORIZED
+            ? undefined
+            : nextCat,
+      },
+    };
+    try {
+      const repo = await resolveProjectRepository();
+      await repo.save(updated);
+      setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      setCacheNote(
+        `已将「${shortProjectTitle(current.title)}」分到「${
+          nextCat || LIBRARY_UNCATEGORIZED
+        }」`,
+      );
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "分类保存失败");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <AppHeader />
-      <main className="mx-auto max-w-3xl px-4 py-8">
-        <div className="mb-6 flex items-start justify-between gap-3">
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-900">我的项目</h1>
+            <h1 className="text-2xl font-semibold text-zinc-900">项目库</h1>
             <p className="mt-1 text-sm text-zinc-500">
               {cloudLoggedIn
-                ? `云端 + 本机缓存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`
-                : `本机保存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
+                ? `云端 + 本机 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`
+                : `本机保存 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
+              {" · "}
+              相册式浏览，可分类、删除、分页
             </p>
           </div>
           <Link
             href="/"
             className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
-            + 新建
+            + 新建款式
           </Link>
         </div>
 
-        <div className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-600">
-          <p className="font-medium text-zinc-800">本机存储</p>
-          <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-500">
+        <details className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-600">
+          <summary className="cursor-pointer font-medium text-zinc-800">
+            本机存储与备份（点击展开）
+          </summary>
+          <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
             <li>
               项目数据 {formatStorageBytes(stats.projectsBytes)} · 视角缓存{" "}
               {formatStorageBytes(stats.trainingBytes)} · AI 用量{" "}
@@ -226,7 +305,7 @@ export default function ProjectsPage() {
               {formatStorageBytes(stats.telemetryBytes)}
             </li>
             <li>
-              本期本地 AI 成功调用约 {aiUnits} 次（下期接订阅额度）
+              本期本地 AI 成功调用约 {aiUnits} 次
               {getAiTelemetryStorageBytes() > 0
                 ? ` · 质量日志 ${formatStorageBytes(getAiTelemetryStorageBytes())}`
                 : ""}
@@ -247,7 +326,7 @@ export default function ProjectsPage() {
               onClick={handleExportTelemetry}
               className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
             >
-              导出质量日志 JSONL
+              导出质量日志
             </button>
             <label className="cursor-pointer rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
               {importBusy ? "导入中…" : "导入 JSON 备份"}
@@ -264,22 +343,17 @@ export default function ProjectsPage() {
               />
             </label>
           </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
-            保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
-            备份后再删。可用「导入 JSON 备份」恢复。大图会自动压缩。断网时仍可本机编辑，恢复网络后再同步。
-          </p>
-        </div>
+        </details>
 
         <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-950">
           <p className="font-medium">云端同步</p>
           <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
             {cloudLoggedIn
               ? syncMode === "auto"
-                ? "当前：自动同步。登录与保存时会尽量传到云端；也可手动点下方按钮。"
-                : "当前：手动同步。保存只写本机，需要时再点下方按钮传到云端。"
-              : `未登录：可继续手动标注（稿在本机浏览器）。注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI，还能同步到云端、换设备继续。`}
+                ? "当前：自动同步。登录与保存时会尽量传到云端。"
+                : "当前：手动同步。保存只写本机，需要时再点下方按钮。"
+              : `未登录：稿在本机浏览器。注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI，还能同步到云端。`}
           </p>
-
           {cloudLoggedIn ? (
             <div className="mt-2">
               <SyncPreferenceControls
@@ -291,7 +365,6 @@ export default function ProjectsPage() {
               <GuestRegisterNudge next="/projects" />
             </div>
           )}
-
           <div className="mt-2 flex flex-wrap gap-2">
             {cloudLoggedIn ? (
               <>
@@ -332,21 +405,46 @@ export default function ProjectsPage() {
           {syncStatus && !syncStatus.ok ? (
             <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
               {syncStatus.message}
-              {syncStatus.offlineHint
-                ? " 本机稿件还在，恢复网络后点「双向同步」即可。"
-                : ""}
             </p>
           ) : null}
         </div>
 
-        {cacheNote && (
+        {cacheNote ? (
           <p className="mb-3 text-xs text-emerald-700">{cacheNote}</p>
-        )}
+        ) : null}
 
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索标题 / 分类 / 款号"
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 outline-none ring-blue-200 focus:ring-2 sm:max-w-xs"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[11px] text-zinc-500">分类</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700"
+            >
+              <option value="all">全部分类</option>
+              <option value={LIBRARY_UNCATEGORIZED}>
+                {LIBRARY_UNCATEGORIZED}
+              </option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
           {(
             [
-              ["all", "全部"],
+              ["all", "全部状态"],
               ["draft", "草稿"],
               ["in_review", "审核中"],
               ["finalized", "已定稿"],
@@ -355,9 +453,11 @@ export default function ProjectsPage() {
             <button
               key={key}
               type="button"
-              onClick={() => setFilter(key)}
+              onClick={() => setWorkflowFilter(key)}
               className={`rounded-full px-3 py-1 text-xs ${
-                filter === key ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border"
+                workflowFilter === key
+                  ? "bg-zinc-900 text-white"
+                  : "border border-zinc-200 bg-white text-zinc-600"
               }`}
             >
               {label}
@@ -367,79 +467,165 @@ export default function ProjectsPage() {
 
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white py-16 text-center text-sm text-zinc-400">
-            暂无项目，{" "}
+            没有符合条件的项目。{" "}
             <Link href="/" className="text-blue-600 hover:underline">
-              开始制作第一个工艺包
+              去新建款式
             </Link>
           </div>
         ) : (
-          <ul className="space-y-2">
-            {filtered.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3"
-              >
-                <Link href={getHref(p)} className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-zinc-900">{p.title}</p>
-                  <p className="mt-0.5 text-xs text-zinc-400">
-                    {p.intake.detectedCategory ?? "未分类"} ·{" "}
-                    {WORKFLOW_LABELS[p.workflowStatus]} · {calcProgress(p)}%
-                  </p>
-                </Link>
-                <div className="ml-3 flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    title="导出 JSON 备份"
-                    onClick={() => void handleExportBackup(p.id, p.title)}
-                    className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100"
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {pageItems.map((p) => {
+                const cat = getProjectLibraryCategory(p);
+                const href = studioHrefForProject(p);
+                return (
+                  <article
+                    key={p.id}
+                    className="group overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:border-zinc-300 hover:shadow"
                   >
-                    备份
-                  </button>
-                  <button
-                    type="button"
-                    title="复制"
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          const copy = await duplicateProject(p.id);
-                          if (copy) {
-                            refresh();
-                            router.push(`/project/${copy.id}/studio`);
+                    <Link href={href} className="block">
+                      <div className="aspect-[4/5] overflow-hidden bg-slate-50">
+                        <ProjectThumb
+                          imageRef={getProjectThumbRef(p)}
+                          title={p.title}
+                          className="h-full w-full transition duration-300 group-hover:scale-[1.02]"
+                        />
+                      </div>
+                      <div className="space-y-1 px-3 pb-2 pt-2.5">
+                        <p
+                          className="truncate text-sm font-semibold text-zinc-900"
+                          title={p.title}
+                        >
+                          {shortProjectTitle(p.title, 18)}
+                        </p>
+                        <p className="text-[11px] text-zinc-500">
+                          {cat} · {WORKFLOW_LABELS[p.workflowStatus] ?? p.workflowStatus}{" "}
+                          · {calcProgress(p)}%
+                        </p>
+                        <p className="text-[10px] leading-relaxed text-zinc-400">
+                          建于 {formatProjectDateTime(p.createdAt)}
+                          <br />
+                          更新 {formatProjectDateTime(p.updatedAt)}
+                        </p>
+                      </div>
+                    </Link>
+                    <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-2 py-2">
+                      <select
+                        aria-label="设置分类"
+                        value={cat}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "__custom__") {
+                            const name = window.prompt(
+                              "输入新分类名称",
+                              customCategory || "",
+                            );
+                            if (name?.trim()) {
+                              setCustomCategory(name.trim());
+                              void handleSetCategory(p.id, name.trim());
+                            }
+                            return;
                           }
-                        } catch (e) {
-                          window.alert(
-                            e instanceof Error
-                              ? e.message
-                              : "复制失败，本地空间可能已满",
-                          );
-                          refresh();
-                        }
-                      })();
-                    }}
-                    className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100"
-                  >
-                    复制
-                  </button>
-                  <button
-                    type="button"
-                    title="删除"
-                    onClick={() => {
-                      if (window.confirm(`确定删除「${p.title}」？`)) {
-                        void (async () => {
-                          const repo = await resolveProjectRepository();
-                          await repo.delete(p.id);
-                          refresh();
-                        })();
-                      }
-                    }}
-                    className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50"
-                  >
-                    删除
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                          void handleSetCategory(p.id, v);
+                        }}
+                        className="max-w-[7rem] flex-1 rounded border border-zinc-200 bg-white px-1.5 py-1 text-[10px] text-zinc-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <option value={LIBRARY_UNCATEGORIZED}>
+                          {LIBRARY_UNCATEGORIZED}
+                        </option>
+                        {categories.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                        <option value="__custom__">+ 新建分类…</option>
+                      </select>
+                      <button
+                        type="button"
+                        title="备份"
+                        onClick={() => void handleExportBackup(p.id, p.title)}
+                        className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
+                      >
+                        备份
+                      </button>
+                      <button
+                        type="button"
+                        title="复制"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              const copy = await duplicateProject(p.id);
+                              if (copy) {
+                                refresh();
+                                router.push(`/project/${copy.id}/studio`);
+                              }
+                            } catch (e) {
+                              window.alert(
+                                e instanceof Error
+                                  ? e.message
+                                  : "复制失败，本地空间可能已满",
+                              );
+                              refresh();
+                            }
+                          })();
+                        }}
+                        className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
+                      >
+                        复制
+                      </button>
+                      <button
+                        type="button"
+                        title="删除"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `确定删除「${p.title || "未命名"}」？删除后不可恢复。`,
+                            )
+                          ) {
+                            void (async () => {
+                              const repo = await resolveProjectRepository();
+                              await repo.delete(p.id);
+                              refresh();
+                            })();
+                          }
+                        }}
+                        className="rounded px-1.5 py-1 text-[10px] text-rose-500 hover:bg-rose-50"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
+              <p>
+                共 {filtered.length} 个 · 第 {safePage} / {totalPages} 页
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 disabled:opacity-40"
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() =>
+                    setPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 disabled:opacity-40"
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </main>
     </div>

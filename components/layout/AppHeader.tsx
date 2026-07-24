@@ -9,7 +9,7 @@ export default function AppHeader() {
         <BrandMark nameClassName="text-lg leading-none" />
         <nav className="flex shrink-0 items-center gap-3 text-sm">
           <Link href="/projects" className="text-zinc-600 hover:text-zinc-900">
-            我的项目
+            项目库
           </Link>
           <Link href="/account" className="text-zinc-600 hover:text-zinc-900">
             用户中心

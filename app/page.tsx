@@ -18,12 +18,11 @@ import { listProjects } from "@/lib/project/storage";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
 import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
-
-function studioHref(p: { id: string; status: string }) {
-  return p.status === "collecting"
-    ? `/project/${p.id}/studio?fullCollect=1`
-    : `/project/${p.id}/studio`;
-}
+import {
+  RECENT_PROJECTS_LIMIT,
+  shortProjectTitle,
+  studioHrefForProject,
+} from "@/lib/project/library-display";
 
 /** 首页：空白画布 + 引导；登录后显示最近项目；不自动打开旧款 */
 export default function CanvasHomePage() {
@@ -100,7 +99,7 @@ export default function CanvasHomePage() {
   }
 
   const loggedIn = Boolean(email);
-  const recent = loggedIn ? projects.slice(0, 6) : [];
+  const recent = loggedIn ? projects.slice(0, RECENT_PROJECTS_LIMIT) : [];
 
   return (
     <div className="relative h-screen overflow-hidden">
@@ -155,13 +154,13 @@ export default function CanvasHomePage() {
             <div className="mt-5 border-t border-slate-100 pt-4 text-left">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-[11px] font-medium text-slate-500">
-                  最近项目
+                  最近更新（{RECENT_PROJECTS_LIMIT} 个）
                 </p>
                 <Link
                   href="/projects"
-                  className="text-[11px] text-blue-600 hover:underline"
+                  className="text-[11px] font-medium text-blue-600 hover:underline"
                 >
-                  全部 →
+                  查看全部项目 →
                 </Link>
               </div>
               {recent.length > 0 ? (
@@ -169,17 +168,18 @@ export default function CanvasHomePage() {
                   {recent.map((p) => (
                     <li key={p.id}>
                       <Link
-                        href={studioHref(p)}
+                        href={studioHrefForProject(p)}
                         className="block truncate rounded-lg px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                        title={p.title}
                       >
-                        {p.title?.trim() || "未命名款式"}
+                        {shortProjectTitle(p.title, 20)}
                       </Link>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="rounded-lg bg-slate-50 px-3 py-3 text-[11px] text-slate-500">
-                  还没有项目。点上方「新建款式」开始；若已在其它设备做过，打开「我的项目」点「从云端拉取」。
+                  还没有项目。点上方「新建款式」开始；若已在其它设备做过，打开「查看全部项目」点「从云端拉取」。
                 </p>
               )}
             </div>
