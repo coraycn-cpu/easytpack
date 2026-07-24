@@ -1426,7 +1426,9 @@ export default function StudioPage() {
     try {
       const imageForAi = await resolveImageDataUrlForAi(effectiveSourceUrl);
       if (!imageForAi) {
-        setAiMessage("参考图过大，请换一张较小的图片后重试");
+        setAiMessage(
+          "参考图过大，已尝试自动压缩仍无法发送。请换一张边长约 2000 以内的图再试",
+        );
         return;
       }
       const { width: sourceWidth, height: sourceHeight } =
