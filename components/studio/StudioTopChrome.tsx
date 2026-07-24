@@ -306,6 +306,7 @@ export default function StudioTopChrome({
             email={email}
             authBusy={authBusy}
             onSignOut={() => void handleSignOut()}
+            onTip={onTip}
           />
         ) : (
           <Link

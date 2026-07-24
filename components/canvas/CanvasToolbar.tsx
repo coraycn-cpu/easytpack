@@ -109,32 +109,32 @@ export default function CanvasToolbar({
 
   const actionBtn = (disabled: boolean, danger?: boolean) =>
     light
-      ? `inline-flex h-7 shrink-0 items-center rounded px-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      ? `inline-flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
           danger
             ? "text-rose-600 hover:bg-rose-50"
             : "text-slate-600 hover:bg-slate-100"
         }`
-      : `inline-flex h-7 shrink-0 items-center rounded px-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      : `inline-flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
           danger ? "text-red-400 hover:bg-zinc-800" : "text-zinc-300 hover:bg-zinc-800"
         }`;
 
   const toolBtn = (active: boolean) =>
     light
-      ? `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-1.5 text-[11px] font-medium transition ${
+      ? `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium transition ${
           active
             ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
             : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
         }`
-      : `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-1.5 text-[11px] transition ${
+      : `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs transition ${
           active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-700"
         }`;
 
   const zoomBtn = light
-    ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-slate-600 transition hover:bg-slate-100"
-    : "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-zinc-300 hover:bg-zinc-800";
+    ? "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm text-slate-600 transition hover:bg-slate-100"
+    : "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm text-zinc-300 hover:bg-zinc-800";
 
   const aiBtn = (primary?: boolean) =>
-    `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-2 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+    `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
       primary
         ? "bg-blue-600 text-white hover:bg-blue-700"
         : light
@@ -144,7 +144,7 @@ export default function CanvasToolbar({
 
   const divider = (
     <div
-      className={`mx-0.5 h-5 w-px shrink-0 ${light ? "bg-slate-200" : "bg-zinc-700"}`}
+      className={`mx-0.5 h-6 w-px shrink-0 ${light ? "bg-slate-200" : "bg-zinc-700"}`}
       aria-hidden
     />
   );
@@ -169,16 +169,16 @@ export default function CanvasToolbar({
             : "border-b border-zinc-700/50 bg-[#1a1a1a]"
       }`}
     >
-      {/* 单行紧凑：不换行，窄屏横向滑动，把高度让给画布 */}
-      <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-1 [scrollbar-width:thin]">
+      {/* 单行：字号稍大便于辨认；窄屏横向滑动，不折成两行 */}
+      <div className="flex items-center gap-2 overflow-x-auto px-3 py-1.5 [scrollbar-width:thin]">
         <div
-          className={`flex shrink-0 items-center gap-1 ${
+          className={`flex shrink-0 items-center gap-1.5 ${
             manualLocked ? "pointer-events-none opacity-50" : ""
           }`}
         >
           <div
             data-canvas-toolbar
-            className={`inline-flex items-center gap-0.5 rounded-md p-0.5 ${
+            className={`inline-flex items-center gap-0.5 rounded-lg p-0.5 ${
               light ? "bg-slate-100" : flat ? "bg-[#262626]" : "bg-zinc-800"
             }`}
           >
@@ -197,10 +197,10 @@ export default function CanvasToolbar({
                 }}
                 className={toolBtn(tool === t.id)}
               >
-                <span className="text-xs leading-none" aria-hidden>
+                <span className="text-sm leading-none" aria-hidden>
                   {t.icon}
                 </span>
-                <span className="hidden xl:inline">{t.label}</span>
+                <span className="hidden lg:inline">{t.label}</span>
               </button>
             ))}
             {onPasteImage && (
@@ -212,8 +212,8 @@ export default function CanvasToolbar({
                   className={`${toolBtn(false)} disabled:cursor-not-allowed disabled:opacity-40`}
                   title={ANN_ACTION_LABELS.pasteImageHint}
                 >
-                  <span className="text-xs leading-none">⧉</span>
-                  <span className="hidden xl:inline">
+                  <span className="text-sm leading-none">⧉</span>
+                  <span className="hidden lg:inline">
                     {ANN_ACTION_LABELS.pasteImage}
                   </span>
                 </button>
@@ -240,14 +240,14 @@ export default function CanvasToolbar({
 
           {divider}
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1.5">
             {ANNOTATION_COLORS.slice(0, 5).map((c) => (
               <button
                 key={c.id}
                 type="button"
                 title={c.label}
                 onClick={() => onColorChange(c.value)}
-                className={`h-5 w-5 shrink-0 rounded-full transition ring-offset-1 ${
+                className={`h-6 w-6 shrink-0 rounded-full transition ring-offset-1 ${
                   light ? "ring-offset-white" : "ring-offset-[#1a1a1a]"
                 } ${
                   color === c.value
@@ -262,9 +262,9 @@ export default function CanvasToolbar({
           {layerVisibility && onLayerVisibilityChange ? (
             <>
               {divider}
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
                 <label
-                  className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-slate-500"
+                  className="inline-flex cursor-pointer items-center gap-1 text-xs text-slate-600"
                   title="显示/隐藏工艺标注层"
                 >
                   <input
@@ -278,10 +278,10 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  工艺
+                  工艺层
                 </label>
                 <label
-                  className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-slate-500"
+                  className="inline-flex cursor-pointer items-center gap-1 text-xs text-slate-600"
                   title="显示/隐藏尺寸标注层"
                 >
                   <input
@@ -295,7 +295,7 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  尺寸
+                  尺寸层
                 </label>
               </div>
             </>
@@ -413,7 +413,7 @@ export default function CanvasToolbar({
 
         {divider}
 
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md bg-slate-100 p-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
           <button
             type="button"
             onClick={() => setScale(Math.max(0.25, scale - 0.1))}
@@ -422,7 +422,7 @@ export default function CanvasToolbar({
           >
             −
           </button>
-          <span className="min-w-[2.75rem] text-center text-[11px] font-medium tabular-nums text-slate-600">
+          <span className="min-w-[3rem] text-center text-xs font-medium tabular-nums text-slate-600">
             {Math.round(scale * 100)}%
           </span>
           <button
@@ -437,7 +437,7 @@ export default function CanvasToolbar({
             <button
               type="button"
               onClick={onResetViewport}
-              className="rounded px-1.5 text-[11px] text-slate-600 hover:bg-slate-200"
+              className="rounded-md px-2 text-xs text-slate-600 hover:bg-slate-200"
               title="重置视图"
             >
               重置
