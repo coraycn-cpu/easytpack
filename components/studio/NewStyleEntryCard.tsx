@@ -21,6 +21,7 @@ import {
   messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import BrandMark from "@/components/brand/BrandMark";
 
 export type NewStyleMode = "quick" | "full";
 
@@ -267,13 +268,10 @@ export function CanvasHubChrome({
   recentProjects?: Array<{ id: string; title: string; href: string; progress: number }>;
 }) {
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-4">
-      <Link
-        href="/"
-        className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 text-sm font-semibold text-slate-800 shadow-sm backdrop-blur"
-      >
-        EasytPack
-      </Link>
+    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4">
+      <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur">
+        <BrandMark nameClassName="text-sm text-slate-800" />
+      </div>
       <div className="pointer-events-auto flex flex-col items-end gap-2">
         <Link
           href="/projects"

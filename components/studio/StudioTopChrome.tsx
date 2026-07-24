@@ -13,9 +13,11 @@ import {
   REGISTER_CTA_LABEL,
   STUDIO_GUEST_BAR_TEXT,
 } from "@/lib/ai/login-gate";
+import StudioAccountChip from "@/components/studio/StudioAccountChip";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
+  setCloudSyncMode,
   subscribeCloudSyncMode,
   type CloudSyncMode,
 } from "@/lib/project/sync-preference";
@@ -44,6 +46,7 @@ export default function StudioTopChrome({
   const [email, setEmail] = useState<string | null>(null);
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
@@ -148,10 +151,12 @@ export default function StudioTopChrome({
   const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 
+  const overlayOpen = menuOpen || accountMenuOpen;
+
   return (
     <div
       className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-[#cbd5e1] bg-white px-3 py-1.5 ${
-        menuOpen ? "z-50" : "z-30"
+        overlayOpen ? "z-[80]" : "z-40"
       }`}
     >
       <div className="relative min-w-0 shrink overflow-visible" ref={menuRef}>
@@ -225,32 +230,73 @@ export default function StudioTopChrome({
       )}
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          disabled={syncBusy || !ready}
-          onClick={() => void handleSync()}
+        {/* 同步 + 自动：合并成一个控件，少占宽度 */}
+        <div
+          className={`inline-flex items-center overflow-hidden rounded-md border ${
+            syncMode === "auto"
+              ? "border-blue-200 bg-blue-50"
+              : "border-slate-200 bg-white"
+          }`}
           title={
             syncMode === "auto"
-              ? "立即双向同步（当前为自动同步）"
-              : "手动同步到云端（当前不会自动上传）"
+              ? "自动同步已开：保存/登录会上传；点左侧可立即同步"
+              : "自动同步已关：点左侧「同步」才会上传到网上"
           }
-          className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-50"
         >
-          {syncBusy
-            ? "同步中…"
-            : syncMode === "manual"
-              ? "手动同步"
-              : "同步到网上"}
-        </button>
-        {email ? (
-          <Link
-            href="/projects"
-            className="hidden rounded-md px-1.5 py-1 text-[10px] text-slate-400 hover:text-blue-600 sm:inline"
-            title="在「我的项目」里改自动/手动"
+          <button
+            type="button"
+            disabled={syncBusy || !ready}
+            onClick={() => void handleSync()}
+            className={`px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${
+              syncMode === "auto"
+                ? "text-blue-800 hover:bg-blue-100"
+                : "text-slate-700 hover:bg-slate-50"
+            }`}
           >
-            {syncMode === "auto" ? "自动" : "手动"}
-          </Link>
-        ) : null}
+            {syncBusy ? "同步中…" : "同步"}
+          </button>
+          <span
+            className={`h-4 w-px shrink-0 ${
+              syncMode === "auto" ? "bg-blue-200" : "bg-slate-200"
+            }`}
+            aria-hidden
+          />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={syncMode === "auto"}
+            disabled={!ready}
+            onClick={() => {
+              const next: CloudSyncMode =
+                syncMode === "auto" ? "manual" : "auto";
+              setCloudSyncMode(next);
+              onTip?.(
+                next === "auto"
+                  ? "已开自动同步：之后保存/登录会自动上传"
+                  : "已关自动同步：保存只留本机，需点「同步」才上传",
+              );
+            }}
+            className={`flex items-center gap-1.5 px-2 py-1 text-[11px] disabled:opacity-50 ${
+              syncMode === "auto"
+                ? "text-blue-800 hover:bg-blue-100"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <span
+              className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition ${
+                syncMode === "auto" ? "bg-blue-600" : "bg-slate-300"
+              }`}
+              aria-hidden
+            >
+              <span
+                className={`absolute h-2.5 w-2.5 rounded-full bg-white shadow transition ${
+                  syncMode === "auto" ? "left-[11px]" : "left-0.5"
+                }`}
+              />
+            </span>
+            <span className="font-medium">自动</span>
+          </button>
+        </div>
 
         {!ready ? (
           <span className="px-1 text-[11px] text-slate-300">…</span>
@@ -259,30 +305,13 @@ export default function StudioTopChrome({
             本机模式
           </span>
         ) : email ? (
-          <>
-            <Link
-              href="/account"
-              className="hidden max-w-[9rem] truncate text-[11px] text-slate-500 hover:text-blue-600 md:inline"
-              title="打开用户中心"
-            >
-              {email}
-            </Link>
-            <Link
-              href="/account"
-              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 md:hidden"
-              title="打开用户中心"
-            >
-              账号
-            </Link>
-            <button
-              type="button"
-              disabled={authBusy}
-              onClick={() => void handleSignOut()}
-              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              退出
-            </button>
-          </>
+          <StudioAccountChip
+            email={email}
+            authBusy={authBusy}
+            onSignOut={() => void handleSignOut()}
+            onTip={onTip}
+            onOpenChange={setAccountMenuOpen}
+          />
         ) : (
           <Link
             href={loginHref}
