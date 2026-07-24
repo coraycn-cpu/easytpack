@@ -52,7 +52,7 @@ export default function DraggableFloatPanel({
   defaultTop = 56,
   widthClassName = "w-[min(100vw-1.5rem,340px)]",
   className = "",
-  zIndexClassName = "z-30",
+  zIndexClassName = "z-20",
 }: DraggableFloatPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{

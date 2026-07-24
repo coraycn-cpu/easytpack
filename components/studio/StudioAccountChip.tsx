@@ -15,6 +15,8 @@ type StudioAccountChipProps = {
   authBusy?: boolean;
   onSignOut: () => void;
   onTip?: (message: string) => void;
+  /** 展开时通知父级抬高层级，避免被画布浮层挡住 */
+  onOpenChange?: (open: boolean) => void;
 };
 
 type AccountSummary = {
@@ -32,6 +34,7 @@ export default function StudioAccountChip({
   authBusy,
   onSignOut,
   onTip,
+  onOpenChange,
 }: StudioAccountChipProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -42,6 +45,17 @@ export default function StudioAccountChip({
 
   const name = memberDisplayName(email);
   const level = planLabel(summary?.plan ?? "free");
+
+  const setMenuOpen = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setOpen((prev) => {
+        const value = typeof next === "function" ? next(prev) : next;
+        onOpenChange?.(value);
+        return value;
+      });
+    },
+    [onOpenChange],
+  );
 
   const loadUsage = useCallback(async () => {
     setLoading(true);
@@ -93,24 +107,24 @@ export default function StudioAccountChip({
     void loadUsage();
     void loadInvite();
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [open, loadUsage, loadInvite]);
+  }, [open, loadUsage, loadInvite, setMenuOpen]);
 
   const remaining =
     summary && summary.limit > 0
       ? Math.max(0, summary.limit - summary.used)
       : null;
 
-  const quotaLine = loading
-    ? "AI 额度读取中…"
+  const quotaCompact = loading
+    ? "AI …"
     : summary?.paused
-      ? "AI 额度已暂停"
+      ? "AI 暂停"
       : summary
-        ? `AI 还剩 ${remaining} / ${summary.limit}`
-        : "AI 额度暂不可用";
+        ? `AI ${remaining}/${summary.limit}`
+        : "AI —";
 
   const copyInvite = async () => {
     if (!inviteCode || copyBusy) return;
@@ -133,31 +147,27 @@ export default function StudioAccountChip({
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex min-w-[9.5rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left hover:bg-slate-50"
+        onClick={() => setMenuOpen((v) => !v)}
+        className="flex max-w-[16rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-left hover:bg-slate-50 sm:max-w-[20rem]"
         title="账号与常用入口"
         aria-expanded={open}
       >
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-              {level}
-            </span>
-            <span className="truncate text-xs font-semibold text-slate-800">
-              {name}
-            </span>
-          </span>
-          <span
-            className={`mt-0.5 block truncate text-[11px] tabular-nums ${
-              summary?.paused
-                ? "text-amber-700"
-                : remaining !== null && remaining <= 20
-                  ? "text-rose-600"
-                  : "text-slate-500"
-            }`}
-          >
-            {quotaLine}
-          </span>
+        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+          {level}
+        </span>
+        <span className="min-w-0 truncate text-xs font-semibold text-slate-800">
+          {name}
+        </span>
+        <span
+          className={`shrink-0 text-[11px] tabular-nums ${
+            summary?.paused
+              ? "text-amber-700"
+              : remaining !== null && remaining <= 20
+                ? "text-rose-600"
+                : "text-slate-500"
+          }`}
+        >
+          {quotaCompact}
         </span>
         <span className="shrink-0 text-[10px] text-slate-400">
           {open ? "▴" : "▾"}
@@ -165,7 +175,7 @@ export default function StudioAccountChip({
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-[70] mt-1 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute right-0 top-full z-[90] mt-1 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-100 bg-slate-50 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-slate-800">
               {name}
@@ -203,18 +213,22 @@ export default function StudioAccountChip({
             <Link
               href="/account"
               className={navItem}
-              onClick={() => setOpen(false)}
+              onClick={() => setMenuOpen(false)}
             >
               用户中心
             </Link>
             <Link
               href="/projects"
               className={navItem}
-              onClick={() => setOpen(false)}
+              onClick={() => setMenuOpen(false)}
             >
               我的项目
             </Link>
-            <Link href="/" className={navItem} onClick={() => setOpen(false)}>
+            <Link
+              href="/"
+              className={navItem}
+              onClick={() => setMenuOpen(false)}
+            >
               回首页
             </Link>
           </div>
@@ -244,7 +258,7 @@ export default function StudioAccountChip({
             type="button"
             disabled={authBusy}
             onClick={() => {
-              setOpen(false);
+              setMenuOpen(false);
               onSignOut();
             }}
             className="w-full px-3 py-2.5 text-left text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"

@@ -46,6 +46,7 @@ export default function StudioTopChrome({
   const [email, setEmail] = useState<string | null>(null);
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
@@ -150,10 +151,12 @@ export default function StudioTopChrome({
   const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 
+  const overlayOpen = menuOpen || accountMenuOpen;
+
   return (
     <div
       className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-[#cbd5e1] bg-white px-3 py-1.5 ${
-        menuOpen ? "z-50" : "z-30"
+        overlayOpen ? "z-[80]" : "z-40"
       }`}
     >
       <div className="relative min-w-0 shrink overflow-visible" ref={menuRef}>
@@ -307,6 +310,7 @@ export default function StudioTopChrome({
             authBusy={authBusy}
             onSignOut={() => void handleSignOut()}
             onTip={onTip}
+            onOpenChange={setAccountMenuOpen}
           />
         ) : (
           <Link
