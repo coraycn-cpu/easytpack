@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} · ${BRAND_SITE}`,
+  title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
   description: BRAND_SLOGAN,
 };
 
