@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { BRAND_NAME } from "@/lib/brand";
 import type { DocMeta } from "@/lib/export/techpack-document";
 
 type A4LandscapePageProps = {
@@ -45,7 +46,7 @@ export default function A4LandscapePage({
       <header className="shrink-0 border-b border-black">
         <div className="grid grid-cols-12 border-b border-black text-[10px] leading-tight">
           <div className="col-span-2 flex items-center justify-center border-r border-black px-2 py-1.5 font-bold tracking-wide">
-            EasytPack
+            {BRAND_NAME}
           </div>
           <div className="col-span-10 grid grid-cols-3">
             <MetaCell label="NAME" value={meta.targetLabel || meta.title} />

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EasytPack — AI 服装工艺包",
-  description: "AI 辅助生成服装工艺包，画板标注 + 工艺单生成",
+  title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
+  description: BRAND_SLOGAN,
 };
 
 export default function RootLayout({

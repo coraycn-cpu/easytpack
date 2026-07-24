@@ -8,6 +8,8 @@ import NewStyleEntryCard, {
 } from "@/components/studio/NewStyleEntryCard";
 import AuthHeaderControls from "@/components/auth/AuthHeaderControls";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import BrandMark from "@/components/brand/BrandMark";
+import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
 import Link from "next/link";
 import {
   createClient,
@@ -104,13 +106,13 @@ export default function CanvasHomePage() {
   return (
     <div className="relative h-screen overflow-hidden">
       <CanvasGridBackground />
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4">
-        <Link
-          href="/"
-          className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 text-sm font-semibold text-slate-800 shadow-sm backdrop-blur"
-        >
-          EasytPack
-        </Link>
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 p-4">
+        <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur">
+          <BrandMark
+            nameClassName="text-sm text-slate-800"
+            sloganClassName="max-w-[14rem] text-slate-500 sm:max-w-[18rem]"
+          />
+        </div>
         <div className="pointer-events-auto flex items-center gap-2">
           {loggedIn ? (
             <Link
@@ -136,8 +138,13 @@ export default function CanvasHomePage() {
 
       <div className="relative z-10 flex h-full flex-col items-center justify-center gap-4 overflow-y-auto p-4 pt-16 pb-8">
         <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-7 text-center shadow-sm backdrop-blur">
-          <p className="text-lg font-semibold text-slate-800">空白画布</p>
-          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+          <p className="text-lg font-semibold tracking-tight text-slate-800">
+            {BRAND_NAME}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">
+            {BRAND_SLOGAN}
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
             上传款式图后可先手动标注工艺与尺寸，再导出给版师。
             要用 AI（一键标注、生图）或把稿存到云端，注册即可——免费送每月{" "}
             {FREE_MONTHLY_AI_GIFT} 点 AI。
