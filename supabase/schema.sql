@@ -68,7 +68,7 @@ create policy "用户只能访问自己的版本"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- ========== AI 质量事件（管理后台 /admin 只读浏览 consent=true）==========
+-- ========== AI 质量事件（管理后台 /admin：consent 浏览 + 审核队列）==========
 create table if not exists ai_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
@@ -84,11 +84,28 @@ create table if not exists ai_events (
   outcome text check (outcome in ('accepted', 'edited', 'regenerated', 'discarded', 'error', 'pending')),
   image_refs text[] default '{}',
   consent boolean default false,
+  -- M3 训练审核：null=未进队；pending/approved/rejected
+  review_status text check (
+    review_status is null
+    or review_status in ('pending', 'approved', 'rejected')
+  ),
+  review_note text,
+  reviewed_at timestamptz,
+  reviewed_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
 
+-- 已有库升级（整段重跑也安全）
+alter table ai_events add column if not exists review_status text;
+alter table ai_events add column if not exists review_note text;
+alter table ai_events add column if not exists reviewed_at timestamptz;
+alter table ai_events add column if not exists reviewed_by uuid references auth.users(id) on delete set null;
+
 create index if not exists ai_events_user_idx on ai_events (user_id, created_at desc);
 create index if not exists ai_events_action_idx on ai_events (action, created_at desc);
+create index if not exists ai_events_review_idx
+  on ai_events (review_status, created_at desc)
+  where consent = true;
 
 alter table ai_events enable row level security;
 drop policy if exists "用户只能访问自己的 AI 事件" on ai_events;

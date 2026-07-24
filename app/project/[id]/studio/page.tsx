@@ -96,6 +96,11 @@ import { createArtboard } from "@/lib/project/hotspots";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import {
+  AI_LOGIN_REQUIRED_MESSAGE,
+  gateAiLogin,
+} from "@/lib/ai/client-login-gate";
+import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
+import {
   computeArtboardSlots,
   nextArtboardOrigin,
   type ArtboardSlot,
@@ -202,6 +207,19 @@ export default function StudioPage() {
       : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
+
+  const requireAiLogin = useCallback(async (): Promise<boolean> => {
+    const gate = await gateAiLogin({
+      next: `/project/${id}/studio`,
+    });
+    if (gate.ok) return true;
+    setAiMessage(gate.message);
+    setAiTip(
+      `手动标注不受影响。注册免费，每月送 AI 额度，还能云端存档。`,
+    );
+    router.push(gate.href);
+    return false;
+  }, [id, router]);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
   const [selectedAnnIds, setSelectedAnnIds] = useState<string[]>([]);
@@ -256,7 +274,15 @@ export default function StudioPage() {
         p.intake.imageDataUrl &&
         !needsGarmentConfirmation(p.intake)
       ) {
-        setFullCollectOpen(true);
+        void isLoggedInForCloud().then((ok) => {
+          if (ok) setFullCollectOpen(true);
+          else {
+            setAiMessage(AI_LOGIN_REQUIRED_MESSAGE);
+            setAiTip(
+              "可先手动标注。注册即送每月 AI 额度，一键标注 / 生图都能用。",
+            );
+          }
+        });
       }
       const renamed = normalizeViewArtboardNames(p.canvas_data.artboards);
       if (renamed.changed) {
@@ -323,6 +349,7 @@ export default function StudioPage() {
     let cancelled = false;
     (async () => {
       try {
+        if (!(await isLoggedInForCloud())) return;
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -408,9 +435,10 @@ export default function StudioPage() {
 
   const handleFlatFrontGenerate = useCallback(async () => {
     if (!project) return;
+    if (!(await requireAiLogin())) return;
     setFlatFrontOfferHandled(true);
     await runFlatFrontGeneration(project);
-  }, [project, runFlatFrontGeneration]);
+  }, [project, runFlatFrontGeneration, requireAiLogin]);
 
   const handleGarmentConfirm = useCallback(
     async (
@@ -473,7 +501,10 @@ export default function StudioPage() {
       setAiMessage("请先确认目标单款");
       return;
     }
-    setFullCollectOpen(true);
+    void (async () => {
+      if (!(await requireAiLogin())) return;
+      setFullCollectOpen(true);
+    })();
   };
 
   const hasStyleImage = useMemo(() => {
@@ -744,6 +775,7 @@ export default function StudioPage() {
   const handleDimensionAiFill = async () => {
     if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
     if (!isDimensionAnnotation(selectedAnn)) return;
+    if (!(await requireAiLogin())) return;
     setAiImageContext({
       action: "size-dimension",
       sourceArtboardId: activeArtboard.id,
@@ -1045,6 +1077,7 @@ export default function StudioPage() {
   const handleRegionEditSubmit = useCallback(
     async (prompt: string) => {
       if (!project || !regionEditPending || regionEditBusy) return;
+      if (!(await requireAiLogin())) return;
       const { artboardId, crop } = regionEditPending;
       const ab = project.canvas_data.artboards.find((a) => a.id === artboardId);
       if (!ab?.imageDataUrl) return;
@@ -1126,6 +1159,7 @@ export default function StudioPage() {
       regionEditPending,
       regionEditBusy,
       updateArtboard,
+      requireAiLogin,
     ],
   );
 
@@ -1431,6 +1465,7 @@ export default function StudioPage() {
   };
 
   const handleGenerateView = async (kind: ViewImageKind, customPrompt?: string) => {
+    if (!(await requireAiLogin())) return;
     const preferredArtboardName =
       kind === "custom"
         ? customPrompt?.trim().slice(0, 8) || canonicalArtboardNameForKind("custom")
@@ -1457,6 +1492,7 @@ export default function StudioPage() {
   /** 从指定彩图画板转换线稿（新建画板） */
   const handleGenerateLineArtFromArtboard = async (sourceArtboardId: string) => {
     if (!project) return;
+    if (!(await requireAiLogin())) return;
     const source = project.canvas_data.artboards.find(
       (a) => a.id === sourceArtboardId,
     );
@@ -1478,6 +1514,7 @@ export default function StudioPage() {
 
   const handleRegenerateView = async (artboardId: string, correctionPrompt: string) => {
     if (!project) return;
+    if (!(await requireAiLogin())) return;
     const target = project.canvas_data.artboards.find((a) => a.id === artboardId);
     const meta = target?.viewImageMeta;
     if (!target || !meta) {
@@ -1553,6 +1590,7 @@ export default function StudioPage() {
 
   const handleBatchAnnotate = async () => {
     if (aiBusy || !project || !activeArtboard) return;
+    if (!(await requireAiLogin())) return;
     focusTab("process");
     setAiImageContext({
       action: "annotate-process",
@@ -1679,6 +1717,7 @@ export default function StudioPage() {
 
   const handleFillBom = async () => {
     if (aiBusy || !project) return;
+    if (!(await requireAiLogin())) return;
     focusTab("bom");
     setAiImageContext({
       action: "fill-bom",
@@ -1725,6 +1764,7 @@ export default function StudioPage() {
 
   const handleRegionAiFill = async () => {
     if (aiBusy || !project || !activeArtboard || !selectedAnn) return;
+    if (!(await requireAiLogin())) return;
     setAiImageContext({
       action: "region-annotate",
       sourceArtboardId: activeArtboard.id,
@@ -1834,8 +1874,11 @@ export default function StudioPage() {
 
   const handleGenerateSize = () => {
     if (aiBusy || !project) return;
-    focusTab("size");
-    setSizeAiDialogOpen(true);
+    void (async () => {
+      if (!(await requireAiLogin())) return;
+      focusTab("size");
+      setSizeAiDialogOpen(true);
+    })();
   };
 
   const runSizeChartAi = async (input: {
@@ -2020,6 +2063,7 @@ export default function StudioPage() {
 
   const handleEnhanceAll = async () => {
     if (aiBusy || !project) return;
+    if (!(await requireAiLogin())) return;
     setAiImageContext({
       action: "enhance",
       preferIntake: true,
@@ -2081,6 +2125,7 @@ export default function StudioPage() {
 
   const handleStyleReview = async () => {
     if (aiBusy || !project) return;
+    if (!(await requireAiLogin())) return;
     setAiImageContext({
       action: "explain",
       sourceArtboardId: primaryArtboardId ?? activeArtboard?.id,

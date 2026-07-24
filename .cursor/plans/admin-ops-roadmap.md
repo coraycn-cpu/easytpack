@@ -18,6 +18,7 @@
 | Consent → `ai_events` | ✅ |
 | 本机 JSON 备份导入/导出 | ✅ |
 | 导出诚实提示（failed/placeholder） | ✅ |
+| 未登录仅手动标注；AI / 云端存档引导注册 | ✅ |
 
 ### 已完成（管理侧 · 初版）
 
@@ -103,7 +104,11 @@ updated_at / updated_by
 | 训练 | 审核队列 + 金标准样本包导出 | 导出 manifest 含过滤条件 |
 | 运维 | Supabase 自动备份 / 导出 runbook（文档） | 文档可照做 |
 
----
+**状态：✅ 本轮落地**
+
+- 云端同步在 `in_review` / `finalized` 时自动写版本（同 `updatedAt` 去重）
+- `/admin` 新增「备份」分区；存储支持孤儿 dry-run/删除；训练支持审核与金标准导出
+- 文档：`docs/SUPABASE_BACKUP_RUNBOOK.md`
 
 ## 四、额度公式（统一口径）
 
@@ -132,16 +137,18 @@ updated_at / updated_by
 
 ## 六、推荐执行顺序（立即）
 
-1. **先做 M1**：用户列表、训练筛选导出、存储占用、配置条  
-2. **再做 M2**：权益表 + 加赠/暂停 + 审计（支付只做条件位）  
-3. **最后 M3**：`pack_versions` 真用起来、存储清理、训练审核队列  
+1. ~~**先做 M1**~~ ✅  
+2. ~~**再做 M2**~~ ✅  
+3. ~~**最后 M3**~~ ✅：`pack_versions` 真用起来、存储清理、训练审核队列、备份 runbook  
 
-对应代码落点建议：
+对应代码落点：
 
-- UI：`app/admin/**`（分区路由或同页 Tab）  
-- API：`app/api/admin/{users,events,storage,entitlements,audit}/*`  
+- UI：`app/admin/page.tsx`（总览 / 用户 / 训练 / 备份 / 存储 / 日志 / 配置）  
+- API：`app/api/admin/{users,events,packs,storage,logs,entitlements}/*`  
 - 额度：`lib/ai/quota.ts` 读 entitlements  
-- Schema：`supabase/schema.sql`（entitlements + audit_log + 可选 event review 字段）
+- 版本：`lib/project/pack-versions.ts` + 云端同步挂钩  
+- Schema：`supabase/schema.sql`  
+- 运维文档：`docs/SUPABASE_BACKUP_RUNBOOK.md`
 
 ---
 
@@ -151,3 +158,16 @@ updated_at / updated_by
 - 能导出一批 consent 训练事件给离线分析  
 - 能给指定用户临时加额度或暂停，无需改环境变量、无需上支付  
 - 出事故时有审计可追；项目有版本可恢复（M3）
+
+---
+
+## 八、第一个基础版上线（2026-07）
+
+**代码结论：有条件可上线。** M1–M3 与产品主路径已齐；拦路项是运维配置与发布线，不是缺功能。
+
+上线照做清单：[`docs/GO_LIVE.md`](../../docs/GO_LIVE.md)
+
+| 类型 | 项 |
+|------|-----|
+| 必须（运维） | 合并 M3 → Production 环境变量勾齐 → 正式库跑 schema → 冒烟第 7 节 |
+| 可延后 | Stripe、团队、LoRA、studio 彻底拆分、自动化测试 |

@@ -7,11 +7,16 @@ import {
   getUserEntitlement,
   type UserEntitlement,
 } from "@/lib/ai/entitlements";
+import {
+  AI_LOGIN_REQUIRED_CODE,
+  AI_LOGIN_REQUIRED_MESSAGE,
+  FREE_MONTHLY_AI_GIFT,
+} from "@/lib/ai/login-gate";
 
 /** 免费档每月 AI 点数（可用环境变量覆盖；未接付费） */
 export function getFreeMonthlyAiUnits(): number {
-  const n = Number(process.env.AI_FREE_MONTHLY_UNITS || "200");
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200;
+  const n = Number(process.env.AI_FREE_MONTHLY_UNITS || String(FREE_MONTHLY_AI_GIFT));
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : FREE_MONTHLY_AI_GIFT;
 }
 
 /** 邀请好友注册获得的积分（计入 AI 额度上限，最高 300） */
@@ -128,16 +133,25 @@ export type AiQuotaBlocked = {
   response: NextResponse;
 };
 
-/** 已登录用户检查本月额度；未登录放行（本机模式） */
+/** 已登录用户检查本月额度；未登录禁止调 AI（引导注册，仍可手动标注） */
 export async function assertWithinAiQuota(
   unitsNeeded = 1,
 ): Promise<AiQuotaOk | AiQuotaBlocked> {
   const userId = await getServerAuthUserId();
+  if (!userId) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: AI_LOGIN_REQUIRED_MESSAGE,
+          code: AI_LOGIN_REQUIRED_CODE,
+        },
+        { status: 401 },
+      ),
+    };
+  }
   const { limit, base, bonus, inviteBonus, adminBonus, paused, plan } =
     await getEffectiveAiLimit(userId);
-  if (!userId) {
-    return { ok: true, userId: null, used: 0, limit };
-  }
   if (paused) {
     return {
       ok: false,

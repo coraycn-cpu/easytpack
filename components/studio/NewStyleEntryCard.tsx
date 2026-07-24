@@ -8,10 +8,19 @@ import SizeStandardFields, {
   type SizeStandardInput,
 } from "@/components/studio/SizeStandardFields";
 import { createStyleProject } from "@/lib/project/create-style";
-import { applyIntentToIntake, confirmTargetGarment, needsGarmentConfirmation } from "@/lib/intake/apply-intent";
+import { applyIntentToIntake } from "@/lib/intake/apply-intent";
 import { fileToDataUrl } from "@/lib/project/storage";
 import { prepareImageDataUrlForStorage } from "@/lib/canvas/paste-image";
 import type { IntakeData } from "@/types/project";
+import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
+import {
+  AI_LOGIN_REQUIRED_MESSAGE,
+  FREE_MONTHLY_AI_GIFT,
+  REGISTER_CTA_LABEL,
+  buildLoginHref,
+  messageFromAiResponse,
+} from "@/lib/ai/client-login-gate";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 
 export type NewStyleMode = "quick" | "full";
 
@@ -32,6 +41,7 @@ export default function NewStyleEntryCard({
   const [loading, setLoading] = useState(false);
   const [loadingPreset, setLoadingPreset] = useState<"intake" | "default">("default");
   const [error, setError] = useState<string | null>(null);
+  const [loginHint, setLoginHint] = useState<string | null>(null);
 
   const canSubmit = Boolean(imageDataUrl) && sizeStandard.sampleSize.trim().length > 0;
 
@@ -60,6 +70,7 @@ export default function NewStyleEntryCard({
     setLoading(true);
     setLoadingPreset("intake");
     setError(null);
+    setLoginHint(null);
 
     try {
       const sampleSize = sizeStandard.sampleSize.trim();
@@ -69,15 +80,20 @@ export default function NewStyleEntryCard({
         detectedCategory: "未分类",
       };
 
-      if (imageDataUrl) {
+      const loggedIn = await isLoggedInForCloud();
+      if (loggedIn) {
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ description, imageDataUrl }),
         });
         const intent = await res.json();
-        if (!res.ok) throw new Error(intent.error || "分析失败");
+        if (!res.ok) {
+          throw new Error(messageFromAiResponse(intent, "分析失败"));
+        }
         intake = applyIntentToIntake(intake, intent);
+      } else {
+        setLoginHint(AI_LOGIN_REQUIRED_MESSAGE);
       }
 
       const project = await createStyleProject({
@@ -88,10 +104,11 @@ export default function NewStyleEntryCard({
         intake,
         regionStandard: sizeStandard.regionStandard,
         sampleSize,
-        status: mode === "full" ? "collecting" : "studio",
+        // 未登录不做 AI 全量采集，直接进画布手动画
+        status: mode === "full" && loggedIn ? "collecting" : "studio",
       });
 
-      onCreated?.(project.id, mode);
+      onCreated?.(project.id, loggedIn ? mode : "quick");
       return project;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "创建失败";
@@ -186,12 +203,24 @@ export default function NewStyleEntryCard({
               onClick={() => createProject("quick")}
               className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
             >
-              进入画布
+              进入画布（可手动标注）
             </button>
-            <p className="text-center text-[10px] leading-relaxed text-slate-400">
-              进入画布后可手动标注。需要 AI 时用顶部「AI 一键标注」生成工艺/物料/尺寸初稿；「一键补全」只补缺项、不覆盖已有内容。
-            </p>
+            <GuestRegisterNudge
+              variant="inline"
+              next="/"
+              className="text-center"
+            />
           </div>
+
+          {loginHint ? (
+            <div className="space-y-2">
+              <GuestRegisterNudge next="/" />
+              <p className="text-center text-[10px] text-zinc-400">
+                刚才已用手动方式建款进画布；注册后即可用 AI（每月{" "}
+                {FREE_MONTHLY_AI_GIFT} 点）。
+              </p>
+            </div>
+          ) : null}
 
           {error && (
             <div className="space-y-1.5 text-center">
@@ -202,6 +231,14 @@ export default function NewStyleEntryCard({
                   className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
                 >
                   打开我的项目 · 删除或清理空间 →
+                </Link>
+              )}
+              {/注册|使用 AI|AI 额度/.test(error) && (
+                <Link
+                  href={buildLoginHref({ mode: "register", next: "/" })}
+                  className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
+                >
+                  {REGISTER_CTA_LABEL} →
                 </Link>
               )}
             </div>

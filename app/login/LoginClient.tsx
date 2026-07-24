@@ -12,6 +12,10 @@ import {
   captureInviteRefFromSearch,
   claimPendingInviteAfterAuth,
 } from "@/lib/invite/claim-pending";
+import {
+  FREE_MONTHLY_AI_GIFT,
+  REGISTER_CTA_LABEL,
+} from "@/lib/ai/login-gate";
 
 type Mode = "login" | "register";
 
@@ -193,10 +197,32 @@ export default function LoginClient() {
           {mode === "login" ? "登录账号" : "注册账号"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          登录后可以把工艺包同步到网上，换电脑也能打开继续做。
-          <br />
-          未登录也能照常在本机做款。
+          {mode === "register" ? (
+            <>
+              注册免费。每月送{" "}
+              <strong className="font-semibold text-zinc-800">
+                {FREE_MONTHLY_AI_GIFT} 点 AI
+              </strong>
+              额度（一键标注、生图、补全），还能把工艺包存到云端、换设备继续。
+              <br />
+              未登录也可先手动标注；要用 AI 或云端存档再来注册即可。
+            </>
+          ) : (
+            <>
+              登录后可继续使用你的 AI 额度与云端稿件，换电脑也能打开。
+              <br />
+              还没有账号？切换到「注册」，免费领每月 {FREE_MONTHLY_AI_GIFT}{" "}
+              点 AI。
+            </>
+          )}
         </p>
+        {mode === "register" && !inviteRef ? (
+          <ul className="mt-3 space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-950">
+            <li>✓ 每月 {FREE_MONTHLY_AI_GIFT} 点 AI 调用额度</li>
+            <li>✓ 云端存档，换设备不丢稿</li>
+            <li>✓ 邀请好友双方再各得 50 分</li>
+          </ul>
+        ) : null}
         {inviteRef ? (
           <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
             你正在通过好友邀请注册。注册成功后，双方各得 50
@@ -289,14 +315,18 @@ export default function LoginClient() {
             disabled={busy || !configured}
             className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
           >
-            {busy ? "请稍候…" : mode === "login" ? "登录" : "注册"}
+            {busy
+              ? "请稍候…"
+              : mode === "login"
+                ? "登录"
+                : REGISTER_CTA_LABEL}
           </button>
         </form>
 
         <p className="mt-4 text-center text-xs text-zinc-400">
           <Link href="/" className="text-blue-600 hover:underline">
-            先回首页继续本机使用
-          </Link>
+          先回首页继续手动标注
+        </Link>
         </p>
       </main>
     </div>

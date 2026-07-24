@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FULL_COLLECT_SOURCE_HINT } from "@/lib/ai/image-source-hints";
 import {
   fetchFullCollectQuestionnaire,
@@ -14,6 +15,10 @@ import {
 } from "@/components/studio/SizeStandardFields";
 import SizeStandardFields from "@/components/studio/SizeStandardFields";
 import type { AiQuestion, TechPackProject } from "@/types/project";
+import {
+  AI_LOGIN_REQUIRED_MESSAGE,
+  gateAiLogin,
+} from "@/lib/ai/client-login-gate";
 
 type Phase = "preparing" | "asking" | "size" | "drafting";
 
@@ -141,6 +146,7 @@ export default function FullCollectFlowOverlay({
   onComplete,
   onError,
 }: FullCollectFlowOverlayProps) {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("preparing");
   const [intro, setIntro] = useState("");
   const [questions, setQuestions] = useState<AiQuestion[]>([]);
@@ -234,6 +240,15 @@ export default function FullCollectFlowOverlay({
 
     void (async () => {
       try {
+        const gate = await gateAiLogin({
+          next: `/project/${project.id}/studio`,
+        });
+        if (!gate.ok) {
+          fail(gate.message || AI_LOGIN_REQUIRED_MESSAGE);
+          router.push(gate.href);
+          return;
+        }
+
         const preview = await resolveFullCollectQuestionImage(project);
         if (preview) setPreviewUrl(preview);
 
@@ -306,7 +321,7 @@ export default function FullCollectFlowOverlay({
         fail(e instanceof Error ? e.message : "准备问题失败");
       }
     })();
-  }, [fail, onProjectPatch, project]);
+  }, [fail, onProjectPatch, project, router]);
 
   const current = questions[index];
   const total = questions.length;

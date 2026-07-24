@@ -34,6 +34,8 @@ export async function pushTelemetryEventToCloud(
       outcome: event.outcome,
       image_refs: event.imageRefs ?? [],
       consent: true,
+      // M3 审核队列：新 consent 事件默认待审
+      review_status: "pending",
     });
     if (error) {
       console.warn("[ai-events]", error.message);

@@ -17,6 +17,11 @@ import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 import type { AiChatResponse, AiChatSuggestedAction } from "@/types/process";
 import type { TechPackProject } from "@/types/project";
+import {
+  gateAiLogin,
+  messageFromAiResponse,
+} from "@/lib/ai/client-login-gate";
+import { useRouter } from "next/navigation";
 
 type ChatMessage = {
   id: string;
@@ -90,6 +95,7 @@ export default function StudioAiDock({
   statusText,
   onRunSuggestedAction,
 }: StudioAiDockProps) {
+  const router = useRouter();
   const welcomeText = useMemo(
     () => buildChatWelcomeMessage(project),
     [
@@ -195,6 +201,22 @@ export default function StudioAiDock({
       const trimmed = text.trim();
       if (!trimmed || loading || disabled) return;
 
+      const gate = await gateAiLogin({
+        next: `/project/${project.id}/studio`,
+      });
+      if (!gate.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a_${Date.now()}`,
+            role: "assistant",
+            content: gate.message,
+          },
+        ]);
+        router.push(gate.href);
+        return;
+      }
+
       const userMsg: ChatMessage = {
         id: `u_${Date.now()}`,
         role: "user",
@@ -264,8 +286,8 @@ export default function StudioAiDock({
             images,
           }),
         });
-        const data = (await res.json()) as AiChatResponse & { error?: string };
-        if (!res.ok) throw new Error(data.error || "对话失败");
+        const data = (await res.json()) as AiChatResponse & { error?: string; code?: string };
+        if (!res.ok) throw new Error(messageFromAiResponse(data, "对话失败"));
 
         const { project: updated, changeSummary } = applyChatResponseToProject(
           project,
@@ -316,6 +338,7 @@ export default function StudioAiDock({
       resolvedActiveId,
       activeArtboardName,
       onProjectUpdate,
+      router,
     ],
   );
 

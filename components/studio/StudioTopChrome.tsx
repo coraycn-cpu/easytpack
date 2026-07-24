@@ -7,10 +7,12 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { syncAfterLogin } from "@/lib/project/cloud-sync";
 import {
-  isLoggedInForCloud,
-  syncAfterLogin,
-} from "@/lib/project/cloud-sync";
+  FREE_MONTHLY_AI_GIFT,
+  REGISTER_CTA_LABEL,
+  STUDIO_GUEST_BAR_TEXT,
+} from "@/lib/ai/login-gate";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -120,10 +122,13 @@ export default function StudioTopChrome({
 
   const handleSync = async () => {
     if (syncBusy) return;
-    const loggedIn = await isLoggedInForCloud();
-    if (!loggedIn) {
-      onTip?.("请先登录，再同步到网上");
-      router.push(`/login?next=/project/${currentProjectId}/studio`);
+    const { gateCloudSaveLogin } = await import("@/lib/ai/client-login-gate");
+    const gate = await gateCloudSaveLogin({
+      next: `/project/${currentProjectId}/studio`,
+    });
+    if (!gate.ok) {
+      onTip?.(gate.message);
+      router.push(gate.href);
       return;
     }
     setSyncBusy(true);
@@ -140,7 +145,8 @@ export default function StudioTopChrome({
   };
 
   const others = projects.filter((p) => p.id !== currentProjectId);
-  const loginHref = `/login?next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
+  const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
+  const showGuestHint = ready && configured && !email;
 
   return (
     <div
@@ -148,11 +154,11 @@ export default function StudioTopChrome({
         menuOpen ? "z-50" : "z-30"
       }`}
     >
-      <div className="relative min-w-0 flex-1 overflow-visible" ref={menuRef}>
+      <div className="relative min-w-0 shrink overflow-visible" ref={menuRef}>
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-slate-50"
+          className="flex max-w-[10rem] items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-slate-50 sm:max-w-[14rem]"
           title="切换项目"
           aria-expanded={menuOpen}
         >
@@ -205,6 +211,18 @@ export default function StudioTopChrome({
           </div>
         )}
       </div>
+
+      {showGuestHint ? (
+        <p
+          className="hidden min-w-0 flex-1 truncate text-[11px] text-amber-800/90 md:block"
+          title={STUDIO_GUEST_BAR_TEXT}
+        >
+          可手动标注 · 本机已自动保存 · 注册送每月 {FREE_MONTHLY_AI_GIFT} 点
+          AI + 云端存档
+        </p>
+      ) : (
+        <div className="min-w-0 flex-1" />
+      )}
 
       <div className="flex shrink-0 items-center gap-1.5">
         <button
@@ -269,8 +287,9 @@ export default function StudioTopChrome({
           <Link
             href={loginHref}
             className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
+            title={STUDIO_GUEST_BAR_TEXT}
           >
-            登录
+            {REGISTER_CTA_LABEL}
           </Link>
         )}
       </div>
