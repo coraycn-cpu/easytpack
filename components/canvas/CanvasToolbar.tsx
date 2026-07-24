@@ -109,38 +109,45 @@ export default function CanvasToolbar({
 
   const actionBtn = (disabled: boolean, danger?: boolean) =>
     light
-      ? `inline-flex h-8 items-center rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      ? `inline-flex h-7 shrink-0 items-center rounded px-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
           danger
             ? "text-rose-600 hover:bg-rose-50"
             : "text-slate-600 hover:bg-slate-100"
         }`
-      : `inline-flex h-8 items-center rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      : `inline-flex h-7 shrink-0 items-center rounded px-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
           danger ? "text-red-400 hover:bg-zinc-800" : "text-zinc-300 hover:bg-zinc-800"
         }`;
 
   const toolBtn = (active: boolean) =>
     light
-      ? `inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition ${
+      ? `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-1.5 text-[11px] font-medium transition ${
           active
             ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
             : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
         }`
-      : `inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm transition ${
+      : `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-1.5 text-[11px] transition ${
           active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-700"
         }`;
 
   const zoomBtn = light
-    ? "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-600 transition hover:bg-slate-100"
-    : "inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-zinc-300 hover:bg-zinc-800";
+    ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-slate-600 transition hover:bg-slate-100"
+    : "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-zinc-300 hover:bg-zinc-800";
 
   const aiBtn = (primary?: boolean) =>
-    `inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+    `inline-flex h-7 shrink-0 items-center gap-0.5 rounded px-2 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
       primary
         ? "bg-blue-600 text-white hover:bg-blue-700"
         : light
           ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
           : "border border-blue-500/40 bg-blue-950 text-blue-200 hover:bg-blue-900"
     }`;
+
+  const divider = (
+    <div
+      className={`mx-0.5 h-5 w-px shrink-0 ${light ? "bg-slate-200" : "bg-zinc-700"}`}
+      aria-hidden
+    />
+  );
 
   const hasAi =
     onFullCollect ||
@@ -155,22 +162,24 @@ export default function CanvasToolbar({
   return (
     <div
       className={`shrink-0 ${
-        light ? "border-b border-slate-200/80 bg-white" : flat ? "border-b border-[#333] bg-[#1a1a1a]" : "border-b border-zinc-700/50 bg-[#1a1a1a]"
+        light
+          ? "border-b border-slate-200/80 bg-white"
+          : flat
+            ? "border-b border-[#333] bg-[#1a1a1a]"
+            : "border-b border-zinc-700/50 bg-[#1a1a1a]"
       }`}
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+      {/* 单行紧凑：不换行，窄屏横向滑动，把高度让给画布 */}
+      <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-1 [scrollbar-width:thin]">
         <div
-          className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 ${
+          className={`flex shrink-0 items-center gap-1 ${
             manualLocked ? "pointer-events-none opacity-50" : ""
           }`}
         >
-          <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-slate-400 lg:inline">
-            手动
-          </span>
           <div
             data-canvas-toolbar
-            className={`inline-flex flex-wrap items-center gap-0.5 rounded-lg p-1 ${
-              light ? "bg-slate-100" : flat ? "bg-[#262626]" : "rounded-lg bg-zinc-800 p-1"
+            className={`inline-flex items-center gap-0.5 rounded-md p-0.5 ${
+              light ? "bg-slate-100" : flat ? "bg-[#262626]" : "bg-zinc-800"
             }`}
           >
             {TOOLS.map((t) => (
@@ -188,10 +197,10 @@ export default function CanvasToolbar({
                 }}
                 className={toolBtn(tool === t.id)}
               >
-                <span className="text-sm leading-none" aria-hidden>
+                <span className="text-xs leading-none" aria-hidden>
                   {t.icon}
                 </span>
-                <span className="hidden sm:inline">{t.label}</span>
+                <span className="hidden xl:inline">{t.label}</span>
               </button>
             ))}
             {onPasteImage && (
@@ -203,8 +212,10 @@ export default function CanvasToolbar({
                   className={`${toolBtn(false)} disabled:cursor-not-allowed disabled:opacity-40`}
                   title={ANN_ACTION_LABELS.pasteImageHint}
                 >
-                  <span className="text-sm leading-none">⧉</span>
-                  <span className="hidden sm:inline">{ANN_ACTION_LABELS.pasteImage}</span>
+                  <span className="text-xs leading-none">⧉</span>
+                  <span className="hidden xl:inline">
+                    {ANN_ACTION_LABELS.pasteImage}
+                  </span>
                 </button>
                 <input
                   ref={pasteFileRef}
@@ -227,20 +238,20 @@ export default function CanvasToolbar({
             )}
           </div>
 
-          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
+          {divider}
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             {ANNOTATION_COLORS.slice(0, 5).map((c) => (
               <button
                 key={c.id}
                 type="button"
                 title={c.label}
                 onClick={() => onColorChange(c.value)}
-                className={`h-6 w-6 rounded-full transition ring-offset-2 ${
+                className={`h-5 w-5 shrink-0 rounded-full transition ring-offset-1 ${
                   light ? "ring-offset-white" : "ring-offset-[#1a1a1a]"
                 } ${
                   color === c.value
-                    ? "ring-2 ring-slate-400 scale-110"
+                    ? "scale-110 ring-2 ring-slate-400"
                     : "ring-1 ring-black/10 hover:scale-105"
                 }`}
                 style={{ backgroundColor: c.value }}
@@ -248,12 +259,14 @@ export default function CanvasToolbar({
             ))}
           </div>
 
-          <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-
-          {layerVisibility && onLayerVisibilityChange && (
+          {layerVisibility && onLayerVisibilityChange ? (
             <>
-              <div className="flex items-center gap-2">
-                <label className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+              {divider}
+              <div className="flex shrink-0 items-center gap-1.5">
+                <label
+                  className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-slate-500"
+                  title="显示/隐藏工艺标注层"
+                >
                   <input
                     type="checkbox"
                     checked={layerVisibility.process}
@@ -265,9 +278,12 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  工艺层
+                  工艺
                 </label>
-                <label className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                <label
+                  className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-slate-500"
+                  title="显示/隐藏尺寸标注层"
+                >
                   <input
                     type="checkbox"
                     checked={layerVisibility.size}
@@ -279,18 +295,31 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  尺寸层
+                  尺寸
                 </label>
               </div>
-              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
             </>
-          )}
+          ) : null}
 
-          <div className="flex items-center gap-0.5">
-            <button type="button" disabled={!canUndo} onClick={onUndo} className={actionBtn(!canUndo)}>
+          {divider}
+
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              disabled={!canUndo}
+              onClick={onUndo}
+              className={actionBtn(!canUndo)}
+              title="撤销"
+            >
               撤销
             </button>
-            <button type="button" disabled={!canRedo} onClick={onRedo} className={actionBtn(!canRedo)}>
+            <button
+              type="button"
+              disabled={!canRedo}
+              onClick={onRedo}
+              className={actionBtn(!canRedo)}
+              title="重做"
+            >
               重做
             </button>
             <button
@@ -298,18 +327,17 @@ export default function CanvasToolbar({
               disabled={!canDelete}
               onClick={onDelete}
               className={actionBtn(!canDelete, true)}
+              title="删除选中"
             >
               删除
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {hasAi && (
-            <>
-              <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-blue-500 lg:inline">
-                AI 辅助
-              </span>
+        {hasAi ? (
+          <>
+            {divider}
+            <div className="flex shrink-0 items-center gap-1">
               {onFullCollect && (
                 <button
                   type="button"
@@ -330,7 +358,9 @@ export default function CanvasToolbar({
                   className={aiBtn()}
                   title={`${AI_ACTION_BUTTON_TITLES["annotate-process"]} · ${ANN_ACTION_LABELS.aiBatchProcessHint}`}
                 >
-                  {annotateProcessLoading ? "标注中…" : ANN_ACTION_LABELS.aiBatchProcess}
+                  {annotateProcessLoading
+                    ? "标注中…"
+                    : ANN_ACTION_LABELS.aiBatchProcess}
                 </button>
               )}
               {onFillBom && (
@@ -377,39 +407,42 @@ export default function CanvasToolbar({
                   款式评语
                 </button>
               )}
-              <div className={`h-6 w-px ${light ? "bg-slate-200" : "bg-zinc-700"}`} />
-            </>
-          )}
+            </div>
+          </>
+        ) : null}
 
-          <span className="text-[10px] font-medium text-slate-500">视图缩放</span>
-          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-1">
+        {divider}
+
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md bg-slate-100 p-0.5">
+          <button
+            type="button"
+            onClick={() => setScale(Math.max(0.25, scale - 0.1))}
+            className={zoomBtn}
+            title="缩小"
+          >
+            −
+          </button>
+          <span className="min-w-[2.75rem] text-center text-[11px] font-medium tabular-nums text-slate-600">
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setScale(Math.min(2, scale + 0.1))}
+            className={zoomBtn}
+            title="放大"
+          >
+            +
+          </button>
+          {onResetViewport && (
             <button
               type="button"
-              onClick={() => setScale(Math.max(0.25, scale - 0.1))}
-              className={zoomBtn}
+              onClick={onResetViewport}
+              className="rounded px-1.5 text-[11px] text-slate-600 hover:bg-slate-200"
+              title="重置视图"
             >
-              −
+              重置
             </button>
-            <span className="min-w-[3rem] text-center text-xs font-medium tabular-nums text-slate-600">
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setScale(Math.min(2, scale + 0.1))}
-              className={zoomBtn}
-            >
-              +
-            </button>
-            {onResetViewport && (
-              <button
-                type="button"
-                onClick={onResetViewport}
-                className="ml-0.5 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
-              >
-                重置
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
