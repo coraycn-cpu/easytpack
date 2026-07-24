@@ -60,7 +60,7 @@ export default function StudioAccountChip({
   const loadUsage = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/account/usage?page=1&pageSize=1");
+      const res = await fetch("/api/account/usage?summary=1");
       if (!res.ok) {
         setSummary(null);
         return;

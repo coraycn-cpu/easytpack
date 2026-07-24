@@ -126,19 +126,26 @@ async function dehydrateProject(project: TechPackProject): Promise<TechPackProje
 async function hydrateProject(project: TechPackProject): Promise<TechPackProject> {
   const intakeRaw =
     toDurableImageRef(project.intake.imageDataUrl) ?? project.intake.imageDataUrl;
-  const intakeUrl = await resolveImageRef(intakeRaw);
-  const artboards: Artboard[] = [];
-  for (const ab of project.canvas_data.artboards) {
-    const raw = toDurableImageRef(ab.imageDataUrl) ?? ab.imageDataUrl;
-    const resolved = await resolveImageRef(raw);
-    // 解析失败时不要把 idb:/sbstorage: 原串当 src（会空白且难排查）
-    const imageDataUrl =
-      resolved ??
-      (raw && (isIdbImageRef(raw) || raw.startsWith("sbstorage:"))
-        ? undefined
-        : raw);
-    artboards.push({ ...ab, imageDataUrl });
-  }
+  const artboardRaws = project.canvas_data.artboards.map((ab) => ({
+    ab,
+    raw: toDurableImageRef(ab.imageDataUrl) ?? ab.imageDataUrl,
+  }));
+
+  // 多图并行换链/读本地，缩短打开画布等待
+  const [intakeUrl, ...resolvedArtboards] = await Promise.all([
+    resolveImageRef(intakeRaw),
+    ...artboardRaws.map(async ({ ab, raw }) => {
+      const resolved = await resolveImageRef(raw);
+      // 解析失败时不要把 idb:/sbstorage: 原串当 src（会空白且难排查）
+      const imageDataUrl =
+        resolved ??
+        (raw && (isIdbImageRef(raw) || raw.startsWith("sbstorage:"))
+          ? undefined
+          : raw);
+      return { ...ab, imageDataUrl };
+    }),
+  ]);
+
   return {
     ...project,
     intake: {
@@ -150,7 +157,10 @@ async function hydrateProject(project: TechPackProject): Promise<TechPackProject
           ? undefined
           : intakeRaw),
     },
-    canvas_data: { ...project.canvas_data, artboards },
+    canvas_data: {
+      ...project.canvas_data,
+      artboards: resolvedArtboards,
+    },
   };
 }
 

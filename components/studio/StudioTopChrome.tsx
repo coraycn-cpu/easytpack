@@ -7,6 +7,7 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { getCachedAuthUser, invalidateClientAuthCache } from "@/lib/supabase/auth-cache";
 import { syncAfterLogin } from "@/lib/project/cloud-sync";
 import {
   FREE_MONTHLY_AI_GIFT,
@@ -56,9 +57,8 @@ export default function StudioTopChrome({
     setConfigured(ok);
     if (ok) {
       try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser();
-        setEmail(data.user?.email ?? null);
+        const user = await getCachedAuthUser();
+        setEmail(user?.email ?? null);
       } catch {
         setEmail(null);
       }
@@ -115,6 +115,7 @@ export default function StudioTopChrome({
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
+      invalidateClientAuthCache();
       setEmail(null);
       onTip?.("已退出登录，项目仍留在本机浏览器");
       router.refresh();

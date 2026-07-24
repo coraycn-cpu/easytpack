@@ -3,6 +3,7 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { getCachedAuthUserId } from "@/lib/supabase/auth-cache";
 import {
   mergeProjectsPreferNewer,
   projectToRow,
@@ -14,18 +15,38 @@ import { migrateProject } from "@/lib/project/hotspots";
 async function currentUserId(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   if (!isSupabaseConfigured()) return null;
-  try {
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) return null;
-    return data.user.id;
-  } catch {
-    return null;
-  }
+  return getCachedAuthUserId();
 }
 
 export async function isLoggedInForCloud(): Promise<boolean> {
   return Boolean(await currentUserId());
+}
+
+/** 列表用瘦字段（不含大 jsonb） */
+export type CloudProjectMeta = {
+  id: string;
+  title: string;
+  status: string;
+  workflow_status: string;
+  updated_at: string;
+  created_at: string;
+  style_no: string | null;
+};
+
+const LIST_META_SELECT =
+  "id, title, status, workflow_status, updated_at, created_at, style_no";
+
+export async function fetchCloudProjectMetas(): Promise<CloudProjectMeta[]> {
+  const userId = await currentUserId();
+  if (!userId) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("tech_packs")
+    .select(LIST_META_SELECT)
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CloudProjectMeta[];
 }
 
 export async function fetchCloudProjects(): Promise<TechPackProject[]> {
@@ -58,6 +79,27 @@ export async function fetchCloudProject(
   if (error) throw new Error(error.message);
   if (!data) return null;
   return migrateProject(rowToProject(data as TechPackRow));
+}
+
+/** 并行拉取若干完整项目（限制并发，避免打爆网络） */
+async function fetchCloudProjectsByIds(
+  ids: string[],
+  concurrency = 4,
+): Promise<TechPackProject[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const out: TechPackProject[] = [];
+  let i = 0;
+  async function worker() {
+    while (i < unique.length) {
+      const id = unique[i++];
+      const p = await fetchCloudProject(id);
+      if (p) out.push(p);
+    }
+  }
+  const n = Math.min(concurrency, unique.length);
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return out;
 }
 
 /** 登录时：先尽量上传图片，再把表数据（含图片引用）写到云端 */
@@ -126,13 +168,45 @@ export async function mirrorDeleteFromCloud(
   }
 }
 
+/**
+ * 本机与云端合并：先拉瘦列表，只对「云端更新 / 仅云端有」的项目拉整包。
+ * 本机已是最新时避免把所有 jsonb 再下载一遍。
+ */
 export async function mergeLocalWithCloud(
   localList: TechPackProject[],
 ): Promise<TechPackProject[]> {
   try {
-    const cloud = await fetchCloudProjects();
-    if (cloud.length === 0) return localList;
-    return mergeProjectsPreferNewer(localList, cloud);
+    // 本机空：一次 select * 往往比 N 次按 id 拉取更省
+    if (localList.length === 0) {
+      const cloud = await fetchCloudProjects();
+      if (cloud.length === 0) return localList;
+      return mergeProjectsPreferNewer(localList, cloud);
+    }
+
+    const metas = await fetchCloudProjectMetas();
+    if (metas.length === 0) return localList;
+
+    const localById = new Map(localList.map((p) => [p.id, p]));
+    const needFull: string[] = [];
+    for (const m of metas) {
+      const local = localById.get(m.id);
+      if (!local) {
+        needFull.push(m.id);
+        continue;
+      }
+      const localT = Date.parse(local.updatedAt) || 0;
+      const cloudT = Date.parse(m.updated_at) || 0;
+      if (cloudT > localT) needFull.push(m.id);
+    }
+
+    // 几乎都要整包时，退回一次 select *
+    if (needFull.length >= Math.max(3, metas.length)) {
+      const cloud = await fetchCloudProjects();
+      return mergeProjectsPreferNewer(localList, cloud);
+    }
+
+    const cloudFull = await fetchCloudProjectsByIds(needFull);
+    return mergeProjectsPreferNewer(localList, cloudFull);
   } catch {
     return localList;
   }
@@ -254,11 +328,18 @@ export async function pushAllLocalProjectsToCloud(
   }
   let ok = 0;
   let fail = 0;
-  for (const p of localList) {
-    const res = await mirrorSaveToCloud(p);
-    if (res.ok) ok += 1;
-    else fail += 1;
+  // 并发上传，避免登录/同步时一个项目卡住整条队列
+  const concurrency = Math.min(3, localList.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < localList.length) {
+      const p = localList[cursor++];
+      const res = await mirrorSaveToCloud(p);
+      if (res.ok) ok += 1;
+      else fail += 1;
+    }
   }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
   const message =
     fail === 0
       ? `已同步 ${ok} 个项目到云端（含图片上传，可能稍慢）。`

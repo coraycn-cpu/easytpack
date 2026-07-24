@@ -10,8 +10,8 @@ import {
 } from "@/lib/supabase/client";
 import {
   captureInviteRefFromSearch,
-  claimPendingInviteAfterAuth,
 } from "@/lib/invite/claim-pending";
+import { startPostAuthBackgroundWork } from "@/lib/auth/post-auth-bootstrap";
 import {
   FREE_MONTHLY_AI_GIFT,
   REGISTER_CTA_LABEL,
@@ -118,28 +118,13 @@ export default function LoginClient() {
     try {
       const supabase = createClient();
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmed,
           password,
         });
         if (error) throw error;
-        // 自动同步：登录后先拉云端再推本机；手动模式跳过，由用户点同步
-        try {
-          const { isCloudSyncAuto } = await import(
-            "@/lib/project/sync-preference"
-          );
-          const { resolveProjectRepository } = await import(
-            "@/lib/project/repository"
-          );
-          await resolveProjectRepository();
-          if (isCloudSyncAuto()) {
-            const { syncAfterLogin } = await import("@/lib/project/cloud-sync");
-            await syncAfterLogin();
-          }
-        } catch {
-          /* 同步失败不挡进入首页 */
-        }
-        await claimPendingInviteAfterAuth();
+        // 先进入产品；邀请领取 + 云端同步放后台，避免登录按钮卡很久
+        startPostAuthBackgroundWork({ user: data.user });
         router.replace(nextPath);
         router.refresh();
         return;
@@ -155,22 +140,7 @@ export default function LoginClient() {
       if (error) throw error;
 
       if (data.session) {
-        try {
-          const { isCloudSyncAuto } = await import(
-            "@/lib/project/sync-preference"
-          );
-          const { resolveProjectRepository } = await import(
-            "@/lib/project/repository"
-          );
-          await resolveProjectRepository();
-          if (isCloudSyncAuto()) {
-            const { syncAfterLogin } = await import("@/lib/project/cloud-sync");
-            await syncAfterLogin();
-          }
-        } catch {
-          /* ignore */
-        }
-        await claimPendingInviteAfterAuth();
+        startPostAuthBackgroundWork({ user: data.user });
         router.replace(nextPath);
         router.refresh();
         return;
