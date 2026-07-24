@@ -2693,17 +2693,9 @@ export default function StudioPage() {
                   : undefined
               }
               onCancel={
-                activeAiPreset === "intake" &&
-                (pendingAiAnalysis ||
-                  (typeof window !== "undefined" &&
-                    new URLSearchParams(window.location.search).get(
-                      "pendingAi",
-                    ) === "1") ||
-                  Boolean(aiTip?.includes("理解款式")))
+                activeAiPreset === "intake"
                   ? cancelPendingAiAnalysis
-                  : activeAiPreset === "intake"
-                    ? cancelPendingAiAnalysis
-                    : undefined
+                  : undefined
               }
               imagePreview={
                 activeAiImageSource?.previewUrl ??
