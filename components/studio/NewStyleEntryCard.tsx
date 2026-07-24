@@ -15,9 +15,12 @@ import type { IntakeData } from "@/types/project";
 import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
 import {
   AI_LOGIN_REQUIRED_MESSAGE,
+  FREE_MONTHLY_AI_GIFT,
+  REGISTER_CTA_LABEL,
   buildLoginHref,
   messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 
 export type NewStyleMode = "quick" | "full";
 
@@ -202,29 +205,21 @@ export default function NewStyleEntryCard({
             >
               进入画布（可手动标注）
             </button>
-            <p className="text-center text-[10px] leading-relaxed text-slate-400">
-              未登录也可进画布用手动画框、写工艺/尺寸。AI
-              识图、一键标注、生图，以及把稿存到云端，需要先
-              <Link
-                href={buildLoginHref({ mode: "register", next: "/" })}
-                className="mx-0.5 text-blue-600 hover:underline"
-              >
-                注册/登录
-              </Link>
-              。
-            </p>
+            <GuestRegisterNudge
+              variant="inline"
+              next="/"
+              className="text-center"
+            />
           </div>
 
           {loginHint ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-[11px] leading-relaxed text-amber-800">
-              {loginHint}{" "}
-              <Link
-                href={buildLoginHref({ mode: "register", next: "/" })}
-                className="font-medium text-blue-700 underline"
-              >
-                去注册
-              </Link>
-            </p>
+            <div className="space-y-2">
+              <GuestRegisterNudge next="/" />
+              <p className="text-center text-[10px] text-zinc-400">
+                刚才已用手动方式建款进画布；注册后即可用 AI（每月{" "}
+                {FREE_MONTHLY_AI_GIFT} 点）。
+              </p>
+            </div>
           ) : null}
 
           {error && (
@@ -238,12 +233,12 @@ export default function NewStyleEntryCard({
                   打开我的项目 · 删除或清理空间 →
                 </Link>
               )}
-              {/注册或登录|使用 AI/.test(error) && (
+              {/注册|使用 AI|AI 额度/.test(error) && (
                 <Link
                   href={buildLoginHref({ mode: "register", next: "/" })}
                   className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
                 >
-                  去注册 / 登录 →
+                  {REGISTER_CTA_LABEL} →
                 </Link>
               )}
             </div>

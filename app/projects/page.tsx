@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import {
   duplicateProject,
@@ -275,7 +277,7 @@ export default function ProjectsPage() {
               ? syncMode === "auto"
                 ? "当前：自动同步。登录与保存时会尽量传到云端；也可手动点下方按钮。"
                 : "当前：手动同步。保存只写本机，需要时再点下方按钮传到云端。"
-              : "未登录：项目只存在当前浏览器，可继续手动标注。要用 AI，或把稿存到云端、换设备继续，请先注册/登录。"}
+              : `未登录：可继续手动标注（稿在本机浏览器）。注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI，还能同步到云端、换设备继续。`}
           </p>
 
           {cloudLoggedIn ? (
@@ -284,7 +286,11 @@ export default function ProjectsPage() {
                 onChanged={(_m, msg) => setCacheNote(msg)}
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-2">
+              <GuestRegisterNudge next="/projects" />
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap gap-2">
             {cloudLoggedIn ? (
@@ -316,10 +322,10 @@ export default function ProjectsPage() {
               </>
             ) : (
               <Link
-                href="/login?mode=register&next=/projects"
+                href="/login?next=/projects"
                 className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
               >
-                去注册/登录
+                已有账号？去登录
               </Link>
             )}
           </div>

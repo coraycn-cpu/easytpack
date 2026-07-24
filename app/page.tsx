@@ -7,6 +7,7 @@ import NewStyleEntryCard, {
   type NewStyleMode,
 } from "@/components/studio/NewStyleEntryCard";
 import AuthHeaderControls from "@/components/auth/AuthHeaderControls";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import Link from "next/link";
 import {
   createClient,
@@ -15,6 +16,7 @@ import {
 import { listProjects } from "@/lib/project/storage";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
+import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
 
 function studioHref(p: { id: string; status: string }) {
   return p.status === "collecting"
@@ -136,8 +138,9 @@ export default function CanvasHomePage() {
         <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-7 text-center shadow-sm backdrop-blur">
           <p className="text-lg font-semibold text-slate-800">空白画布</p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            上传款式图后可手动标注工艺与尺寸，再导出给版师。未登录也能本机手动画；
-            AI 与云端存档需要先注册/登录。
+            上传款式图后可先手动标注工艺与尺寸，再导出给版师。
+            要用 AI（一键标注、生图）或把稿存到云端，注册即可——免费送每月{" "}
+            {FREE_MONTHLY_AI_GIFT} 点 AI。
           </p>
 
           <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-left text-[11px] leading-relaxed text-slate-600">
@@ -145,7 +148,9 @@ export default function CanvasHomePage() {
             <ol className="mt-1.5 list-decimal space-y-1 pl-4">
               <li>点「新建款式」上传正面图</li>
               <li>在画布里用方框/尺寸线/表格手动标注</li>
-              <li>要用 AI 或把稿存到云端 → 先注册/登录</li>
+              <li>
+                需要 AI 或云端存档时，注册领取每月 {FREE_MONTHLY_AI_GIFT} 点
+              </li>
             </ol>
           </div>
 
@@ -158,26 +163,18 @@ export default function CanvasHomePage() {
           </button>
 
           {configured && !loggedIn ? (
-            <div className="mt-4 flex gap-2">
-              <Link
-                href="/login?next=/"
-                className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                登录
-              </Link>
-              <Link
-                href="/login?mode=register&next=/"
-                className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-medium text-white hover:bg-zinc-700"
-              >
-                注册
-              </Link>
+            <div className="mt-4 space-y-2">
+              <GuestRegisterNudge next="/" />
+              <p className="text-center text-[11px] text-slate-400">
+                已有账号？
+                <Link
+                  href="/login?next=/"
+                  className="ml-1 text-blue-600 hover:underline"
+                >
+                  去登录
+                </Link>
+              </p>
             </div>
-          ) : null}
-
-          {configured && !loggedIn ? (
-            <p className="mt-3 text-[11px] text-slate-400">
-              登录后这里会显示你的最近项目。
-            </p>
           ) : null}
 
           {loggedIn ? (

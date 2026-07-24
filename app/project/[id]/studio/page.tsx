@@ -214,7 +214,9 @@ export default function StudioPage() {
     });
     if (gate.ok) return true;
     setAiMessage(gate.message);
-    setAiTip("手动标注不受影响：方框 / 尺寸线 / 工艺表可直接改");
+    setAiTip(
+      `手动标注不受影响。注册免费，每月送 AI 额度，还能云端存档。`,
+    );
     router.push(gate.href);
     return false;
   }, [id, router]);
@@ -276,7 +278,9 @@ export default function StudioPage() {
           if (ok) setFullCollectOpen(true);
           else {
             setAiMessage(AI_LOGIN_REQUIRED_MESSAGE);
-            setAiTip("可先手动标注；需要 AI 一键标注时请注册登录");
+            setAiTip(
+              "可先手动标注。注册即送每月 AI 额度，一键标注 / 生图都能用。",
+            );
           }
         });
       }

@@ -8,6 +8,11 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import { syncAfterLogin } from "@/lib/project/cloud-sync";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import {
+  FREE_MONTHLY_AI_GIFT,
+  REGISTER_CTA_LABEL,
+} from "@/lib/ai/login-gate";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -143,6 +148,7 @@ export default function StudioTopChrome({
   const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
 
   return (
+    <>
     <div
       className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-[#cbd5e1] bg-white px-3 py-1.5 ${
         menuOpen ? "z-50" : "z-30"
@@ -269,11 +275,19 @@ export default function StudioTopChrome({
           <Link
             href={loginHref}
             className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
+            title={`注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
           >
-            注册/登录
+            {REGISTER_CTA_LABEL}
           </Link>
         )}
       </div>
     </div>
+    {ready && configured && !email ? (
+      <GuestRegisterNudge
+        variant="banner"
+        next={`/project/${currentProjectId}/studio`}
+      />
+    ) : null}
+    </>
   );
 }
