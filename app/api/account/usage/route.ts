@@ -28,6 +28,33 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
+  const summaryOnly =
+    searchParams.get("summary") === "1" ||
+    searchParams.get("summary") === "true";
+
+  // 画布右上角等只要 used/limit/plan：跳过明细与 count，并行查额度
+  if (summaryOnly) {
+    const [used, limitInfo] = await Promise.all([
+      sumCloudAiUsageThisMonth(userId),
+      getEffectiveAiLimit(userId),
+    ]);
+    return NextResponse.json({
+      used,
+      limit: limitInfo.limit,
+      base: limitInfo.base,
+      bonus: limitInfo.bonus,
+      inviteBonus: limitInfo.inviteBonus,
+      adminBonus: limitInfo.adminBonus,
+      plan: limitInfo.plan,
+      paused: limitInfo.paused,
+      page: 1,
+      pageSize: 0,
+      total: 0,
+      totalPages: 1,
+      items: [] as AiUsageItem[],
+    });
+  }
+
   const pageRaw = Number(searchParams.get("page") || "1");
   const pageSizeRaw = Number(
     searchParams.get("pageSize") || String(DEFAULT_PAGE_SIZE),
@@ -43,9 +70,12 @@ export async function GET(req: NextRequest) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const used = await sumCloudAiUsageThisMonth(userId);
+  const [used, limitInfo] = await Promise.all([
+    sumCloudAiUsageThisMonth(userId),
+    getEffectiveAiLimit(userId),
+  ]);
   const { limit, base, bonus, inviteBonus, adminBonus, plan, paused } =
-    await getEffectiveAiLimit(userId);
+    limitInfo;
 
   try {
     const supabase = await createClient();

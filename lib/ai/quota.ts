@@ -108,12 +108,35 @@ export async function sumCloudAiUsageThisMonth(
 ): Promise<number> {
   try {
     const supabase = await createClient();
+    const monthStart = startOfMonthIso();
+
+    // 优先让数据库求和，避免把本月所有行拉到应用层
+    const { data: agg, error: aggError } = await supabase
+      .from("ai_usage")
+      .select("units.sum()")
+      .eq("user_id", userId)
+      .eq("ok", true)
+      .gte("created_at", monthStart)
+      .maybeSingle();
+
+    if (!aggError && agg && typeof agg === "object") {
+      const row = agg as Record<string, unknown>;
+      // PostgREST 可能返回 { sum: n } 或 { units: n }
+      let raw: unknown = row.sum ?? row.units;
+      if (raw && typeof raw === "object" && raw !== null && "sum" in raw) {
+        raw = (raw as { sum: unknown }).sum;
+      }
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
+    }
+
+    // 旧环境若不支持聚合，回退到拉 units 再加总
     const { data, error } = await supabase
       .from("ai_usage")
       .select("units")
       .eq("user_id", userId)
       .eq("ok", true)
-      .gte("created_at", startOfMonthIso());
+      .gte("created_at", monthStart);
     if (error || !data) return 0;
     return data.reduce((n, row) => n + (Number(row.units) || 0), 0);
   } catch {
