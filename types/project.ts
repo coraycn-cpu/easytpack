@@ -52,6 +52,11 @@ export type IntakeData = {
   flatFrontSkipped?: boolean;
   /** 项目库分类（相册整理用，随 intake jsonb 存云端，无需改表） */
   libraryCategory?: string;
+  /**
+   * 未登录先建草稿、登录后再跑 AI 分析。
+   * 登录进画布后应消费并清除。
+   */
+  pendingAiAnalysis?: boolean;
 };
 
 export type QuestionOption = {

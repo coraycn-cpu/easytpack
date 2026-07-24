@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NewStyleEntryCard, {
   CanvasGridBackground,
-  type NewStyleMode,
 } from "@/components/studio/NewStyleEntryCard";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import BrandFooter from "@/components/brand/BrandFooter";
@@ -17,7 +16,12 @@ import {
 import { listProjects } from "@/lib/project/storage";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
-import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
+import {
+  FREE_MONTHLY_AI_GIFT,
+  LOGIN_CTA_LABEL,
+  REGISTER_CTA_LABEL,
+  buildLoginHref,
+} from "@/lib/ai/login-gate";
 import {
   RECENT_PROJECTS_LIMIT,
   shortProjectTitle,
@@ -81,12 +85,23 @@ export default function CanvasHomePage() {
     };
   }, []);
 
-  const handleCreated = (projectId: string, mode: NewStyleMode) => {
+  const handleCreated = (projectId: string) => {
+    setNewOpen(false);
+    // 新建款只进普通画布；全量标注由画布内手动点「AI 一键标注」
+    router.push(`/project/${projectId}/studio`);
+  };
+
+  const handleCreatedNeedLogin = (
+    projectId: string,
+    authMode: "login" | "register",
+  ) => {
     setNewOpen(false);
     router.push(
-      mode === "full"
-        ? `/project/${projectId}/studio?fullCollect=1`
-        : `/project/${projectId}/studio`,
+      buildLoginHref({
+        mode: authMode,
+        // 登录后带回草稿：跑基础 AI 分析（非全量标注）
+        next: `/project/${projectId}/studio?pendingAi=1`,
+      }),
     );
   };
 
@@ -130,23 +145,28 @@ export default function CanvasHomePage() {
           <button
             type="button"
             onClick={() => setNewOpen(true)}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             新建款式
           </button>
 
           {configured && !loggedIn ? (
-            <div className="mt-4 space-y-2">
-              <GuestRegisterNudge next="/" />
-              <p className="text-center text-[11px] text-slate-400">
-                已有账号？
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Link
-                  href="/login?next=/"
-                  className="ml-1 text-blue-600 hover:underline"
+                  href={buildLoginHref({ mode: "register", next: "/" })}
+                  className="flex min-h-11 items-center justify-center rounded-xl bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700"
                 >
-                  去登录
+                  {REGISTER_CTA_LABEL}
                 </Link>
-              </p>
+                <Link
+                  href={buildLoginHref({ mode: "login", next: "/" })}
+                  className="flex min-h-11 items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-3 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  {LOGIN_CTA_LABEL}
+                </Link>
+              </div>
+              <GuestRegisterNudge next="/" showCta={false} />
             </div>
           ) : null}
 
@@ -208,7 +228,11 @@ export default function CanvasHomePage() {
             >
               ×
             </button>
-            <NewStyleEntryCard variant="overlay" onCreated={handleCreated} />
+            <NewStyleEntryCard
+              variant="overlay"
+              onCreated={handleCreated}
+              onCreatedNeedLogin={handleCreatedNeedLogin}
+            />
           </div>
         </div>
       )}

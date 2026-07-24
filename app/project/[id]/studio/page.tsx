@@ -15,6 +15,7 @@ import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
+import { buildLoginHref } from "@/lib/ai/login-gate";
 import {
   applyIntentToIntake,
   confirmTargetGarment,
@@ -98,8 +99,13 @@ import { getProject, saveProject } from "@/lib/project/storage";
 import {
   AI_LOGIN_REQUIRED_MESSAGE,
   gateAiLogin,
+  messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
 import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
+import {
+  createClient,
+  isSupabaseConfigured,
+} from "@/lib/supabase/client";
 import {
   computeArtboardSlots,
   nextArtboardOrigin,
@@ -192,7 +198,9 @@ export default function StudioPage() {
     Record<string, string>
   >({});
   const garmentBlocked = Boolean(
-    project && needsGarmentConfirmation(project.intake),
+    project &&
+      !project.intake.pendingAiAnalysis &&
+      needsGarmentConfirmation(project.intake),
   );
   const aiBusy =
     aiTask !== null ||
@@ -265,11 +273,17 @@ export default function StudioPage() {
       setProject(p);
       setActiveArtboardId(p.canvas_data.activeArtboardId);
       setLayout(getStudioLayout(p.canvas_data.studioLayout));
-      // 全量标注问答在弹窗内完成：显式 ?fullCollect=1 或 status=collecting
-      const fullCollectParam =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("fullCollect") === "1";
+      // 全量标注：仅显式 ?fullCollect=1 或 status=collecting，且不是「登录后轻量分析」草稿
+      const search =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : null;
+      const fullCollectParam = search?.get("fullCollect") === "1";
+      const pendingAiParam = search?.get("pendingAi") === "1";
+      const isPendingAiDraft =
+        pendingAiParam || Boolean(p.intake.pendingAiAnalysis);
       if (
+        !isPendingAiDraft &&
         (fullCollectParam || p.status === "collecting") &&
         p.intake.imageDataUrl &&
         !needsGarmentConfirmation(p.intake)
@@ -283,6 +297,16 @@ export default function StudioPage() {
             );
           }
         });
+      }
+      // 旧草稿误标成 collecting：登录后轻量分析应进普通画布
+      if (isPendingAiDraft && p.status === "collecting") {
+        const fixedStatus = {
+          ...p,
+          status: "studio" as const,
+        };
+        projectRef.current = fixedStatus;
+        setProject(fixedStatus);
+        void saveProject(fixedStatus);
       }
       const renamed = normalizeViewArtboardNames(p.canvas_data.artboards);
       if (renamed.changed) {
@@ -343,39 +367,188 @@ export default function StudioPage() {
   const intakeAlreadyAnalyzed = Boolean(
     project?.intake.visibleGarments?.length || project?.intake.garmentConfirmed,
   );
+  const pendingAiAnalysis = Boolean(project?.intake.pendingAiAnalysis);
+  const pendingAiRunningRef = useRef(false);
+  const pendingAiAbortRef = useRef<AbortController | null>(null);
 
+  const cancelPendingAiAnalysis = useCallback(() => {
+    pendingAiAbortRef.current?.abort();
+    pendingAiAbortRef.current = null;
+    pendingAiRunningRef.current = false;
+    setAiTask(null);
+    const base = projectRef.current;
+    if (base?.intake.pendingAiAnalysis) {
+      persist({
+        ...base,
+        status: "studio",
+        intake: { ...base.intake, pendingAiAnalysis: false },
+      });
+    }
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("pendingAi")) {
+        url.searchParams.delete("pendingAi");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      }
+    }
+    setAiTip("已跳过自动分析。可先手动标注，需要时再点左侧 AI。");
+    setAiMessage(null);
+  }, [persist]);
+
+  /** 登录后把新建草稿的图+描述送去 AI（仅轻量理解，不自动全量标注） */
   useEffect(() => {
-    if (!intakeImageDataUrl || intakeAlreadyAnalyzed) return;
+    if (!project?.id || !intakeImageDataUrl) return;
+    if (intakeAlreadyAnalyzed && !pendingAiAnalysis) return;
+
     let cancelled = false;
-    (async () => {
+    let authUnsub: { unsubscribe: () => void } | null = null;
+
+    const clearPendingAiQuery = () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("pendingAi")) return;
+      url.searchParams.delete("pendingAi");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    };
+
+    const runPendingIntake = async () => {
+      if (cancelled || pendingAiRunningRef.current) return;
+      if (!(await isLoggedInForCloud())) return;
+
+      const base = projectRef.current;
+      if (!base?.intake.imageDataUrl) return;
+      if (
+        (base.intake.visibleGarments?.length || base.intake.garmentConfirmed) &&
+        !base.intake.pendingAiAnalysis
+      ) {
+        clearPendingAiQuery();
+        return;
+      }
+
+      pendingAiRunningRef.current = true;
+      const abort = new AbortController();
+      pendingAiAbortRef.current = abort;
+      setAiTask("intake");
+      setAiTip("正在用你上传的图和填写内容理解款式…");
+      setAiMessage(null);
+
       try {
-        if (!(await isLoggedInForCloud())) return;
+        const imageForAi =
+          (await resolveImageDataUrlForAi(base.intake.imageDataUrl)) ??
+          base.intake.imageDataUrl;
+        if (abort.signal.aborted || cancelled) return;
+        if (!imageForAi?.startsWith("data:")) {
+          setAiMessage("找不到款式图，请重新上传后再试。");
+          return;
+        }
+
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            description: projectRef.current?.intake.description,
-            imageDataUrl: intakeImageDataUrl,
+            description: base.intake.description,
+            imageDataUrl: imageForAi,
           }),
+          signal: abort.signal,
         });
         const intent = await res.json();
-        if (!res.ok || cancelled) return;
-        const base = projectRef.current;
-        if (!base) return;
-        const updated = {
-          ...base,
-          intake: applyIntentToIntake(base.intake, intent),
-          title: base.title || intent.suggestedTitle || base.title,
+        if (abort.signal.aborted || cancelled) return;
+        if (!res.ok) {
+          setAiMessage(messageFromAiResponse(intent, "AI 分析失败"));
+          setAiTip("可先手动标注；稍后可在左侧再试 AI。");
+          // 清掉 pending，避免反复弹
+          const latestFail = projectRef.current ?? base;
+          persist({
+            ...latestFail,
+            status: "studio",
+            intake: { ...latestFail.intake, pendingAiAnalysis: false },
+          });
+          clearPendingAiQuery();
+          return;
+        }
+
+        const latest = projectRef.current ?? base;
+        const nextIntake = {
+          ...applyIntentToIntake(latest.intake, intent),
+          pendingAiAnalysis: false,
+        };
+        const updated: TechPackProject = {
+          ...latest,
+          intake: nextIntake,
+          // 登录后进普通画布，绝不自动开全量标注
+          status: "studio",
+          title:
+            (latest.title && latest.title !== "我的款式"
+              ? latest.title
+              : null) ||
+            intent.suggestedTitle ||
+            latest.intake.description.trim().slice(0, 40) ||
+            latest.title,
         };
         persist(updated);
+        clearPendingAiQuery();
+        setAiTip(
+          needsGarmentConfirmation(nextIntake)
+            ? "款式已理解，请确认目标单款；之后可手动标注或点左侧 AI。"
+            : "款式已理解，已进入画布。需要时再点左侧「AI 一键标注」。",
+        );
+      } catch (err) {
+        if (abort.signal.aborted || cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAiMessage(
+          err instanceof Error ? err.message : "AI 分析失败，请稍后重试",
+        );
+      } finally {
+        if (pendingAiAbortRef.current === abort) {
+          pendingAiAbortRef.current = null;
+        }
+        pendingAiRunningRef.current = false;
+        if (!cancelled && !abort.signal.aborted) setAiTask(null);
+      }
+    };
+
+    const wantsPending =
+      pendingAiAnalysis ||
+      (typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("pendingAi") === "1");
+
+    void (async () => {
+      if (await isLoggedInForCloud()) {
+        await runPendingIntake();
+        return;
+      }
+      // 刚从登录页跳回时，会话可能晚一点就绪：等登录事件再跑
+      if (!wantsPending || !isSupabaseConfigured()) return;
+      try {
+        const supabase = createClient();
+        const { data } = supabase.auth.onAuthStateChange((event, session) => {
+          if (
+            session?.user &&
+            (event === "SIGNED_IN" || event === "INITIAL_SESSION")
+          ) {
+            void runPendingIntake();
+          }
+        });
+        authUnsub = data.subscription;
+        window.setTimeout(() => {
+          void runPendingIntake();
+        }, 400);
       } catch {
-        /* 非阻断 */
+        /* ignore */
       }
     })();
+
     return () => {
       cancelled = true;
+      authUnsub?.unsubscribe();
     };
-  }, [project?.id, intakeImageDataUrl, intakeAlreadyAnalyzed, persist]);
+  }, [
+    project?.id,
+    intakeImageDataUrl,
+    intakeAlreadyAnalyzed,
+    pendingAiAnalysis,
+    persist,
+  ]);
 
   const flatFrontRunningRef = useRef(false);
 
@@ -2490,6 +2663,22 @@ export default function StudioPage() {
               onError={(message) => {
                 setAiMessage(message);
               }}
+              onCancel={() => {
+                setFullCollectOpen(false);
+                const base = projectRef.current;
+                if (base && base.status === "collecting") {
+                  persist({ ...base, status: "studio" });
+                }
+                if (
+                  typeof window !== "undefined" &&
+                  new URLSearchParams(window.location.search).get("fullCollect") ===
+                    "1"
+                ) {
+                  router.replace(`/project/${id}/studio`);
+                }
+                setAiTip("已关闭全量标注。可先手动做，需要时再点左侧「AI 一键标注」。");
+                setAiMessage(null);
+              }}
             />
           )}
 
@@ -2501,6 +2690,11 @@ export default function StudioPage() {
               subtitle={
                 activeAiPreset === "view-image"
                   ? viewImageSubtitleForTask(aiImageContext?.taskLabel)
+                  : undefined
+              }
+              onCancel={
+                activeAiPreset === "intake"
+                  ? cancelPendingAiAnalysis
                   : undefined
               }
               imagePreview={
@@ -2537,12 +2731,17 @@ export default function StudioPage() {
                 </button>
                 <NewStyleEntryCard
                   variant="overlay"
-                  onCreated={(projectId, mode) => {
+                  onCreated={(projectId) => {
+                    setNewStyleOpen(false);
+                    router.push(`/project/${projectId}/studio`);
+                  }}
+                  onCreatedNeedLogin={(projectId, authMode) => {
                     setNewStyleOpen(false);
                     router.push(
-                      mode === "full"
-                        ? `/project/${projectId}/studio?fullCollect=1`
-                        : `/project/${projectId}/studio`,
+                      buildLoginHref({
+                        mode: authMode,
+                        next: `/project/${projectId}/studio?pendingAi=1`,
+                      }),
                     );
                   }}
                 />

@@ -19,6 +19,9 @@ type AiAnalysisOverlayProps = {
   steps?: AiLoadingStep[];
   tips?: string[];
   subtitle?: string;
+  /** 可中断时显示「跳过」；处理中也可先回画布手动做 */
+  onCancel?: () => void;
+  cancelLabel?: string;
 };
 
 export default function AiAnalysisOverlay({
@@ -30,6 +33,8 @@ export default function AiAnalysisOverlay({
   steps: stepsOverride,
   tips: tipsOverride,
   subtitle: subtitleOverride,
+  onCancel,
+  cancelLabel = "跳过，先手动标注",
 }: AiAnalysisOverlayProps) {
   const config = getAiLoadingPreset(preset);
   const displayTitle = title ?? config.title;
@@ -150,9 +155,24 @@ export default function AiAnalysisOverlay({
             <p className="mt-5 text-center text-xs leading-relaxed text-slate-400">
               {tips[tipIndex]}
             </p>
-            <p className="mt-2 text-center text-[10px] font-medium text-amber-600/90">
-              ⚠ AI 处理中，界面已锁定，请勿重复点击
-            </p>
+            {onCancel ? (
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  {cancelLabel}
+                </button>
+                <p className="text-center text-[10px] text-slate-400">
+                  可随时跳过，稍后再点左侧 AI
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-center text-[10px] font-medium text-amber-600/90">
+                ⚠ AI 处理中，界面已锁定，请勿重复点击
+              </p>
+            )}
           </div>
         </div>
       </div>

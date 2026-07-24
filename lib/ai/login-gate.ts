@@ -9,6 +9,8 @@ export const FREE_MONTHLY_AI_GIFT = 200;
 
 export const REGISTER_CTA_LABEL = "免费注册 · 领 AI 额度";
 
+export const LOGIN_CTA_LABEL = "已有账号？登录";
+
 export const AI_LOGIN_REQUIRED_MESSAGE =
   `使用 AI 需要先注册。现在注册即送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI 额度，还能把稿存到云端、换设备继续。你仍可先在画布上手动标注。`;
 
