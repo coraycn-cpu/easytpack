@@ -252,12 +252,11 @@ export default function NewStyleEntryCard({
           {showGuestLoginPush ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-3 text-left">
               <p className="text-xs font-semibold text-blue-950">
-                建议先登录 / 注册再继续
+                登录后可用 AI 基础分析
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-950/80">
-                登录后会自动做一次基础款式分析（理解图片与描述，不是全量标注），
-                并可用 AI / 云端存档。注册免费，每月送 {FREE_MONTHLY_AI_GIFT} 点
-                AI。未登录也可先带图进画布手动标注。
+                已有账号可先登录，再用同一张图做基础款式分析（不是全量标注）。
+                还没有账号请回首页注册。未登录也可先带图进画布手动标注。
               </p>
             </div>
           ) : null}
@@ -265,16 +264,6 @@ export default function NewStyleEntryCard({
           <div className="flex flex-col gap-2 pt-1">
             {showGuestLoginPush ? (
               <>
-                <button
-                  type="button"
-                  disabled={!canSubmit || loading}
-                  onClick={() =>
-                    void createProject({ preferLogin: "register" })
-                  }
-                  className="rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40"
-                >
-                  {REGISTER_CTA_LABEL}后继续
-                </button>
                 <button
                   type="button"
                   disabled={!canSubmit || loading}
@@ -287,7 +276,7 @@ export default function NewStyleEntryCard({
                   type="button"
                   disabled={!canSubmit || loading}
                   onClick={() => void createProject()}
-                  className="rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                  className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
                 >
                   暂不登录，带图进入画布（不调用 AI）
                 </button>
