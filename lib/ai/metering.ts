@@ -15,6 +15,7 @@ export type AiMeterAction =
   | "enhance"
   | "explain"
   | "style-review"
+  | "translate-techpack"
   | "chat"
   | "view-image"
   | "generate"
@@ -33,6 +34,7 @@ const ACTION_LABELS: Record<string, string> = {
   enhance: "一键补全",
   explain: "说明",
   "style-review": "款式评语",
+  "translate-techpack": "工艺包英译",
   chat: "对话助手",
   "view-image": "视角生图",
   generate: "工艺生成",

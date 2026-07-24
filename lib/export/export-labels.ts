@@ -1,0 +1,103 @@
+import type { ExportLocale } from "@/lib/export/en-overlay";
+
+/** 导出预览静态文案（表头/章节）；正文由英译 overlay 提供 */
+export function exportUiLabels(locale: ExportLocale) {
+  if (locale === "en") {
+    return {
+      processBom: "CONSTRUCTION / BOM",
+      process: "CONSTRUCTION",
+      bom: "BOM",
+      size: "SIZE CHART (cm)",
+      sizeWithSample: (sample?: string, hasReview?: boolean) =>
+        `SIZE CHART (cm)${sample ? ` · Sample ${sample}` : ""}${
+          hasReview ? " · REMARKS" : ""
+        }`,
+      review: "STYLE REMARKS",
+      cover: "COVER / OVERVIEW",
+      colPart: "Part",
+      colProcess: "Construction",
+      colStitch: "Stitch",
+      colSeam: "S.A.",
+      colName: "Item",
+      colSpec: "Spec",
+      colUsage: "Usage",
+      colCategory: "Type",
+      colColor: "Color",
+      colCode: "Code",
+      colMethod: "Method",
+      coverStyle: "Style notes",
+      coverFabric: "Main fabric",
+      coverTrim: "Trims / accessories",
+      coverProcess: "Construction parts",
+      coverNotes: "Collaboration notes",
+      coverPack: "Pack contents",
+      coverViews: "views",
+      coverProcessCount: "ops",
+      coverBomCount: "BOM",
+      coverPhoto: "ref",
+      coverFeatures: "features",
+      noImage: "No style image",
+      noDesc: "(No description yet)",
+      noFabric: "(See BOM page)",
+      noTrim: "(None)",
+      noProcess: "(No construction rows)",
+      orderQty: "Order Quantity",
+      sizeHint: "Size",
+      sampleHint: "Sample",
+      qtyFill: "QTY column for factory fill-in",
+      workflow: {
+        draft: "Draft",
+        in_review: "In review",
+        finalized: "Finalized",
+      } as Record<string, string>,
+    };
+  }
+  return {
+    processBom: "工艺 / 物料",
+    process: "结构工艺表",
+    bom: "物料清单 BOM",
+    size: "尺寸表（cm）",
+    sizeWithSample: (sample?: string, hasReview?: boolean) =>
+      `尺寸表（cm）${sample ? ` · 基准 ${sample}` : ""}${
+        hasReview ? " · 评语" : ""
+      }`,
+    review: "款式评语 REMARKS",
+    cover: "COVER / 协作总览",
+    colPart: "部位",
+    colProcess: "工艺",
+    colStitch: "针法",
+    colSeam: "缝份",
+    colName: "名称",
+    colSpec: "规格",
+    colUsage: "用量",
+    colCategory: "类别",
+    colColor: "颜色",
+    colCode: "编码",
+    colMethod: "量法",
+    coverStyle: "款式说明",
+    coverFabric: "主面料",
+    coverTrim: "辅料 / 配件",
+    coverProcess: "工艺部位",
+    coverNotes: "协作注意",
+    coverPack: "资料包",
+    coverViews: "视图",
+    coverProcessCount: "工艺",
+    coverBomCount: "物料",
+    coverPhoto: "参考图",
+    coverFeatures: "特征",
+    noImage: "暂无款式图",
+    noDesc: "（暂无描述，请在建款时补充）",
+    noFabric: "（暂无，见 BOM 页）",
+    noTrim: "（暂无）",
+    noProcess: "（暂无工艺条目）",
+    orderQty: "Order Quantity · 下单数量",
+    sizeHint: "尺码",
+    sampleHint: "基准",
+    qtyFill: "数量栏可手填",
+    workflow: {
+      draft: "草稿",
+      in_review: "审核中",
+      finalized: "已定稿",
+    } as Record<string, string>,
+  };
+}

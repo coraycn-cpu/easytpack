@@ -128,6 +128,7 @@ async function callStructured<S extends z.ZodType>({
     region_annotate: "annotate-region",
     enhance_techpack: "enhance",
     style_review: "style-review",
+    translate_techpack: "translate-techpack",
   };
   const action = actionBySchema[schemaName] ?? "other";
   try {
@@ -597,4 +598,61 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
     throw new Error("AI 未返回有效评语，请稍后重试");
   }
   return { review };
+}
+
+/** 工艺包 → 外贸服装专业英语（可带用户纠正意见二次润色） */
+export async function generateTechPackEnTranslation(input: {
+  payload: ReturnType<
+    typeof import("@/lib/export/en-overlay").slimProjectForTranslate
+  >;
+  /** 已有英译（二次纠正时传入） */
+  existingOverlay?: import("@/lib/export/en-overlay").TechPackEnOverlay | null;
+  /** 用户纠正意见 */
+  correctionHints?: string;
+}) {
+  const { TechPackEnOverlaySchema } = await import(
+    "@/types/export-translation"
+  );
+
+  const processCount = input.payload.process_items.length;
+  const bomCount = input.payload.bom_items.length;
+  const sizeCount = input.payload.size_rows.length;
+
+  const instructions = `You are a senior fashion tech-pack translator for apparel export (China → US/EU buyers & factories).
+
+Goals:
+1. Translate Chinese tech-pack content into professional fashion English used in tech packs / BOM / POM sheets.
+2. Correct informal or inaccurate Chinese apparel wording into industry-standard English terms (e.g. 缝份→seam allowance, 针法→stitch type, 衣长→body length / CB length as appropriate).
+3. Keep numbers, size codes (S/M/L/XL, 160/84A, etc.), style numbers, and supplier codes unchanged.
+4. Output arrays MUST keep the SAME order and SAME length as the source:
+   - process_items length = ${processCount}
+   - bom_items length = ${bomCount}
+   - size_rows length = ${sizeCount}
+5. artboard_names: map each given artboard id to a short English view name (Front, Back, Detail…).
+6. style_review: keep a clear structure; you may use headings like Style Features / Fabric / Construction / Notes.
+7. correction_notes: 1–3 short English bullets on key terminology fixes (optional but preferred).
+8. Do NOT invent new process/BOM/size rows. Do NOT drop rows.
+${
+  input.correctionHints?.trim()
+    ? `\nUser correction requests (must follow):\n${input.correctionHints.trim()}`
+    : ""
+}`;
+
+  const userText = `
+SOURCE (Chinese tech pack JSON):
+${JSON.stringify(input.payload)}
+
+${
+  input.existingOverlay
+    ? `PREVIOUS ENGLISH DRAFT (refine this; keep array lengths):\n${JSON.stringify(input.existingOverlay)}`
+    : "No previous English draft — translate from source."
+}
+`.trim();
+
+  return callStructured({
+    instructions,
+    userText,
+    schema: TechPackEnOverlaySchema,
+    schemaName: "translate_techpack",
+  });
 }

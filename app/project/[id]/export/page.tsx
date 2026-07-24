@@ -5,10 +5,19 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
 import {
+  gateAiLogin,
+  messageFromAiResponse,
+} from "@/lib/ai/client-login-gate";
+import {
   renderAllArtboards,
   renderArtboardToDataUrl,
   renderTechPackSheetToDataUrl,
 } from "@/lib/export/canvas-render";
+import {
+  applyEnOverlay,
+  type ExportLocale,
+  type TechPackEnOverlay,
+} from "@/lib/export/en-overlay";
 import {
   downloadDataUrl,
   exportFilename,
@@ -40,6 +49,13 @@ export default function ExportPage() {
   );
   const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [exportLocale, setExportLocale] = useState<ExportLocale>("zh");
+  const [enOverlay, setEnOverlay] = useState<TechPackEnOverlay | null>(null);
+  const [translateBusy, setTranslateBusy] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const [correctionHints, setCorrectionHints] = useState("");
+  const [showCorrection, setShowCorrection] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,13 +122,49 @@ export default function ExportPage() {
     };
   }, [project]);
 
+  const displayProject = useMemo(() => {
+    if (!project) return null;
+    if (exportLocale === "en" && enOverlay) {
+      return applyEnOverlay(project, enOverlay);
+    }
+    return project;
+  }, [project, exportLocale, enOverlay]);
+
+  const displayAnnotatedImages = useMemo(() => {
+    if (!displayProject || exportLocale !== "en" || !enOverlay) {
+      return annotatedImages;
+    }
+    const nameById = enOverlay.artboard_names ?? {};
+    const ordered = sortArtboardsForExport(displayProject.canvas_data.artboards);
+    return annotatedImages.map((img, i) => {
+      const ab = ordered[i];
+      const enName = ab ? nameById[ab.id]?.trim() || ab.name : undefined;
+      return enName ? { ...img, name: enName } : img;
+    });
+  }, [annotatedImages, displayProject, exportLocale, enOverlay]);
+
+  const displayCoverHeroLabel = useMemo(() => {
+    if (exportLocale !== "en" || !enOverlay || !project) return coverHeroLabel;
+    const ordered = sortArtboardsForExport(project.canvas_data.artboards);
+    const primary = ordered[0];
+    if (!primary) return coverHeroLabel;
+    return enOverlay.artboard_names?.[primary.id]?.trim() || coverHeroLabel;
+  }, [coverHeroLabel, exportLocale, enOverlay, project]);
+
   const pageCount = useMemo(() => {
-    if (!project) return 0;
-    return buildTechPackDocument(project, annotatedImages, {
+    if (!displayProject) return 0;
+    return buildTechPackDocument(displayProject, displayAnnotatedImages, {
       coverHeroUrl,
-      coverHeroLabel,
+      coverHeroLabel: displayCoverHeroLabel,
+      locale: exportLocale,
     }).length;
-  }, [project, annotatedImages, coverHeroUrl, coverHeroLabel]);
+  }, [
+    displayProject,
+    displayAnnotatedImages,
+    coverHeroUrl,
+    displayCoverHeroLabel,
+    exportLocale,
+  ]);
 
   const honestyIssues = useMemo(() => {
     if (!project) return [] as string[];
@@ -142,6 +194,7 @@ export default function ExportPage() {
       basename: styleExportBasename(project),
       pageCount: extra?.pageCount,
       imageMode: IMAGE_MODE,
+      locale: exportLocale,
     };
     const history = [...(project.exportHistory ?? []), entry].slice(-20);
     const updated = { ...project, exportHistory: history };
@@ -149,8 +202,63 @@ export default function ExportPage() {
     setProject(updated);
   };
 
-  const handleExportPdf = () => {
+  const runTranslate = async (opts?: { refine?: boolean }) => {
     if (!project) return;
+    setTranslateError(null);
+
+    const gate = await gateAiLogin({ next: `/project/${id}/export` });
+    if (!gate.ok) {
+      setTranslateError(gate.message);
+      if (window.confirm(`${gate.message}\n\n去注册/登录？`)) {
+        router.push(gate.href);
+      }
+      return;
+    }
+
+    setTranslateBusy(true);
+    try {
+      const res = await fetch("/api/ai/translate-techpack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          project,
+          existingOverlay: opts?.refine ? enOverlay : undefined,
+          correctionHints: opts?.refine
+            ? correctionHints.trim() || undefined
+            : undefined,
+        }),
+      });
+      const data = (await res.json()) as {
+        overlay?: TechPackEnOverlay;
+        error?: string;
+        code?: string;
+      };
+      if (!res.ok) {
+        throw new Error(messageFromAiResponse(data, "英译失败"));
+      }
+      if (!data.overlay) {
+        throw new Error("未返回英译结果");
+      }
+      setEnOverlay(data.overlay);
+      setExportLocale("en");
+      setShowCorrection(true);
+      if (data.overlay.correction_notes) {
+        // 保留用户输入；不把 AI 说明写进纠正框
+      }
+    } catch (e) {
+      setTranslateError(e instanceof Error ? e.message : "英译失败");
+    } finally {
+      setTranslateBusy(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    if (!displayProject) return;
+    if (exportLocale === "en" && !enOverlay) {
+      window.alert("请先点「AI 英译」，再导出英文版 PDF。");
+      return;
+    }
     if (
       honestyIssues.length > 0 &&
       !window.confirm(
@@ -161,14 +269,21 @@ export default function ExportPage() {
     }
     setBusy("pdf");
     void persistHistory("pdf", { pageCount }).finally(() => {
-      document.title = exportFilename(project, "工艺包");
+      document.title = exportFilename(
+        displayProject,
+        exportLocale === "en" ? "TechPack-EN" : "工艺包",
+      );
       window.print();
       setBusy(null);
     });
   };
 
   const handleExportXlsx = () => {
-    if (!project) return;
+    if (!displayProject) return;
+    if (exportLocale === "en" && !enOverlay) {
+      window.alert("请先点「AI 英译」，再导出英文版 Excel。");
+      return;
+    }
     if (
       honestyIssues.length > 0 &&
       !window.confirm(
@@ -178,7 +293,9 @@ export default function ExportPage() {
       return;
     }
     setBusy("xlsx");
-    void exportTechPackXlsx(project, annotatedImages)
+    void exportTechPackXlsx(displayProject, displayAnnotatedImages, {
+      locale: exportLocale,
+    })
       .then(() => persistHistory("xlsx"))
       .finally(() => setBusy(null));
   };
@@ -202,7 +319,7 @@ export default function ExportPage() {
     void persistHistory("composite").finally(() => setBusy(null));
   };
 
-  if (!project) {
+  if (!project || !displayProject) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
         加载中…
@@ -211,6 +328,8 @@ export default function ExportPage() {
   }
 
   const progress = calcProgress(project);
+  const canUseEn = Boolean(enOverlay);
+  const isEn = exportLocale === "en";
 
   return (
     <>
@@ -231,6 +350,7 @@ export default function ExportPage() {
                 {styleExportBasename(project)} · 完成度 {progress}%
                 {rendering ? " · 正在生成图…" : ""}
                 {pageCount ? ` · ${pageCount} 页` : ""}
+                {isEn ? " · 英文预览" : ""}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -240,7 +360,11 @@ export default function ExportPage() {
                 onClick={handleExportPdf}
                 className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
               >
-                {busy === "pdf" ? "…" : "导出 PDF"}
+                {busy === "pdf"
+                  ? "…"
+                  : isEn
+                    ? "导出 PDF（英文）"
+                    : "导出 PDF"}
               </button>
               <button
                 type="button"
@@ -248,7 +372,11 @@ export default function ExportPage() {
                 onClick={handleExportXlsx}
                 className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50 disabled:opacity-40"
               >
-                {busy === "xlsx" ? "…" : "导出 Excel"}
+                {busy === "xlsx"
+                  ? "…"
+                  : isEn
+                    ? "导出 Excel（英文）"
+                    : "导出 Excel"}
               </button>
               <button
                 type="button"
@@ -276,6 +404,107 @@ export default function ExportPage() {
               </p>
             </div>
           ) : null}
+
+          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-[11px] leading-relaxed text-sky-950">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sky-900">
+                  外贸英文版（AI 服装专业英语）
+                </p>
+                <p className="mt-1 text-sky-900/80">
+                  不改你本机里的中文原稿。先点「AI 英译」，再切换看英文预览；导出 PDF / Excel
+                  会按当前预览语言。图上的中文标注像素暂不改。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={translateBusy || busy !== null}
+                  onClick={() => void runTranslate()}
+                  className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-medium text-white hover:bg-sky-800 disabled:opacity-40"
+                >
+                  {translateBusy
+                    ? "翻译中…"
+                    : canUseEn
+                      ? "重新英译"
+                      : "AI 英译"}
+                </button>
+                <div className="inline-flex overflow-hidden rounded-lg border border-sky-200 bg-white text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setExportLocale("zh")}
+                    className={`px-3 py-2 ${
+                      !isEn
+                        ? "bg-sky-700 text-white"
+                        : "text-sky-900 hover:bg-sky-50"
+                    }`}
+                  >
+                    中文
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canUseEn}
+                    onClick={() => setExportLocale("en")}
+                    title={canUseEn ? undefined : "请先完成 AI 英译"}
+                    className={`px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40 ${
+                      isEn
+                        ? "bg-sky-700 text-white"
+                        : "text-sky-900 hover:bg-sky-50"
+                    }`}
+                  >
+                    English
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {translateError ? (
+              <p className="mt-2 text-red-700">{translateError}</p>
+            ) : null}
+
+            {enOverlay?.correction_notes ? (
+              <p className="mt-2 rounded-lg border border-sky-100 bg-white/70 px-2.5 py-2 text-sky-900/90">
+                <span className="font-medium">术语纠正说明：</span>
+                {enOverlay.correction_notes}
+              </p>
+            ) : null}
+
+            {canUseEn ? (
+              <div className="mt-3 border-t border-sky-100 pt-3">
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-sky-800 underline-offset-2 hover:underline"
+                  onClick={() => setShowCorrection((v) => !v)}
+                >
+                  {showCorrection ? "收起纠正" : "写纠正意见，再润色英文"}
+                </button>
+                {showCorrection ? (
+                  <div className="mt-2 space-y-2">
+                    <textarea
+                      value={correctionHints}
+                      onChange={(e) => setCorrectionHints(e.target.value)}
+                      rows={3}
+                      placeholder="例如：衣长请用 CB length；缝份统一写成 seam allowance；前片不要译成 front piece…"
+                      className="w-full rounded-lg border border-sky-200 bg-white px-2.5 py-2 text-[11px] text-zinc-800 outline-none focus:border-sky-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        translateBusy ||
+                        busy !== null ||
+                        !correctionHints.trim()
+                      }
+                      onClick={() => void runTranslate({ refine: true })}
+                      className="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-40"
+                    >
+                      {translateBusy ? "润色中…" : "按意见重新润色"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-[11px] leading-relaxed text-amber-950">
             <p className="font-semibold text-amber-900">发给版师前自检</p>
             <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-amber-900/90">
@@ -292,6 +521,9 @@ export default function ExportPage() {
               </li>
               <li>
                 <strong>合拼大图</strong>：适合微信预览，不替代正式表
+              </li>
+              <li>
+                <strong>英文版</strong>：先 AI 英译 → 切到 English → 再导出
               </li>
             </ol>
             <p className="mt-2 text-amber-800/80">{COMM_PACK_COPY.exportHint}</p>
@@ -314,20 +546,22 @@ export default function ExportPage() {
             </span>
           </label>
           <TechPackPreview
-            project={project}
-            annotatedImages={annotatedImages}
+            project={displayProject}
+            annotatedImages={displayAnnotatedImages}
             coverHeroUrl={coverHeroUrl}
-            coverHeroLabel={coverHeroLabel}
+            coverHeroLabel={displayCoverHeroLabel}
+            locale={exportLocale}
           />
         </main>
       </div>
 
       <div className="hidden print:block">
         <TechPackPreview
-          project={project}
-          annotatedImages={annotatedImages}
+          project={displayProject}
+          annotatedImages={displayAnnotatedImages}
           coverHeroUrl={coverHeroUrl}
-          coverHeroLabel={coverHeroLabel}
+          coverHeroLabel={displayCoverHeroLabel}
+          locale={exportLocale}
           printMode
         />
       </div>

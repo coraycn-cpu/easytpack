@@ -208,6 +208,8 @@ export type TechPackProject = {
     basename: string;
     pageCount?: number;
     imageMode?: "merged" | "split";
+    /** 导出语言：中文原稿或英译预览 */
+    locale?: "zh" | "en";
     /** 分享激励用：匿名摘要 hash */
     shareSnapshotHash?: string;
     /** 分享链接 id（kind=share） */

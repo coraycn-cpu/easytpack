@@ -7,6 +7,8 @@ import type {
   DocMeta,
   TechPackDocPage,
 } from "@/lib/export/techpack-document";
+import { exportUiLabels } from "@/lib/export/export-labels";
+import type { ExportLocale } from "@/lib/export/en-overlay";
 import { regionStandardLabel } from "@/lib/size-chart/standards";
 import type { SizeRegionStandard } from "@/types/project";
 
@@ -14,12 +16,14 @@ type Props = {
   meta: DocMeta;
   pages: TechPackDocPage[];
   screenChrome?: boolean;
+  locale?: ExportLocale;
 };
 
 export default function TechPackDocPages({
   meta,
   pages,
   screenChrome = true,
+  locale = "zh",
 }: Props) {
   return (
     <>
@@ -29,6 +33,7 @@ export default function TechPackDocPages({
           meta={meta}
           page={page}
           screenChrome={screenChrome}
+          locale={locale}
         />
       ))}
     </>
@@ -39,11 +44,14 @@ function PageByKind({
   meta,
   page,
   screenChrome,
+  locale = "zh",
 }: {
   meta: DocMeta;
   page: TechPackDocPage;
   screenChrome: boolean;
+  locale?: ExportLocale;
 }) {
+  const L = exportUiLabels(locale);
   switch (page.kind) {
     case "cover":
       return (
@@ -51,6 +59,7 @@ function PageByKind({
           meta={meta}
           overview={page.overview}
           screenChrome={screenChrome}
+          locale={locale}
         />
       );
 
@@ -106,24 +115,24 @@ function PageByKind({
       return (
         <A4LandscapePage
           meta={meta}
-          sectionTitle="工艺 / 物料"
+          sectionTitle={L.processBom}
           screenChrome={screenChrome}
         >
           <div className="grid h-full min-h-0 grid-cols-2 gap-2">
             <div className="flex min-h-0 flex-col overflow-hidden border border-black">
               <p className="shrink-0 border-b border-black bg-zinc-100 px-2 py-0.5 text-[10px] font-bold">
-                结构工艺表
+                {L.process}
               </p>
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <ProcessTable items={page.processItems} offset={0} />
+                <ProcessTable items={page.processItems} offset={0} locale={locale} />
               </div>
             </div>
             <div className="flex min-h-0 flex-col overflow-hidden border border-black">
               <p className="shrink-0 border-b border-black bg-zinc-100 px-2 py-0.5 text-[10px] font-bold">
-                面辅料 BOM
+                {L.bom}
               </p>
               <div className="min-h-0 flex-1 overflow-hidden">
-                <BomTable items={page.bomItems} compact />
+                <BomTable items={page.bomItems} compact locale={locale} />
               </div>
             </div>
           </div>
@@ -134,7 +143,7 @@ function PageByKind({
       return (
         <A4LandscapePage
           meta={meta}
-          sectionTitle="结构工艺表"
+          sectionTitle={L.process}
           pageLabel={
             page.pageCount > 1
               ? `${page.pageIndex}/${page.pageCount}`
@@ -142,7 +151,7 @@ function PageByKind({
           }
           screenChrome={screenChrome}
         >
-          <ProcessTable items={page.items} offset={page.offset} />
+          <ProcessTable items={page.items} offset={page.offset} locale={locale} />
         </A4LandscapePage>
       );
 
@@ -150,7 +159,7 @@ function PageByKind({
       return (
         <A4LandscapePage
           meta={meta}
-          sectionTitle="BILL OF MATERIALS · 面辅料清单"
+          sectionTitle={locale === "en" ? "BILL OF MATERIALS" : "BILL OF MATERIALS · 面辅料清单"}
           pageLabel={
             page.pageCount > 1
               ? `${page.pageIndex}/${page.pageCount}`
@@ -158,7 +167,7 @@ function PageByKind({
           }
           screenChrome={screenChrome}
         >
-          <BomTable items={page.items} padRows={page.padRows} />
+          <BomTable items={page.items} padRows={page.padRows} locale={locale} />
         </A4LandscapePage>
       );
 
@@ -166,7 +175,7 @@ function PageByKind({
       return (
         <A4LandscapePage
           meta={meta}
-          sectionTitle={`尺寸表（cm）${page.sampleSize ? ` · 基准 ${page.sampleSize}` : ""}${page.reviewText ? " · 评语" : ""}`}
+          sectionTitle={L.sizeWithSample(page.sampleSize, Boolean(page.reviewText))}
           pageLabel={
             page.pageCount > 1
               ? `${page.pageIndex}/${page.pageCount}`
@@ -187,8 +196,8 @@ function PageByKind({
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-zinc-100 text-left">
-                    <th className="border border-black px-1.5 py-1">部位</th>
-                    <th className="border border-black px-1.5 py-1">量法</th>
+                    <th className="border border-black px-1.5 py-1">{L.colPart}</th>
+                    <th className="border border-black px-1.5 py-1">{L.colMethod}</th>
                     {page.sizes.map((s) => (
                       <th key={s} className="border border-black px-1.5 py-1">
                         {s}
@@ -218,7 +227,7 @@ function PageByKind({
             {page.reviewText ? (
               <div className="min-h-0 flex-1 overflow-hidden border border-black">
                 <p className="border-b border-black bg-zinc-100 px-2 py-0.5 text-[10px] font-bold">
-                  款式评语
+                  {L.review}
                 </p>
                 <p className="max-h-full overflow-hidden whitespace-pre-wrap px-2 py-1 text-[11px] leading-relaxed">
                   {page.reviewText}
@@ -233,7 +242,7 @@ function PageByKind({
       return (
         <A4LandscapePage
           meta={meta}
-          sectionTitle="款式评语 REMARKS"
+          sectionTitle={L.review}
           screenChrome={screenChrome}
         >
           <div className="h-full overflow-hidden border border-black p-3 text-[12px] leading-relaxed whitespace-pre-wrap">
@@ -250,19 +259,22 @@ function PageByKind({
 function ProcessTable({
   items,
   offset,
+  locale = "zh",
 }: {
   items: import("@/types/process").ProcessItem[];
   offset: number;
+  locale?: ExportLocale;
 }) {
+  const L = exportUiLabels(locale);
   return (
     <table className="w-full table-fixed border-collapse text-[10px]">
       <thead>
         <tr className="bg-zinc-100 text-left">
           <th className="w-7 border border-black px-1 py-0.5">#</th>
-          <th className="w-[18%] border border-black px-1 py-0.5">部位</th>
-          <th className="border border-black px-1 py-0.5">工艺</th>
-          <th className="w-[16%] border border-black px-1 py-0.5">针法</th>
-          <th className="w-[12%] border border-black px-1 py-0.5">缝份</th>
+          <th className="w-[18%] border border-black px-1 py-0.5">{L.colPart}</th>
+          <th className="border border-black px-1 py-0.5">{L.colProcess}</th>
+          <th className="w-[16%] border border-black px-1 py-0.5">{L.colStitch}</th>
+          <th className="w-[12%] border border-black px-1 py-0.5">{L.colSeam}</th>
         </tr>
       </thead>
       <tbody>
@@ -294,26 +306,29 @@ function BomTable({
   items,
   padRows = 0,
   compact,
+  locale = "zh",
 }: {
   items: import("@/types/process").BomItem[];
   padRows?: number;
   compact?: boolean;
+  locale?: ExportLocale;
 }) {
+  const L = exportUiLabels(locale);
   const empty = Array.from({ length: padRows }, (_, i) => i);
   const text = compact ? "text-[9px]" : "text-[10px]";
   return (
     <table className={`w-full border-collapse ${text}`}>
       <thead>
         <tr className="bg-zinc-100 text-left">
-          <th className="border border-black px-1 py-0.5">名称</th>
-          <th className="border border-black px-1 py-0.5">规格</th>
-          <th className="border border-black px-1 py-0.5 w-12">用量</th>
+          <th className="border border-black px-1 py-0.5">{L.colName}</th>
+          <th className="border border-black px-1 py-0.5">{L.colSpec}</th>
+          <th className="border border-black px-1 py-0.5 w-12">{L.colUsage}</th>
           {!compact && (
-            <th className="border border-black px-1 py-0.5 w-12">类别</th>
+            <th className="border border-black px-1 py-0.5 w-12">{L.colCategory}</th>
           )}
-          <th className="border border-black px-1 py-0.5 w-12">颜色</th>
+          <th className="border border-black px-1 py-0.5 w-12">{L.colColor}</th>
           {!compact && (
-            <th className="border border-black px-1 py-0.5 w-14">编码</th>
+            <th className="border border-black px-1 py-0.5 w-14">{L.colCode}</th>
           )}
         </tr>
       </thead>
@@ -362,12 +377,15 @@ function CoverOverviewPage({
   meta,
   overview,
   screenChrome,
+  locale = "zh",
 }: {
   meta: DocMeta;
   overview: CoverOverview;
   screenChrome: boolean;
+  locale?: ExportLocale;
 }) {
   const o = overview;
+  const L = exportUiLabels(locale);
   const region = regionStandardLabel(
     o.regionStandard as SizeRegionStandard | undefined,
   );
@@ -375,17 +393,17 @@ function CoverOverviewPage({
   return (
     <A4LandscapePage
       meta={meta}
-      sectionTitle="COVER / 协作总览"
+      sectionTitle={L.cover}
       screenChrome={screenChrome}
     >
       <div className="flex h-full min-h-0 flex-col gap-1.5 text-[10px] leading-snug">
         {/* 订单尺码表：数量留空供工厂手填 */}
         <div className="shrink-0 border border-black">
           <div className="flex items-center justify-between border-b border-black bg-zinc-100 px-2 py-0.5">
-            <span className="font-bold uppercase">Order Quantity · 下单数量</span>
+            <span className="font-bold uppercase">{L.orderQty}</span>
             <span className="text-zinc-500">
-              {region || "尺码"}
-              {o.sampleSize ? ` · 基准 ${o.sampleSize}` : ""} · 数量栏可手填
+              {region || L.sizeHint}
+              {o.sampleSize ? ` · ${L.sampleHint} ${o.sampleSize}` : ""} · {L.qtyFill}
             </span>
           </div>
           <table className="w-full border-collapse">
@@ -438,49 +456,50 @@ function CoverOverviewPage({
                 </div>
               ) : (
                 <p className="flex h-full items-center justify-center text-zinc-400">
-                  暂无款式图
+                  {L.noImage}
                 </p>
               )}
             </div>
             <div className="shrink-0 border border-black px-2 py-1">
-              <span className="font-bold">资料包 </span>
-              视图 {o.viewCount} 页 · 工艺 {o.processCount} 条 · 物料{" "}
-              {o.bomCount} 项 · 参考图 {o.photoType}
+              <span className="font-bold">{L.coverPack} </span>
+              {L.coverViews} {o.viewCount} · {L.coverProcessCount}{" "}
+              {o.processCount} · {L.coverBomCount} {o.bomCount} · {L.coverPhoto}{" "}
+              {o.photoType}
               {o.features.length > 0
-                ? ` · 特征 ${o.features.join("、")}`
+                ? ` · ${L.coverFeatures} ${o.features.join(locale === "en" ? ", " : "、")}`
                 : ""}
             </div>
           </div>
 
           <div className="flex w-[38%] shrink-0 flex-col gap-1 overflow-hidden">
-            <CoverBlock title="款式说明">
-              {o.styleBrief || "（暂无描述，请在建款时补充）"}
+            <CoverBlock title={L.coverStyle}>
+              {o.styleBrief || L.noDesc}
             </CoverBlock>
-            <CoverBlock title="主面料">
+            <CoverBlock title={L.coverFabric}>
               {o.fabricLines.length
                 ? o.fabricLines.map((line, i) => (
                     <p key={i} className="truncate">
                       · {line}
                     </p>
                   ))
-                : "（暂无，见 BOM 页）"}
+                : L.noFabric}
             </CoverBlock>
-            <CoverBlock title="辅料 / 配件">
+            <CoverBlock title={L.coverTrim}>
               {o.trimLines.length
                 ? o.trimLines.map((line, i) => (
                     <p key={i} className="truncate">
                       · {line}
                     </p>
                   ))
-                : "（暂无）"}
+                : L.noTrim}
             </CoverBlock>
-            <CoverBlock title="工艺部位">
+            <CoverBlock title={L.coverProcess}>
               {o.processParts.length
-                ? o.processParts.join("、")
-                : "（暂无工艺条目）"}
+                ? o.processParts.join(locale === "en" ? ", " : "、")
+                : L.noProcess}
             </CoverBlock>
             {(o.reviewBrief || o.questionnaireHints.length > 0) && (
-              <CoverBlock title="协作注意" grow>
+              <CoverBlock title={L.coverNotes} grow>
                 {o.reviewBrief ? (
                   <p className="whitespace-pre-wrap">{o.reviewBrief}</p>
                 ) : null}
