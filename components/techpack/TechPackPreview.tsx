@@ -7,16 +7,16 @@ import {
   buildTechPackDocument,
   type AnnotatedImage,
 } from "@/lib/export/techpack-document";
+import type { ExportLocale } from "@/lib/export/en-overlay";
 import type { TechPackProject } from "@/types/project";
 
 type TechPackPreviewProps = {
   project: TechPackProject;
   annotatedImages?: AnnotatedImage[];
-  /** 封面主图净图（无标注）；缺省则回退 intake 原图 */
   coverHeroUrl?: string | null;
   coverHeroLabel?: string;
-  /** 打印模式：铺开全部 A4 页 */
   printMode?: boolean;
+  locale?: ExportLocale;
 };
 
 export default function TechPackPreview({
@@ -25,21 +25,26 @@ export default function TechPackPreview({
   coverHeroUrl,
   coverHeroLabel,
   printMode,
+  locale = "zh",
 }: TechPackPreviewProps) {
-  const meta = useMemo(() => buildDocMeta(project), [project]);
+  const meta = useMemo(
+    () => buildDocMeta(project, locale),
+    [project, locale],
+  );
   const pages = useMemo(
     () =>
       buildTechPackDocument(project, annotatedImages, {
         coverHeroUrl,
         coverHeroLabel,
+        locale,
       }),
-    [project, annotatedImages, coverHeroUrl, coverHeroLabel],
+    [project, annotatedImages, coverHeroUrl, coverHeroLabel, locale],
   );
   const [pageIndex, setPageIndex] = useState(0);
 
   useEffect(() => {
     setPageIndex(0);
-  }, [pages.length, project.id]);
+  }, [pages.length, project.id, locale]);
 
   const safeIndex = Math.min(pageIndex, Math.max(0, pages.length - 1));
   const current = pages[safeIndex];
@@ -47,7 +52,12 @@ export default function TechPackPreview({
   if (printMode) {
     return (
       <div className="techpack-print-root bg-white text-black">
-        <TechPackDocPages meta={meta} pages={pages} screenChrome={false} />
+        <TechPackDocPages
+          meta={meta}
+          pages={pages}
+          screenChrome={false}
+          locale={locale}
+        />
       </div>
     );
   }
@@ -56,7 +66,9 @@ export default function TechPackPreview({
     <div className="mx-auto w-full max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
         <p className="text-xs text-zinc-500">
-          A4 横向 · {pages.length} 页 · {meta.targetLabel}
+          A4 {locale === "en" ? "landscape" : "横向"} · {pages.length}{" "}
+          {locale === "en" ? "pages" : "页"} · {meta.targetLabel}
+          {locale === "en" ? " · EN" : ""}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -65,7 +77,7 @@ export default function TechPackPreview({
             onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
             className="rounded border border-zinc-200 px-2 py-1 text-xs disabled:opacity-40"
           >
-            上一页
+            {locale === "en" ? "Prev" : "上一页"}
           </button>
           <span className="min-w-[4.5rem] text-center text-xs font-medium text-zinc-700">
             {pages.length ? safeIndex + 1 : 0} / {pages.length}
@@ -78,16 +90,23 @@ export default function TechPackPreview({
             }
             className="rounded border border-zinc-200 px-2 py-1 text-xs disabled:opacity-40"
           >
-            下一页
+            {locale === "en" ? "Next" : "下一页"}
           </button>
         </div>
       </div>
 
       <div className="w-full overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 p-3 sm:p-4">
         {current ? (
-          <TechPackDocPages meta={meta} pages={[current]} screenChrome />
+          <TechPackDocPages
+            meta={meta}
+            pages={[current]}
+            screenChrome
+            locale={locale}
+          />
         ) : (
-          <p className="py-16 text-center text-sm text-zinc-400">暂无页面</p>
+          <p className="py-16 text-center text-sm text-zinc-400">
+            {locale === "en" ? "No pages" : "暂无页面"}
+          </p>
         )}
       </div>
     </div>

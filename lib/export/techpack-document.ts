@@ -4,6 +4,8 @@ import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
 import { formatDate, WORKFLOW_LABELS } from "@/lib/project/progress";
+import { exportUiLabels } from "@/lib/export/export-labels";
+import type { ExportLocale } from "@/lib/export/en-overlay";
 
 export type AnnotatedImage = { name: string; dataUrl: string };
 
@@ -11,6 +13,7 @@ export type BuildTechPackDocOptions = {
   /** 封面主图净图（无标注）；VIEW 页仍用 annotatedImages */
   coverHeroUrl?: string | null;
   coverHeroLabel?: string;
+  locale?: ExportLocale;
 };
 
 /** 首页协作概览：版师/工厂一眼能用的摘要 */
@@ -141,13 +144,17 @@ export type DocMeta = {
   description: string;
 };
 
-export function buildDocMeta(project: TechPackProject): DocMeta {
+export function buildDocMeta(
+  project: TechPackProject,
+  locale: ExportLocale = "zh",
+): DocMeta {
+  const labels = exportUiLabels(locale);
   const materials = project.bom_items
     .filter((b) => b.category === "fabric" || !b.category)
     .map((b) => b.name)
     .filter(Boolean)
     .slice(0, 4)
-    .join("、");
+    .join(locale === "en" ? ", " : "、");
   const sizes = project.size_chart.sizes ?? [];
   return {
     title: project.title,
@@ -158,7 +165,10 @@ export function buildDocMeta(project: TechPackProject): DocMeta {
     targetLabel: project.intake.targetGarment?.label || project.title,
     styleNo: project.styleNo ?? project.id.slice(-8).toUpperCase(),
     date: formatDate(project.updatedAt),
-    workflow: WORKFLOW_LABELS[project.workflowStatus] ?? "草稿",
+    workflow:
+      labels.workflow[project.workflowStatus] ??
+      WORKFLOW_LABELS[project.workflowStatus] ??
+      (locale === "en" ? "Draft" : "草稿"),
     materialsHint: materials || "—",
     sizeRange: sizes.length ? `${sizes[0]}–${sizes[sizes.length - 1]}` : "—",
     description: project.intake.description?.trim() || "",
