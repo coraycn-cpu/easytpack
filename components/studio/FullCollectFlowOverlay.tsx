@@ -19,6 +19,7 @@ import {
   AI_LOGIN_REQUIRED_MESSAGE,
   gateAiLogin,
 } from "@/lib/ai/client-login-gate";
+import { AI_UNITS_FULL_COLLECT_ESTIMATE } from "@/lib/ai/quota-units";
 
 type Phase = "preparing" | "asking" | "size" | "drafting";
 
@@ -461,7 +462,7 @@ export default function FullCollectFlowOverlay({
     return (
       <Shell
         title="AI 正在准备补充问题"
-        subtitle="约 10–20 秒，请稍候"
+        subtitle={`约 10–20 秒 · 整次一键标注大约 ${AI_UNITS_FULL_COLLECT_ESTIMATE} 点 AI`}
         imagePreview={previewUrl}
         imageSourceHint={FULL_COLLECT_SOURCE_HINT}
         footerTip="问题尽量简短，方便你快速回答"

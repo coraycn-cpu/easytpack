@@ -1,5 +1,6 @@
 import { meterAiCall } from "@/lib/ai/metering";
 import { appendAiTelemetryEvent } from "@/lib/ai/telemetry";
+import { AI_UNITS_VIEW_IMAGE } from "@/lib/ai/quota-units";
 import type { ViewImageKind } from "@/lib/studio/view-types";
 
 /** 视角生图结果记账（计量 + 遥测），从 studio 页拆出 */
@@ -18,6 +19,7 @@ export function recordViewImageClientOutcome(input: {
   meterAiCall({
     action: "view-image",
     projectId: input.projectId,
+    units: input.ok ? AI_UNITS_VIEW_IMAGE : 0,
     ok: input.ok,
     provider: input.provider,
     model: input.model,
@@ -37,6 +39,7 @@ export function recordViewImageClientOutcome(input: {
       kind: input.kind,
       artboardName: input.artboardName,
       ok: input.ok,
+      units: input.ok ? AI_UNITS_VIEW_IMAGE : 0,
     },
   });
 }

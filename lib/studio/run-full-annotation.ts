@@ -12,6 +12,7 @@ import { generateProcessId } from "@/lib/process/ids";
 import { STYLE_REVIEW_MAX, type BomItem, type ProcessItem } from "@/types/process";
 import type { TechPackProject, Annotation } from "@/types/project";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
+import { fetchAi, notifyAiQuotaChanged } from "@/lib/ai/quota-client";
 
 export type RunFullAnnotationInput = {
   project: TechPackProject;
@@ -77,7 +78,7 @@ export async function runFullTechPackAnnotation(
   };
 
   // 1. AI 标工艺 — 同 /api/ai/annotate-batch + handleBatchAnnotate
-  const batchRes = await fetch("/api/ai/annotate-batch", {
+  const batchRes = await fetchAi("/api/ai/annotate-batch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -154,7 +155,7 @@ export async function runFullTechPackAnnotation(
     const { dataUrl: bomImageUrl } = await resolveGarmentImageForAi(project, {
       preferIntake: true,
     });
-    const bomRes = await fetch("/api/ai/bom", {
+    const bomRes = await fetchAi("/api/ai/bom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -189,7 +190,7 @@ export async function runFullTechPackAnnotation(
   });
 
   try {
-    const sizeRes = await fetch("/api/ai/size-chart", {
+    const sizeRes = await fetchAi("/api/ai/size-chart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -215,7 +216,7 @@ export async function runFullTechPackAnnotation(
       if (sizeFilled > 0 && sizeImageUrl) {
         try {
           const skipParts = collectLinkedSizePartsFromProject(project.canvas_data.artboards);
-          const dimRes = await fetch("/api/ai/size-dimension-batch", {
+          const dimRes = await fetchAi("/api/ai/size-dimension-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -267,7 +268,7 @@ export async function runFullTechPackAnnotation(
   // 5. 款式评语 — 同 /api/ai/style-review + handleStyleReview
   let hasReview = false;
   try {
-    const reviewRes = await fetch("/api/ai/style-review", {
+    const reviewRes = await fetchAi("/api/ai/style-review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -311,6 +312,8 @@ export async function runFullTechPackAnnotation(
     parts.length > 0
       ? `已生成：${parts.join("、")}`
       : (batchData.userTips ?? "AI 初稿已生成，请在画板中核对");
+
+  notifyAiQuotaChanged();
 
   return {
     project,

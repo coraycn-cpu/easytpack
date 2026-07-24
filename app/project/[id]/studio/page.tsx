@@ -106,6 +106,7 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { notifyAiQuotaChanged } from "@/lib/ai/quota-client";
 import {
   computeArtboardSlots,
   nextArtboardOrigin,
@@ -215,6 +216,15 @@ export default function StudioPage() {
       : aiTask;
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
+  const prevAiBusyRef = useRef(false);
+
+  // AI 忙完后刷新右上角额度角标
+  useEffect(() => {
+    if (prevAiBusyRef.current && !aiBusy) {
+      notifyAiQuotaChanged();
+    }
+    prevAiBusyRef.current = aiBusy;
+  }, [aiBusy]);
 
   const requireAiLogin = useCallback(async (): Promise<boolean> => {
     const gate = await gateAiLogin({
@@ -676,6 +686,37 @@ export default function StudioPage() {
     }
     void (async () => {
       if (!(await requireAiLogin())) return;
+      const { AI_UNITS_FULL_COLLECT_ESTIMATE, fullCollectCostHint } =
+        await import("@/lib/ai/quota-units");
+      const ok = window.confirm(
+        `开始「AI 一键标注」？\n\n${fullCollectCostHint()}\n不够额度时会中途失败。\n\n确定继续？`,
+      );
+      if (!ok) return;
+      // 额度不够时先拦一层（预估），真正扣费仍以各接口成功为准
+      try {
+        const res = await fetch("/api/account/usage?summary=1");
+        if (res.ok) {
+          const data = (await res.json()) as {
+            used?: number;
+            limit?: number;
+            paused?: boolean;
+          };
+          if (data.paused) {
+            setAiMessage("账号 AI 已暂停，请联系管理员。");
+            return;
+          }
+          const used = Math.max(0, Math.floor(Number(data.used) || 0));
+          const limit = Math.max(0, Math.floor(Number(data.limit) || 0));
+          if (limit > 0 && used + AI_UNITS_FULL_COLLECT_ESTIMATE > limit) {
+            setAiMessage(
+              `额度可能不够：已用 ${used}/${limit}，一键标注约需 ${AI_UNITS_FULL_COLLECT_ESTIMATE} 点。可先做单项 AI，或邀请好友加分。`,
+            );
+            return;
+          }
+        }
+      } catch {
+        /* 预检失败不挡，后面接口会 429 */
+      }
       setFullCollectOpen(true);
     })();
   };

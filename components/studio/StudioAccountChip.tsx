@@ -8,6 +8,10 @@ import {
   planLabel,
   type UserPlan,
 } from "@/lib/ai/plan-display";
+import {
+  AI_QUOTA_CHANGED_EVENT,
+  type AiQuotaChangedDetail,
+} from "@/lib/ai/quota-client";
 import { buildInviteRegisterUrl } from "@/lib/invite/constants";
 
 type StudioAccountChipProps = {
@@ -103,6 +107,29 @@ export default function StudioAccountChip({
   }, [loadUsage]);
 
   useEffect(() => {
+    const onQuota = (ev: Event) => {
+      const detail = (ev as CustomEvent<AiQuotaChangedDetail>).detail;
+      if (
+        detail &&
+        typeof detail.used === "number" &&
+        typeof detail.limit === "number"
+      ) {
+        setSummary((prev) => ({
+          used: detail.used!,
+          limit: detail.limit!,
+          plan: prev?.plan ?? "free",
+          paused: prev?.paused ?? false,
+        }));
+        setLoading(false);
+        return;
+      }
+      void loadUsage();
+    };
+    window.addEventListener(AI_QUOTA_CHANGED_EVENT, onQuota);
+    return () => window.removeEventListener(AI_QUOTA_CHANGED_EVENT, onQuota);
+  }, [loadUsage]);
+
+  useEffect(() => {
     if (!open) return;
     void loadUsage();
     void loadInvite();
@@ -118,12 +145,13 @@ export default function StudioAccountChip({
       ? Math.max(0, summary.limit - summary.used)
       : null;
 
+  // 与用户中心统一：已用/上限
   const quotaCompact = loading
     ? "AI …"
     : summary?.paused
       ? "AI 暂停"
       : summary
-        ? `AI ${remaining}/${summary.limit}`
+        ? `AI ${summary.used}/${summary.limit}`
         : "AI —";
 
   const copyInvite = async () => {
@@ -149,7 +177,11 @@ export default function StudioAccountChip({
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         className="flex max-w-[16rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-left hover:bg-slate-50 sm:max-w-[20rem]"
-        title="账号与常用入口"
+        title={
+          summary && !summary.paused
+            ? `本月 AI 已用 ${summary.used} / 上限 ${summary.limit} 点`
+            : "账号与常用入口"
+        }
         aria-expanded={open}
       >
         <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
@@ -189,17 +221,22 @@ export default function StudioAccountChip({
               <dd className="font-medium text-slate-700">{level}</dd>
             </div>
             <div className="flex items-start justify-between gap-2">
-              <dt className="shrink-0 text-slate-400">AI 额度</dt>
+              <dt className="shrink-0 text-slate-400">AI 点（本月）</dt>
               <dd className="text-right font-medium tabular-nums text-slate-700">
                 {loading
                   ? "读取中…"
                   : summary?.paused
                     ? "本月已暂停"
                     : summary
-                      ? `已用 ${summary.used} · 共 ${summary.limit}`
+                      ? `已用 ${summary.used} / 上限 ${summary.limit}`
                       : "暂无法读取"}
               </dd>
             </div>
+            {summary && !summary.paused && remaining !== null ? (
+              <p className="text-[10px] text-slate-400">
+                还剩 {remaining} 点 · 生图成功一次约 5 点
+              </p>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <dt className="text-slate-400">团队</dt>
               <dd className="font-medium text-slate-700">个人</dd>
@@ -238,7 +275,7 @@ export default function StudioAccountChip({
               邀请好友
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              复制注册链接发给好友，双方可得分。
+              复制注册链接发给好友，双方邀请分会加进每月 AI 上限。
             </p>
             <button
               type="button"

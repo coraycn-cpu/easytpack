@@ -10,13 +10,20 @@ import {
 import {
   AI_LOGIN_REQUIRED_CODE,
   AI_LOGIN_REQUIRED_MESSAGE,
+  DEFAULT_FREE_MONTHLY_AI_UNITS,
   FREE_MONTHLY_AI_GIFT,
 } from "@/lib/ai/login-gate";
 
 /** 免费档每月 AI 点数（可用环境变量覆盖；未接付费） */
 export function getFreeMonthlyAiUnits(): number {
-  const n = Number(process.env.AI_FREE_MONTHLY_UNITS || String(FREE_MONTHLY_AI_GIFT));
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : FREE_MONTHLY_AI_GIFT;
+  const n = Number(
+    process.env.AI_FREE_MONTHLY_UNITS ||
+      process.env.NEXT_PUBLIC_AI_FREE_MONTHLY_UNITS ||
+      String(FREE_MONTHLY_AI_GIFT || DEFAULT_FREE_MONTHLY_AI_UNITS),
+  );
+  return Number.isFinite(n) && n > 0
+    ? Math.floor(n)
+    : DEFAULT_FREE_MONTHLY_AI_UNITS;
 }
 
 /** 邀请好友注册获得的积分（计入 AI 额度上限，最高 300） */
@@ -196,7 +203,7 @@ export async function assertWithinAiQuota(
       ok: false,
       response: NextResponse.json(
         {
-          error: `本月 AI 额度已用完（已用 ${used}/${limit}，免费 ${base} + 邀请 ${inviteBonus} + 加赠 ${adminBonus}）。可下月再试或邀请好友加分；付费升级将在后续版本开放。`,
+          error: `本月 AI 额度已用完（已用 ${used}/${limit}，免费 ${base} + 邀请 ${inviteBonus} + 加赠 ${adminBonus}）。生图成功一次约 5 点。可下月再试或邀请好友加分；付费升级将在后续版本开放。`,
           code: "AI_QUOTA_EXCEEDED",
           used,
           limit,

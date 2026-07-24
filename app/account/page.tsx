@@ -11,8 +11,6 @@ import {
 } from "@/lib/supabase/client";
 import {
   aiMeterActionLabel,
-  listAiMeterEvents,
-  sumAiMeterUnits,
 } from "@/lib/ai/metering";
 import { getCloudSyncMode } from "@/lib/project/sync-preference";
 import { consumeInviteClaimTip } from "@/lib/invite/claim-pending";
@@ -97,8 +95,6 @@ export default function AccountPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [tip, setTip] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [localUnits, setLocalUnits] = useState(0);
-  const [localCalls, setLocalCalls] = useState(0);
   const [page, setPage] = useState(1);
   const [usageLoading, setUsageLoading] = useState(false);
   const [cloudUsage, setCloudUsage] = useState<CloudUsagePage | null>(null);
@@ -132,8 +128,6 @@ export default function AccountPage() {
   }, [configured, router]);
 
   useEffect(() => {
-    setLocalUnits(sumAiMeterUnits());
-    setLocalCalls(listAiMeterEvents().filter((e) => e.ok).length);
     setSyncMode(getCloudSyncMode());
   }, [ready]);
 
@@ -393,9 +387,9 @@ export default function AccountPage() {
               }
             />
             <StatTile
-              label="本机调用"
-              value={`${localCalls}`}
-              hint={`约 ${localUnits} 点（本浏览器）`}
+              label="计价说明"
+              value="生图 5 点"
+              hint="其它 AI 成功多为 1 点；一键标注约 6 点"
             />
           </div>
           {cloudUsage ? (
@@ -406,6 +400,9 @@ export default function AccountPage() {
               />
             </div>
           ) : null}
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+            正式额度以云端「已用 / 上限」为准（成功才扣点）。邀请分会加进每月上限，不是另一套钱包。
+          </p>
         </section>
 
         {/* 功能区：左操作 / 右用量，不再整页竖排 */}

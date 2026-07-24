@@ -4,8 +4,26 @@
 
 export const AI_LOGIN_REQUIRED_CODE = "AI_LOGIN_REQUIRED";
 
-/** 与 lib/ai/quota 默认免费档一致；营销文案用此数 */
-export const FREE_MONTHLY_AI_GIFT = 200;
+/** 默认免费档；可被环境变量覆盖（见 freeMonthlyAiGift） */
+export const DEFAULT_FREE_MONTHLY_AI_UNITS = 200;
+
+/**
+ * 营销/界面展示用的「每月免费点数」。
+ * 优先读 NEXT_PUBLIC_AI_FREE_MONTHLY_UNITS（与 Vercel 里 AI_FREE_MONTHLY_UNITS 保持同值）。
+ */
+export function freeMonthlyAiGift(): number {
+  const raw =
+    (typeof process !== "undefined" &&
+      (process.env.NEXT_PUBLIC_AI_FREE_MONTHLY_UNITS ||
+        process.env.AI_FREE_MONTHLY_UNITS)) ||
+    "";
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return DEFAULT_FREE_MONTHLY_AI_UNITS;
+}
+
+/** @deprecated 请优先用 freeMonthlyAiGift()；保留常量兼容旧引用（构建期内联公共变量） */
+export const FREE_MONTHLY_AI_GIFT = freeMonthlyAiGift();
 
 export const REGISTER_CTA_LABEL = "免费注册 · 领 AI 额度";
 
@@ -23,9 +41,9 @@ export const GUEST_MANUAL_OK_TIP =
 export const REGISTER_BENEFITS_HEADLINE = `注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`;
 
 export const REGISTER_BENEFITS_LINES = [
-  `每月 ${FREE_MONTHLY_AI_GIFT} 点 AI：一键标注、生图、补全都可用`,
+  `每月 ${FREE_MONTHLY_AI_GIFT} 点 AI：一键标注、生图、补全都可用（生图成功一次约 5 点）`,
   "云端存档：换电脑 / 换浏览器也能打开旧款",
-  "邀请好友双方再各得 50 分（可叠加额度）",
+  "邀请好友双方再各得 50 分（加进每月 AI 上限）",
 ] as const;
 
 export const GUEST_LIMIT_LINES = [
