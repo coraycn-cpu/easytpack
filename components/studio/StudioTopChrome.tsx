@@ -7,10 +7,7 @@ import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
-import {
-  isLoggedInForCloud,
-  syncAfterLogin,
-} from "@/lib/project/cloud-sync";
+import { syncAfterLogin } from "@/lib/project/cloud-sync";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -120,10 +117,13 @@ export default function StudioTopChrome({
 
   const handleSync = async () => {
     if (syncBusy) return;
-    const loggedIn = await isLoggedInForCloud();
-    if (!loggedIn) {
-      onTip?.("请先登录，再同步到网上");
-      router.push(`/login?next=/project/${currentProjectId}/studio`);
+    const { gateCloudSaveLogin } = await import("@/lib/ai/client-login-gate");
+    const gate = await gateCloudSaveLogin({
+      next: `/project/${currentProjectId}/studio`,
+    });
+    if (!gate.ok) {
+      onTip?.(gate.message);
+      router.push(gate.href);
       return;
     }
     setSyncBusy(true);
@@ -140,7 +140,7 @@ export default function StudioTopChrome({
   };
 
   const others = projects.filter((p) => p.id !== currentProjectId);
-  const loginHref = `/login?next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
+  const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
 
   return (
     <div
@@ -270,7 +270,7 @@ export default function StudioTopChrome({
             href={loginHref}
             className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
           >
-            登录
+            注册/登录
           </Link>
         )}
       </div>

@@ -18,6 +18,7 @@
 | Consent → `ai_events` | ✅ |
 | 本机 JSON 备份导入/导出 | ✅ |
 | 导出诚实提示（failed/placeholder） | ✅ |
+| 未登录仅手动标注；AI / 云端存档引导注册 | ✅ |
 
 ### 已完成（管理侧 · 初版）
 

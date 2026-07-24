@@ -33,7 +33,7 @@ function pickProjectId(
 
 /**
  * 统一：额度检查 → 执行 → 写 ai_usage + 日志头。
- * 未登录不拦额度；已登录超额返回 429。
+ * 未登录返回 401（引导注册）；已登录超额返回 429。
  */
 export async function runMeteredAiJsonRoute(
   req: NextRequest,

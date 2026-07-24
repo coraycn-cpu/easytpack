@@ -136,15 +136,16 @@ export default function CanvasHomePage() {
         <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-7 text-center shadow-sm backdrop-blur">
           <p className="text-lg font-semibold text-slate-800">空白画布</p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            上传款式图，用 AI 标工艺、补尺寸，再导出给版师。未登录也能本机做款；登录后可同步到网上、换设备继续。
+            上传款式图后可手动标注工艺与尺寸，再导出给版师。未登录也能本机手动画；
+            AI 与云端存档需要先注册/登录。
           </p>
 
           <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-left text-[11px] leading-relaxed text-slate-600">
             <p className="font-medium text-slate-700">怎么开始</p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4">
               <li>点「新建款式」上传正面图</li>
-              <li>在画布里标注工艺 / 尺寸，或用 AI 一键生成</li>
-              <li>左侧可生成背面、领口等视角；顶栏可同步到网上</li>
+              <li>在画布里用方框/尺寸线/表格手动标注</li>
+              <li>要用 AI 或把稿存到云端 → 先注册/登录</li>
             </ol>
           </div>
 
@@ -215,7 +216,7 @@ export default function CanvasHomePage() {
 
           {!configured ? (
             <p className="mt-4 text-[11px] leading-relaxed text-amber-700">
-              当前是本机模式（未配置云端）。可先新建做款；配好云端后再登录同步。
+              当前是本机模式（未配置云端）。可先新建并手动标注；配好云端并注册后才能用 AI 与同步存档。
             </p>
           ) : null}
         </div>
