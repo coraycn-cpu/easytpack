@@ -36,7 +36,7 @@ const ACTION_LABELS: Record<string, string> = {
   "style-review": "款式评语",
   "translate-techpack": "工艺包英译",
   chat: "对话助手",
-  "view-image": "视角生图",
+  "view-image": "视角生图（5点）",
   generate: "工艺生成",
   "full-collect": "全量采集",
   other: "其它",

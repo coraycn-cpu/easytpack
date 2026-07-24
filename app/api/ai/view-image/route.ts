@@ -9,6 +9,7 @@ import {
   assertWithinAiQuota,
   persistCloudAiUsage,
 } from "@/lib/ai/quota";
+import { AI_UNITS_VIEW_IMAGE } from "@/lib/ai/quota-units";
 import { isViewImageKind } from "@/lib/studio/view-types";
 
 export async function GET() {
@@ -18,7 +19,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const started = Date.now();
   let projectId: string | undefined;
-  const quota = await assertWithinAiQuota(1);
+  const units = AI_UNITS_VIEW_IMAGE;
+  const quota = await assertWithinAiQuota(units);
   if (!quota.ok) return quota.response;
 
   try {
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
     meterAiCallServer({
       action: "view-image",
       projectId,
+      units: ok ? units : 0,
       ok,
       provider: synthesis.provider,
       model: synthesis.model,
@@ -63,6 +66,7 @@ export async function POST(req: NextRequest) {
       userId: quota.userId,
       action: "view-image",
       projectId,
+      units,
       ok,
       provider: synthesis.provider,
       model: synthesis.model,
@@ -80,10 +84,11 @@ export async function POST(req: NextRequest) {
     });
     res.headers.set("x-ai-action", "view-image");
     res.headers.set("x-ai-ms", String(Date.now() - started));
+    res.headers.set("x-ai-units", String(ok ? units : 0));
     if (quota.userId) {
       res.headers.set(
         "x-ai-quota-used",
-        String(quota.used + (ok ? 1 : 0)),
+        String(quota.used + (ok ? units : 0)),
       );
       res.headers.set("x-ai-quota-limit", String(quota.limit));
     }
@@ -95,6 +100,7 @@ export async function POST(req: NextRequest) {
     meterAiCallServer({
       action: "view-image",
       projectId,
+      units: 0,
       ok: false,
       error: message,
     });
@@ -102,6 +108,7 @@ export async function POST(req: NextRequest) {
       userId: quota.userId,
       action: "view-image",
       projectId,
+      units,
       ok: false,
     });
     return NextResponse.json({ error: message }, { status: 500 });

@@ -102,6 +102,9 @@ export default function FixedViewSidebar({
           <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
             {VIEW_IMAGE_AI_GUIDE}
           </p>
+          <p className="mt-0.5 text-[9px] font-medium text-violet-800/90">
+            成功生成一张约消耗 5 点 AI
+          </p>
           <p className="mt-1 text-[9px] leading-snug text-slate-500">
             {SIDEBAR_AI_SOURCE_HINT}
           </p>

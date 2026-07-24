@@ -23,7 +23,6 @@ import {
   exportAiTelemetryJsonl,
   getAiTelemetryStorageBytes,
 } from "@/lib/ai/telemetry";
-import { listAiMeterEvents, sumAiMeterUnits } from "@/lib/ai/metering";
 import {
   isLoggedInForCloud,
   pullAllFromCloudAndCache,
@@ -70,7 +69,6 @@ export default function ProjectsPage() {
     projectCount: 0,
   }));
   const [cacheNote, setCacheNote] = useState<string | null>(null);
-  const [aiUnits, setAiUnits] = useState(0);
   const [cloudLoggedIn, setCloudLoggedIn] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
@@ -84,7 +82,6 @@ export default function ProjectsPage() {
       setProjects(await repo.list());
     })();
     setStats(getEasytpackStorageStats());
-    setAiUnits(sumAiMeterUnits());
     void isLoggedInForCloud().then(setCloudLoggedIn);
     setSyncStatus(getCloudSyncStatus());
   };
@@ -205,9 +202,7 @@ export default function ProjectsPage() {
       `easytpack-ai-telemetry-${new Date().toISOString().slice(0, 10)}.jsonl`,
       jsonl,
     );
-    setCacheNote(
-      `已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`,
-    );
+    setCacheNote("已导出质量日志");
   };
 
   const handleImportBackup = async (file: File | null) => {
@@ -305,9 +300,9 @@ export default function ProjectsPage() {
               {formatStorageBytes(stats.telemetryBytes)}
             </li>
             <li>
-              本期本地 AI 成功调用约 {aiUnits} 次
+              正式 AI 额度请看「用户中心」云端已用/上限（生图成功约 5 点）
               {getAiTelemetryStorageBytes() > 0
-                ? ` · 质量日志 ${formatStorageBytes(getAiTelemetryStorageBytes())}`
+                ? ` · 本机质量日志 ${formatStorageBytes(getAiTelemetryStorageBytes())}`
                 : ""}
             </li>
           </ul>

@@ -68,6 +68,7 @@ export async function runMeteredAiJsonRoute(
     const res = NextResponse.json(payload);
     res.headers.set("x-ai-action", options.action);
     res.headers.set("x-ai-ms", String(Date.now() - started));
+    res.headers.set("x-ai-units", String(units));
     if (userId) {
       res.headers.set("x-ai-quota-used", String(quota.used + units));
       res.headers.set("x-ai-quota-limit", String(quota.limit));
