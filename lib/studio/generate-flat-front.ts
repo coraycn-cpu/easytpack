@@ -57,7 +57,7 @@ export async function generateFlatFrontForPrimary(
     return {
       project,
       success: false,
-      message: "参考图过大，无法生成平铺正面",
+      message: "参考图过大，自动压缩后仍无法生成平铺正面，请换稍小的图",
     };
   }
 
