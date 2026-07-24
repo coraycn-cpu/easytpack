@@ -103,7 +103,8 @@ export default function CanvasHomePage() {
     router.push(
       buildLoginHref({
         mode: authMode,
-        next: `/project/${projectId}/studio`,
+        // 登录后带回草稿：用上传图+填写内容跑 AI，再填入画布
+        next: `/project/${projectId}/studio?pendingAi=1`,
       }),
     );
   };

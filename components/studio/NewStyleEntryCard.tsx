@@ -101,10 +101,13 @@ export default function NewStyleEntryCard({
 
     try {
       const sampleSize = sizeStandard.sampleSize.trim();
+      const preferLogin = opts?.preferLogin;
       let intake: IntakeData = {
         description,
         imageDataUrl,
         detectedCategory: "未分类",
+        // 未登录先存草稿：登录进画布后再用同一张图/描述跑 AI
+        ...(preferLogin ? { pendingAiAnalysis: true } : {}),
       };
 
       const isLogged = await isLoggedInForCloud();
@@ -120,7 +123,7 @@ export default function NewStyleEntryCard({
           throw new Error(messageFromAiResponse(intent, "分析失败"));
         }
         intake = applyIntentToIntake(intake, intent);
-      } else {
+      } else if (!preferLogin) {
         setLoginHint(AI_LOGIN_REQUIRED_MESSAGE);
       }
 
@@ -132,13 +135,16 @@ export default function NewStyleEntryCard({
         intake,
         regionStandard: sizeStandard.regionStandard,
         sampleSize,
-        // 未登录不做 AI 全量采集，直接进画布手动画
-        status: mode === "full" && isLogged ? "collecting" : "studio",
+        // 登录后继续：标记 collecting，回画布后跑分析并填入
+        status:
+          (mode === "full" && isLogged) || (!isLogged && preferLogin)
+            ? "collecting"
+            : "studio",
       });
 
-      if (!isLogged && opts?.preferLogin) {
+      if (!isLogged && preferLogin) {
         if (onCreatedNeedLogin) {
-          onCreatedNeedLogin(project.id, opts.preferLogin);
+          onCreatedNeedLogin(project.id, preferLogin);
           return project;
         }
         // 父级未接线时仍进画布，避免卡住
@@ -244,7 +250,7 @@ export default function NewStyleEntryCard({
               <p className="mt-1 text-[11px] leading-relaxed text-blue-950/80">
                 登录后可用 AI 一键标注与生图，并把稿存到云端（换电脑也能打开）。
                 注册免费，每月送 {FREE_MONTHLY_AI_GIFT} 点 AI。
-                草稿会先保存在本机，登录后自动回到画布。
+                你上传的图和填写内容会先保存；登录后自动用它们做 AI 分析并填入画布。
               </p>
             </div>
           ) : null}
