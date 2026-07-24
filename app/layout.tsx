@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
+import { BRAND_NAME, BRAND_SITE, BRAND_SLOGAN } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
+  title: `${BRAND_NAME} · ${BRAND_SITE}`,
   description: BRAND_SLOGAN,
 };
 
