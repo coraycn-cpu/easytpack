@@ -94,7 +94,10 @@ flowchart TB
 | **训练数据收集** | ① 统一 `AiTelemetryEvent` 类型（action、ai_output 摘要、user_final 摘要、outcome、correction、consent）② 生图/标注/一键：在现有路径打点到本地队列（可导出 JSONL）③ 替换 view-gen「假 accepted」为真实 outcome 枚举 ④ **consent 字段**预留在项目上（默认 false） | `lib/training/*` 扩展；studio AI handlers；导出定稿点 |
 | **管理后台** | ① 事件/用量 JSONL 导出（给未来 admin 导入）② schema 预留 `ai_events` / `pack_versions` / `ai_usage` 表定义 ③ 不写 `/admin` 页面 | `supabase/schema.sql` + `scripts/` 或项目页「导出质量日志」调试入口 |
 
-**明确不做（留给下期）：** Auth UI、强制登录、Stripe/支付、公开分享页、Admin CRUD、向量库、模型微调。
+> **进度更新（phase2）：** Auth / 同步 / 额度 / 邀请 / Admin M1–M3 已落地。  
+> **第一个基础版：** 代码可上线；运维清单见 [docs/GO_LIVE.md](../../docs/GO_LIVE.md)。运营计划见 [admin-ops-roadmap.md](./admin-ops-roadmap.md)。
+
+**明确不做（留给更后）：** Stripe/支付收银台、公开分享页、向量库、模型微调、真实多团队组织。
 
 ---
 

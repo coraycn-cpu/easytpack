@@ -85,6 +85,15 @@ export function appendAiTelemetryEvent(
   const next = readEvents();
   next.push(event);
   writeEvents(next);
+  if (event.consent) {
+    void import("@/lib/ai/telemetry-cloud")
+      .then(({ pushTelemetryEventToCloud }) =>
+        pushTelemetryEventToCloud(event),
+      )
+      .catch(() => {
+        /* ignore */
+      });
+  }
   return event;
 }
 

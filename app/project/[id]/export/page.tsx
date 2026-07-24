@@ -16,7 +16,6 @@ import {
 } from "@/lib/export/filename";
 import { buildTechPackDocument } from "@/lib/export/techpack-document";
 import { exportTechPackXlsx } from "@/lib/export/xlsx";
-import { buildShareSnapshotHash } from "@/lib/export/share-snapshot";
 import { sortArtboardsForExport } from "@/lib/export/artboard-order";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
@@ -115,6 +114,23 @@ export default function ExportPage() {
     }).length;
   }, [project, annotatedImages, coverHeroUrl, coverHeroLabel]);
 
+  const honestyIssues = useMemo(() => {
+    if (!project) return [] as string[];
+    const issues: string[] = [];
+    for (const ab of project.canvas_data.artboards) {
+      const status = ab.viewImageMeta?.generationStatus;
+      const name = ab.name || "未命名视角";
+      if (status === "failed") {
+        issues.push(`「${name}」生图失败，请回画板重试或删除后再导出`);
+      } else if (status === "placeholder") {
+        issues.push(
+          `「${name}」仍是占位/示意稿，勿当作真实成品图发给版师`,
+        );
+      }
+    }
+    return issues;
+  }, [project]);
+
   const persistHistory = async (
     kind: "pdf" | "xlsx" | "composite",
     extra?: { pageCount?: number },
@@ -126,7 +142,6 @@ export default function ExportPage() {
       basename: styleExportBasename(project),
       pageCount: extra?.pageCount,
       imageMode: IMAGE_MODE,
-      shareSnapshotHash: buildShareSnapshotHash(project),
     };
     const history = [...(project.exportHistory ?? []), entry].slice(-20);
     const updated = { ...project, exportHistory: history };
@@ -136,6 +151,14 @@ export default function ExportPage() {
 
   const handleExportPdf = () => {
     if (!project) return;
+    if (
+      honestyIssues.length > 0 &&
+      !window.confirm(
+        `检测到可能不适合发给版师的图：\n- ${honestyIssues.join("\n- ")}\n\n仍要继续导出 PDF 吗？`,
+      )
+    ) {
+      return;
+    }
     setBusy("pdf");
     void persistHistory("pdf", { pageCount }).finally(() => {
       document.title = exportFilename(project, "工艺包");
@@ -146,6 +169,14 @@ export default function ExportPage() {
 
   const handleExportXlsx = () => {
     if (!project) return;
+    if (
+      honestyIssues.length > 0 &&
+      !window.confirm(
+        `检测到可能不适合发给版师的图：\n- ${honestyIssues.join("\n- ")}\n\n仍要继续导出 Excel 吗？`,
+      )
+    ) {
+      return;
+    }
     setBusy("xlsx");
     void exportTechPackXlsx(project, annotatedImages)
       .then(() => persistHistory("xlsx"))
@@ -154,6 +185,14 @@ export default function ExportPage() {
 
   const handleDownloadComposite = () => {
     if (!stageCompositeUrl || !project) return;
+    if (
+      honestyIssues.length > 0 &&
+      !window.confirm(
+        `检测到可能不适合发给版师的图：\n- ${honestyIssues.join("\n- ")}\n\n仍要下载合拼大图吗？`,
+      )
+    ) {
+      return;
+    }
     setBusy("composite");
     const ext = stageCompositeUrl.startsWith("data:image/jpeg") ? "jpg" : "png";
     downloadDataUrl(
@@ -224,12 +263,26 @@ export default function ExportPage() {
         </header>
 
         <main className="mx-auto max-w-5xl px-4 py-6">
+          {honestyIssues.length > 0 ? (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-[11px] leading-relaxed text-red-950">
+              <p className="font-semibold text-red-900">导出前请注意（图诚实提示）</p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-red-900/90">
+                {honestyIssues.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-red-800/80">
+                建议先回画板处理失败/占位图，再发给版师。
+              </p>
+            </div>
+          ) : null}
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-[11px] leading-relaxed text-amber-950">
             <p className="font-semibold text-amber-900">发给版师前自检</p>
             <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-amber-900/90">
               <li>封面标题、尺码标准、样衣码是否正确</li>
               <li>工艺 / BOM / 尺寸表是否有空行或缺关键数值</li>
               <li>画布标注是否指向关键部位（图仅供沟通，以表为准）</li>
+              <li>是否仍有失败或占位视角图（见上方红色提示）</li>
               <li>
                 <strong>PDF</strong>：系统打印对话框选「另存为 PDF」· A4 ·{" "}
                 <strong>横向</strong> · 背景图形开启
@@ -257,7 +310,7 @@ export default function ExportPage() {
               }}
             />
             <span>
-              同意本款匿名摘要进入质量改进池（默认关闭；下期管理后台用，不含公开分享）
+              同意本款匿名摘要进入质量改进池（默认关闭；下期管理后台用）
             </span>
           </label>
           <TechPackPreview

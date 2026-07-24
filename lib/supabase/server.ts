@@ -6,7 +6,7 @@ export async function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    throw new Error("Supabase 未配置");
+    throw new Error("云端账号尚未配置（缺少 URL 或密钥）");
   }
 
   const cookieStore = await cookies();
@@ -22,7 +22,7 @@ export async function createClient() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Server Component 中可能无法写 cookie
+          // 部分页面环境不能写 cookie，忽略即可
         }
       },
     },

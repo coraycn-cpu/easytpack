@@ -21,6 +21,30 @@ export type AiMeterAction =
   | "full-collect"
   | "other";
 
+const ACTION_LABELS: Record<string, string> = {
+  intake: "意图分析",
+  questionnaire: "问卷生成",
+  "annotate-batch": "一键标注",
+  "annotate-region": "区域标注",
+  bom: "物料清单",
+  "size-chart": "尺码表",
+  "size-dimension": "尺寸识别",
+  "size-dimension-batch": "批量尺寸",
+  enhance: "一键补全",
+  explain: "说明",
+  "style-review": "款式评语",
+  chat: "对话助手",
+  "view-image": "视角生图",
+  generate: "工艺生成",
+  "full-collect": "全量采集",
+  other: "其它",
+  stream: "流式调试",
+};
+
+export function aiMeterActionLabel(action: string): string {
+  return ACTION_LABELS[action] ?? action;
+}
+
 export type AiMeterEvent = {
   id: string;
   at: string;

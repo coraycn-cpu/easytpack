@@ -22,6 +22,7 @@ import {
   resolveImageRef,
   toIdbRef,
 } from "@/lib/project/image-idb";
+import { toDurableImageRef } from "@/lib/project/cloud-images";
 
 const STORAGE_KEY = "easytpack_projects";
 
@@ -104,15 +105,14 @@ async function offloadImageField(
 
 async function dehydrateProject(project: TechPackProject): Promise<TechPackProject> {
   const id = project.id;
-  const intakeUrl = await offloadImageField(
-    id,
-    "intake",
-    project.intake.imageDataUrl,
-  );
+  // 先把临时签名链还原成 sbstorage:，避免写坏本机缓存
+  const durableIntake = toDurableImageRef(project.intake.imageDataUrl);
+  const intakeUrl = await offloadImageField(id, "intake", durableIntake);
 
   const artboards: Artboard[] = [];
   for (const ab of project.canvas_data.artboards) {
-    const imageDataUrl = await offloadImageField(id, `ab:${ab.id}`, ab.imageDataUrl);
+    const durable = toDurableImageRef(ab.imageDataUrl);
+    const imageDataUrl = await offloadImageField(id, `ab:${ab.id}`, durable);
     artboards.push({ ...ab, imageDataUrl });
   }
 
@@ -124,17 +124,31 @@ async function dehydrateProject(project: TechPackProject): Promise<TechPackProje
 }
 
 async function hydrateProject(project: TechPackProject): Promise<TechPackProject> {
-  const intakeUrl = await resolveImageRef(project.intake.imageDataUrl);
+  const intakeRaw =
+    toDurableImageRef(project.intake.imageDataUrl) ?? project.intake.imageDataUrl;
+  const intakeUrl = await resolveImageRef(intakeRaw);
   const artboards: Artboard[] = [];
   for (const ab of project.canvas_data.artboards) {
-    const imageDataUrl = await resolveImageRef(ab.imageDataUrl);
+    const raw = toDurableImageRef(ab.imageDataUrl) ?? ab.imageDataUrl;
+    const resolved = await resolveImageRef(raw);
+    // 解析失败时不要把 idb:/sbstorage: 原串当 src（会空白且难排查）
+    const imageDataUrl =
+      resolved ??
+      (raw && (isIdbImageRef(raw) || raw.startsWith("sbstorage:"))
+        ? undefined
+        : raw);
     artboards.push({ ...ab, imageDataUrl });
   }
   return {
     ...project,
     intake: {
       ...project.intake,
-      imageDataUrl: intakeUrl ?? project.intake.imageDataUrl,
+      imageDataUrl:
+        intakeUrl ??
+        (intakeRaw &&
+        (isIdbImageRef(intakeRaw) || intakeRaw.startsWith("sbstorage:"))
+          ? undefined
+          : intakeRaw),
     },
     canvas_data: { ...project.canvas_data, artboards },
   };
@@ -169,7 +183,10 @@ export function createEmptyProject(
   };
 }
 
-export async function saveProject(project: TechPackProject): Promise<void> {
+export async function saveProject(
+  project: TechPackProject,
+  options?: { skipCloudMirror?: boolean },
+): Promise<void> {
   const migrated = migrateProject({
     ...project,
     updatedAt: new Date().toISOString(),
@@ -227,39 +244,105 @@ export async function saveProject(project: TechPackProject): Promise<void> {
     all[project.id] = slim;
     writeAll(all);
   }
+
+  if (options?.skipCloudMirror) return;
+
+  // 手动同步模式：只写本机，等用户点「同步」
+  void import("@/lib/project/sync-preference")
+    .then(({ isCloudSyncAuto }) => {
+      if (!isCloudSyncAuto()) return;
+      return import("@/lib/project/cloud-sync").then(
+        async ({ mirrorSaveToCloud }) => {
+          const { reportCloudSyncResult } = await import(
+            "@/lib/project/sync-status"
+          );
+          const res = await mirrorSaveToCloud(slim);
+          if (res.ok) {
+            reportCloudSyncResult({ ok: true, message: "已自动同步到云端" });
+          } else if (res.error === "not_logged_in") {
+            /* 未登录不提示 */
+          } else {
+            reportCloudSyncResult({
+              ok: false,
+              message: res.error
+                ? `云端同步失败：${res.error}（本机已保存，可稍后重试）`
+                : "云端同步失败（本机已保存，可稍后重试）",
+              offlineHint: true,
+            });
+          }
+        },
+      );
+    })
+    .catch(() => {
+      /* ignore */
+    });
+}
+
+/** 把合并后的项目以永久引用写入本机缓存（登录拉取用） */
+export async function cacheProjectsDurable(
+  projects: TechPackProject[],
+): Promise<number> {
+  if (projects.length === 0) return 0;
+  const all = readAll();
+  let n = 0;
+  for (const p of projects) {
+    try {
+      const slim = await dehydrateProject(migrateProject(p));
+      all[p.id] = slim;
+      n += 1;
+    } catch {
+      /* skip one */
+    }
+  }
+  writeAll(all);
+  return n;
 }
 
 export async function getProject(id: string): Promise<TechPackProject | null> {
   const all = readAll();
-  const p = all[id];
-  if (!p) return null;
-  const migrated = migrateProject(p);
-  const canvasMigrated =
-    migrated.canvas_data.artboards.length !== p.canvas_data.artboards.length ||
-    migrated.canvas_data.artboards.some((ab) => {
-      const prev = p.canvas_data.artboards.find((x) => x.id === ab.id);
-      return Boolean(ab.viewImageMeta) && !prev?.viewImageMeta;
-    });
-  if (canvasMigrated) {
-    // Persist structural migration without re-hydrating images into localStorage
-    const dehydrated = await dehydrateProject(migrated);
-    all[id] = { ...dehydrated, updatedAt: p.updatedAt };
-    try {
-      writeAll(all);
-    } catch {
-      // ignore quota on structural migrate
-    }
+  const localRaw = all[id] ? migrateProject(all[id]) : null;
+
+  // 有本机缓存时也和云端合并，修复本地过期签名链 / 丢图
+  let merged: TechPackProject | null = localRaw;
+  try {
+    const { mergeOneLocalWithCloud } = await import("@/lib/project/cloud-sync");
+    merged = await mergeOneLocalWithCloud(id, localRaw);
+  } catch {
+    merged = localRaw;
+  }
+
+  if (!merged) return null;
+
+  const migrated = migrateProject(merged);
+  try {
+    // 缓存永久引用到本机（不含临时 https）
+    const slim = await dehydrateProject(migrated);
+    all[id] = { ...slim, updatedAt: migrated.updatedAt };
+    writeAll(all);
+  } catch {
+    /* quota ignore */
   }
   return hydrateProject(migrated);
 }
 
-/** List projects for UI; images may remain as idb: refs (no hydrate). */
-export async function listProjects(): Promise<TechPackProject[]> {
+/** 仅本机列表（不含云端合并，供混合仓使用） */
+export async function listLocalProjectsOnly(): Promise<TechPackProject[]> {
   return Object.values(readAll())
     .map(migrateProject)
     .sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
+}
+
+/** List projects for UI; images may remain as idb: refs (no hydrate). */
+export async function listProjects(): Promise<TechPackProject[]> {
+  const local = await listLocalProjectsOnly();
+  try {
+    const { mergeLocalWithCloud } = await import("@/lib/project/cloud-sync");
+    return await mergeLocalWithCloud(local);
+  } catch {
+    return local;
+  }
 }
 
 export async function duplicateProject(id: string): Promise<TechPackProject | null> {
@@ -282,7 +365,10 @@ export async function duplicateProject(id: string): Promise<TechPackProject | nu
   return copy;
 }
 
-export async function deleteProject(id: string): Promise<void> {
+export async function deleteProject(
+  id: string,
+  options?: { skipCloudMirror?: boolean },
+): Promise<void> {
   const all = readAll();
   delete all[id];
   writeAll(all);
@@ -291,6 +377,12 @@ export async function deleteProject(id: string): Promise<void> {
   } catch {
     // ignore IDB cleanup failures
   }
+  if (options?.skipCloudMirror) return;
+  void import("@/lib/project/cloud-sync")
+    .then(({ mirrorDeleteFromCloud }) => mirrorDeleteFromCloud(id))
+    .catch(() => {
+      /* ignore */
+    });
 }
 
 /** Approximate localStorage usage for easytpack keys (UTF-16 bytes). */
@@ -334,6 +426,82 @@ export function getEasytpackStorageStats(): {
 /** 导出项目 JSON（备份；图片可能为 idb: 引用，需本机才能还原） */
 export function exportProjectJsonBackup(project: TechPackProject): string {
   return JSON.stringify(project, null, 2);
+}
+
+export type ImportBackupResult = {
+  project: TechPackProject;
+  warnings: string[];
+};
+
+/**
+ * 从 JSON 备份恢复为新项目（新 id，避免覆盖现有款）。
+ * 若图片是 idb: / 失效引用，会提示但尽量保留其它字段。
+ */
+export function parseProjectJsonBackup(raw: string): ImportBackupResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("不是有效的 JSON 文件");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("备份格式不对：需要单个项目对象");
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (!obj.canvas_data || typeof obj.canvas_data !== "object") {
+    throw new Error("备份缺少 canvas_data，无法恢复");
+  }
+  if (!obj.intake || typeof obj.intake !== "object") {
+    throw new Error("备份缺少 intake，无法恢复");
+  }
+
+  const warnings: string[] = [];
+  const now = new Date().toISOString();
+  const baseTitle =
+    typeof obj.title === "string" && obj.title.trim()
+      ? obj.title.trim()
+      : "未命名款式";
+
+  const restored = migrateProject({
+    ...(obj as unknown as TechPackProject),
+    id: generateProjectId(),
+    title: baseTitle.includes("（恢复）") ? baseTitle : `${baseTitle}（恢复）`,
+    createdAt: now,
+    updatedAt: now,
+    workflowStatus:
+      (obj.workflowStatus as TechPackProject["workflowStatus"]) ?? "draft",
+  });
+
+  const refs: string[] = [];
+  if (restored.intake.imageDataUrl) refs.push(restored.intake.imageDataUrl);
+  for (const ab of restored.canvas_data.artboards) {
+    if (ab.imageDataUrl) refs.push(ab.imageDataUrl);
+  }
+  const missingIdb = refs.some((r) => isIdbImageRef(r));
+  if (missingIdb) {
+    warnings.push(
+      "备份里含本机图片引用（idb:…）。换浏览器/清缓存后图可能丢失，请在 Studio 重新上传。",
+    );
+  }
+  if (refs.some((r) => r.startsWith("sbstorage:"))) {
+    warnings.push(
+      "含云端图片引用。需登录同一账号并同步后才可能重新拉图。",
+    );
+  }
+
+  return { project: restored, warnings };
+}
+
+export async function importProjectJsonBackup(
+  raw: string,
+): Promise<ImportBackupResult> {
+  const result = parseProjectJsonBackup(raw);
+  // 粗略体积保护：过大时仍可试，但先提示空间风险
+  if (raw.length > 8_000_000) {
+    result.warnings.push("文件较大，若保存失败请先清理缓存或删旧款。");
+  }
+  await saveProject(result.project);
+  return result;
 }
 
 export function formatStorageBytes(bytes: number): string {

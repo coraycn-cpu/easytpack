@@ -4,16 +4,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
+import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
+import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
 import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
 import {
-  deleteProject,
   duplicateProject,
   evacuateNonProjectStorage,
   exportProjectJsonBackup,
   formatStorageBytes,
   getEasytpackStorageStats,
-  getProject,
-  listProjects,
+  importProjectJsonBackup,
 } from "@/lib/project/storage";
 import {
   downloadTextFile,
@@ -21,6 +22,23 @@ import {
   getAiTelemetryStorageBytes,
 } from "@/lib/ai/telemetry";
 import { listAiMeterEvents, sumAiMeterUnits } from "@/lib/ai/metering";
+import {
+  isLoggedInForCloud,
+  pullAllFromCloudAndCache,
+  pushAllLocalProjectsToCloud,
+  syncAfterLogin,
+} from "@/lib/project/cloud-sync";
+import { resolveProjectRepository } from "@/lib/project/repository";
+import {
+  getCloudSyncMode,
+  subscribeCloudSyncMode,
+  type CloudSyncMode,
+} from "@/lib/project/sync-preference";
+import {
+  getCloudSyncStatus,
+  subscribeCloudSyncStatus,
+  type CloudSyncStatus,
+} from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
 
 export default function ProjectsPage() {
@@ -37,15 +55,32 @@ export default function ProjectsPage() {
   }));
   const [cacheNote, setCacheNote] = useState<string | null>(null);
   const [aiUnits, setAiUnits] = useState(0);
+  const [cloudLoggedIn, setCloudLoggedIn] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus | null>(null);
+  const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
+  const [importBusy, setImportBusy] = useState(false);
 
   const refresh = () => {
-    void listProjects().then(setProjects);
+    void (async () => {
+      const repo = await resolveProjectRepository();
+      setProjects(await repo.list());
+    })();
     setStats(getEasytpackStorageStats());
     setAiUnits(sumAiMeterUnits());
+    void isLoggedInForCloud().then(setCloudLoggedIn);
+    setSyncStatus(getCloudSyncStatus());
   };
 
   useEffect(() => {
+    setSyncMode(getCloudSyncMode());
     refresh();
+    const unsubStatus = subscribeCloudSyncStatus(setSyncStatus);
+    const unsubMode = subscribeCloudSyncMode(setSyncMode);
+    return () => {
+      unsubStatus();
+      unsubMode();
+    };
   }, []);
 
   const filtered = projects.filter((p) =>
@@ -69,9 +104,40 @@ export default function ProjectsPage() {
     refresh();
   };
 
+  const handleSyncBoth = () => {
+    setSyncBusy(true);
+    void syncAfterLogin()
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
+  };
+
+  const handlePull = () => {
+    setSyncBusy(true);
+    void pullAllFromCloudAndCache()
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
+  };
+
+  const handlePush = () => {
+    setSyncBusy(true);
+    void pushAllLocalProjectsToCloud(projects)
+      .then((res) => {
+        setCacheNote(res.message);
+        refresh();
+      })
+      .finally(() => setSyncBusy(false));
+  };
+
   const handleExportBackup = async (id: string, title: string) => {
     try {
-      const p = await getProject(id);
+      const repo = await resolveProjectRepository();
+      const p = await repo.get(id);
       if (!p) {
         window.alert("项目不存在或已删除");
         return;
@@ -98,6 +164,37 @@ export default function ProjectsPage() {
     setCacheNote(`已导出质量日志（${listAiMeterEvents().length} 条用量记录仍在本地）`);
   };
 
+  const handleImportBackup = async (file: File | null) => {
+    if (!file || importBusy) return;
+    setImportBusy(true);
+    try {
+      if (file.size > 20 * 1024 * 1024) {
+        throw new Error("文件过大（超过 20MB），请换较小备份或先压缩图片");
+      }
+      const text = await file.text();
+      const result = await importProjectJsonBackup(text);
+      refresh();
+      const warn =
+        result.warnings.length > 0
+          ? `（注意：${result.warnings.join(" ")}）`
+          : "";
+      setCacheNote(`已恢复「${result.project.title}」${warn}`);
+      if (
+        window.confirm(
+          `已恢复「${result.project.title}」。是否打开 Studio？${
+            result.warnings[0] ? `\n\n${result.warnings[0]}` : ""
+          }`,
+        )
+      ) {
+        router.push(`/project/${result.project.id}/studio`);
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "导入失败");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <AppHeader />
@@ -106,8 +203,9 @@ export default function ProjectsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">我的项目</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              本地保存，共 {projects.length} 个款式 · 约占{" "}
-              {formatStorageBytes(stats.totalBytes)}
+              {cloudLoggedIn
+                ? `云端 + 本机缓存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`
+                : `本机保存 · 共 ${projects.length} 个款式 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
             </p>
           </div>
           <Link
@@ -151,11 +249,94 @@ export default function ProjectsPage() {
             >
               导出质量日志 JSONL
             </button>
+            <label className="cursor-pointer rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
+              {importBusy ? "导入中…" : "导入 JSON 备份"}
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                disabled={importBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  void handleImportBackup(f);
+                }}
+              />
+            </label>
           </div>
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
             保存失败或提示空间已满时：删除旧款、清理缓存，或导出 JSON
-            备份后再删。大图会自动压缩。
+            备份后再删。可用「导入 JSON 备份」恢复。大图会自动压缩。断网时仍可本机编辑，恢复网络后再同步。
           </p>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-950">
+          <p className="font-medium">云端同步</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
+            {cloudLoggedIn
+              ? syncMode === "auto"
+                ? "当前：自动同步。登录与保存时会尽量传到云端；也可手动点下方按钮。"
+                : "当前：手动同步。保存只写本机，需要时再点下方按钮传到云端。"
+              : `未登录：可继续手动标注（稿在本机浏览器）。注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI，还能同步到云端、换设备继续。`}
+          </p>
+
+          {cloudLoggedIn ? (
+            <div className="mt-2">
+              <SyncPreferenceControls
+                onChanged={(_m, msg) => setCacheNote(msg)}
+              />
+            </div>
+          ) : (
+            <div className="mt-2">
+              <GuestRegisterNudge next="/projects" />
+            </div>
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {cloudLoggedIn ? (
+              <>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handleSyncBoth}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  {syncBusy ? "同步中…" : "双向同步"}
+                </button>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handlePull}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  从云端拉取
+                </button>
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handlePush}
+                  className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+                >
+                  推到云端
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/login?next=/projects"
+                className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
+              >
+                已有账号？去登录
+              </Link>
+            )}
+          </div>
+          {syncStatus && !syncStatus.ok ? (
+            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+              {syncStatus.message}
+              {syncStatus.offlineHint
+                ? " 本机稿件还在，恢复网络后点「双向同步」即可。"
+                : ""}
+            </p>
+          ) : null}
         </div>
 
         {cacheNote && (
@@ -244,7 +425,11 @@ export default function ProjectsPage() {
                     title="删除"
                     onClick={() => {
                       if (window.confirm(`确定删除「${p.title}」？`)) {
-                        void deleteProject(p.id).then(() => refresh());
+                        void (async () => {
+                          const repo = await resolveProjectRepository();
+                          await repo.delete(p.id);
+                          refresh();
+                        })();
                       }
                     }}
                     className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50"

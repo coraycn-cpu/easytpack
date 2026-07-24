@@ -1,5 +1,6 @@
 import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
-import { createEmptyProject, saveProject } from "@/lib/project/storage";
+import { createEmptyProject } from "@/lib/project/storage";
+import { resolveProjectRepository } from "@/lib/project/repository";
 import type { IntakeData, SizeChart, TechPackProject } from "@/types/project";
 
 export function buildInitialSizeChart(
@@ -32,6 +33,7 @@ export async function createStyleProject(input: {
   });
   project.status = input.status;
   project.size_chart = buildInitialSizeChart(input.regionStandard, input.sampleSize);
-  await saveProject(project);
+  const repo = await resolveProjectRepository();
+  await repo.save(project);
   return project;
 }

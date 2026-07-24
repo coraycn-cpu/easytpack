@@ -1,40 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { generateQuestionnaire } from "@/lib/ai/intake";
+import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import type { IntakeData } from "@/types/project";
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const {
-      description,
-      imageDataUrl,
-      intentSummary,
-      detectedCategory,
-      detectedFeatures,
-      intake,
-    } = body;
-
-    if (!intentSummary || !detectedCategory) {
-      return NextResponse.json(
-        { error: "缺少意图分析结果" },
-        { status: 400 },
-      );
-    }
-
-    const result = await generateQuestionnaire({
-      description: description ?? "",
-      imageDataUrl,
-      intentSummary,
-      detectedCategory,
-      detectedFeatures: detectedFeatures ?? [],
-      intake,
-    });
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("[AI questionnaire]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "问卷生成失败" },
-      { status: 500 },
-    );
-  }
+  return runMeteredAiJsonRoute(req, {
+    action: "questionnaire",
+    run: async (body) => {
+      const intentSummary = body.intentSummary;
+      const detectedCategory = body.detectedCategory;
+      if (!intentSummary || !detectedCategory) {
+        throw new Error("缺少意图分析结果");
+      }
+      return generateQuestionnaire({
+        description:
+          typeof body.description === "string" ? body.description : "",
+        imageDataUrl:
+          typeof body.imageDataUrl === "string" ? body.imageDataUrl : undefined,
+        intentSummary: String(intentSummary),
+        detectedCategory: String(detectedCategory),
+        detectedFeatures: Array.isArray(body.detectedFeatures)
+          ? (body.detectedFeatures as string[])
+          : [],
+        intake: body.intake as IntakeData | undefined,
+      });
+    },
+  });
 }
