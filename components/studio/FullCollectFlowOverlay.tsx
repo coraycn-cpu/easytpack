@@ -27,6 +27,8 @@ type FullCollectFlowOverlayProps = {
   onProjectPatch: (project: TechPackProject) => void;
   onComplete: (project: TechPackProject, summary: string) => void;
   onError?: (message: string) => void;
+  /** 关闭全量标注，回到画布手动做 */
+  onCancel?: () => void;
 };
 
 function Shell({
@@ -37,6 +39,8 @@ function Shell({
   children,
   footerTip,
   lockedTip = true,
+  onCancel,
+  cancelLabel = "关闭，先手动标注",
 }: {
   title: string;
   subtitle: string;
@@ -45,6 +49,8 @@ function Shell({
   children: React.ReactNode;
   footerTip?: string;
   lockedTip?: boolean;
+  onCancel?: () => void;
+  cancelLabel?: string;
 }) {
   return (
     <>
@@ -60,14 +66,24 @@ function Shell({
         aria-modal="true"
         aria-label={title}
       >
-        <div className="pointer-events-auto w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="pointer-events-auto relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+          {onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-lg leading-none text-white hover:bg-white/30"
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          ) : null}
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 px-6 py-5 text-white">
             <div className="flex items-center gap-3">
               <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20 text-2xl">
                 🤖
                 <span className="absolute inset-0 animate-ping rounded-full bg-white/20" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 pr-6">
                 <h2 className="text-lg font-semibold">{title}</h2>
                 <p className="text-sm text-blue-100">{subtitle}</p>
                 {imageSourceHint ? (
@@ -98,7 +114,17 @@ function Shell({
                 {footerTip}
               </p>
             ) : null}
-            {lockedTip ? (
+            {onCancel ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  {cancelLabel}
+                </button>
+              </div>
+            ) : lockedTip ? (
               <p className="mt-2 text-center text-[10px] font-medium text-amber-600/90">
                 ⚠ AI 处理中，界面已锁定，请勿重复点击
               </p>
@@ -145,6 +171,7 @@ export default function FullCollectFlowOverlay({
   onProjectPatch,
   onComplete,
   onError,
+  onCancel,
 }: FullCollectFlowOverlayProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("preparing");
@@ -162,6 +189,12 @@ export default function FullCollectFlowOverlay({
   const [localError, setLocalError] = useState<string | null>(null);
   const [textDraft, setTextDraft] = useState("");
   const startedRef = useRef(false);
+  const cancelledRef = useRef(false);
+
+  const handleCancel = () => {
+    cancelledRef.current = true;
+    onCancel?.();
+  };
 
   useEffect(() => {
     setSizeStandard({
@@ -212,6 +245,7 @@ export default function FullCollectFlowOverlay({
           regionStandard,
           sampleSize,
         });
+        if (cancelledRef.current) return;
         const updated: TechPackProject = {
           ...annotated,
           status: "studio",
@@ -227,6 +261,7 @@ export default function FullCollectFlowOverlay({
         onProjectPatch(updated);
         onComplete(updated, summary);
       } catch (e) {
+        if (cancelledRef.current) return;
         fail(e instanceof Error ? e.message : "生成初稿失败");
         setPhase("asking");
       }
@@ -413,6 +448,7 @@ export default function FullCollectFlowOverlay({
         subtitle="可关闭后重试「AI 一键标注」"
         imagePreview={previewUrl}
         lockedTip={false}
+        onCancel={onCancel ? handleCancel : undefined}
       >
         <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {localError}
@@ -429,6 +465,8 @@ export default function FullCollectFlowOverlay({
         imagePreview={previewUrl}
         imageSourceHint={FULL_COLLECT_SOURCE_HINT}
         footerTip="问题尽量简短，方便你快速回答"
+        onCancel={onCancel ? handleCancel : undefined}
+        cancelLabel="关闭，先手动标注"
       >
         <LoadingBody
           icon="💬"
@@ -448,10 +486,12 @@ export default function FullCollectFlowOverlay({
     return (
       <Shell
         title="AI 正在生成工艺包初稿"
-        subtitle="通常需要 30–60 秒，请勿关闭"
+        subtitle="通常需要 30–60 秒"
         imagePreview={previewUrl}
         imageSourceHint={FULL_COLLECT_SOURCE_HINT}
         footerTip="工艺/尺寸用主款；物料用原参考图"
+        onCancel={onCancel ? handleCancel : undefined}
+        cancelLabel="关闭回画布（后台可能仍在跑，可稍后刷新）"
       >
         <LoadingBody
           icon="⚙️"
@@ -472,6 +512,7 @@ export default function FullCollectFlowOverlay({
         imageSourceHint={FULL_COLLECT_SOURCE_HINT}
         lockedTip={false}
         footerTip={`补充问题已完成（${Math.min(total, FULL_COLLECT_MAX_QUESTIONS)}/${FULL_COLLECT_MAX_QUESTIONS}）`}
+        onCancel={onCancel ? handleCancel : undefined}
       >
         <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
           <SizeStandardFields
@@ -520,6 +561,7 @@ export default function FullCollectFlowOverlay({
       imageSourceHint={FULL_COLLECT_SOURCE_HINT}
       lockedTip={false}
       footerTip={intro || "快速点选即可，答完后生成工艺包初稿"}
+      onCancel={onCancel ? handleCancel : undefined}
     >
       <div className="mb-3 flex justify-center gap-1.5">
         {questions.map((q, i) => (

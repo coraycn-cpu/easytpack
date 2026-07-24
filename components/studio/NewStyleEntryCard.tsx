@@ -135,11 +135,8 @@ export default function NewStyleEntryCard({
         intake,
         regionStandard: sizeStandard.regionStandard,
         sampleSize,
-        // 登录后继续：标记 collecting，回画布后跑分析并填入
-        status:
-          (mode === "full" && isLogged) || (!isLogged && preferLogin)
-            ? "collecting"
-            : "studio",
+        // 登录后继续：只进普通画布（studio），不自动开全量标注
+        status: mode === "full" && isLogged ? "collecting" : "studio",
       });
 
       if (!isLogged && preferLogin) {
@@ -250,7 +247,7 @@ export default function NewStyleEntryCard({
               <p className="mt-1 text-[11px] leading-relaxed text-blue-950/80">
                 登录后可用 AI 一键标注与生图，并把稿存到云端（换电脑也能打开）。
                 注册免费，每月送 {FREE_MONTHLY_AI_GIFT} 点 AI。
-                你上传的图和填写内容会先保存；登录后自动用它们做 AI 分析并填入画布。
+                你上传的图和填写内容会先保存；登录后自动做一次款式理解（不自动开全量标注），再进入画布。
               </p>
             </div>
           ) : null}

@@ -273,11 +273,17 @@ export default function StudioPage() {
       setProject(p);
       setActiveArtboardId(p.canvas_data.activeArtboardId);
       setLayout(getStudioLayout(p.canvas_data.studioLayout));
-      // 全量标注问答在弹窗内完成：显式 ?fullCollect=1 或 status=collecting
-      const fullCollectParam =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("fullCollect") === "1";
+      // 全量标注：仅显式 ?fullCollect=1 或 status=collecting，且不是「登录后轻量分析」草稿
+      const search =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : null;
+      const fullCollectParam = search?.get("fullCollect") === "1";
+      const pendingAiParam = search?.get("pendingAi") === "1";
+      const isPendingAiDraft =
+        pendingAiParam || Boolean(p.intake.pendingAiAnalysis);
       if (
+        !isPendingAiDraft &&
         (fullCollectParam || p.status === "collecting") &&
         p.intake.imageDataUrl &&
         !needsGarmentConfirmation(p.intake)
@@ -291,6 +297,16 @@ export default function StudioPage() {
             );
           }
         });
+      }
+      // 旧草稿误标成 collecting：登录后轻量分析应进普通画布
+      if (isPendingAiDraft && p.status === "collecting") {
+        const fixedStatus = {
+          ...p,
+          status: "studio" as const,
+        };
+        projectRef.current = fixedStatus;
+        setProject(fixedStatus);
+        void saveProject(fixedStatus);
       }
       const renamed = normalizeViewArtboardNames(p.canvas_data.artboards);
       if (renamed.changed) {
@@ -353,8 +369,33 @@ export default function StudioPage() {
   );
   const pendingAiAnalysis = Boolean(project?.intake.pendingAiAnalysis);
   const pendingAiRunningRef = useRef(false);
+  const pendingAiAbortRef = useRef<AbortController | null>(null);
 
-  /** 登录后把新建草稿的图+描述送去 AI，结果写回 intake / 画布流程 */
+  const cancelPendingAiAnalysis = useCallback(() => {
+    pendingAiAbortRef.current?.abort();
+    pendingAiAbortRef.current = null;
+    pendingAiRunningRef.current = false;
+    setAiTask(null);
+    const base = projectRef.current;
+    if (base?.intake.pendingAiAnalysis) {
+      persist({
+        ...base,
+        status: "studio",
+        intake: { ...base.intake, pendingAiAnalysis: false },
+      });
+    }
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("pendingAi")) {
+        url.searchParams.delete("pendingAi");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      }
+    }
+    setAiTip("已跳过自动分析。可先手动标注，需要时再点左侧 AI。");
+    setAiMessage(null);
+  }, [persist]);
+
+  /** 登录后把新建草稿的图+描述送去 AI（仅轻量理解，不自动全量标注） */
   useEffect(() => {
     if (!project?.id || !intakeImageDataUrl) return;
     if (intakeAlreadyAnalyzed && !pendingAiAnalysis) return;
@@ -385,14 +426,17 @@ export default function StudioPage() {
       }
 
       pendingAiRunningRef.current = true;
+      const abort = new AbortController();
+      pendingAiAbortRef.current = abort;
       setAiTask("intake");
-      setAiTip("正在用你上传的图和填写内容做 AI 分析…");
+      setAiTip("正在用你上传的图和填写内容理解款式…");
       setAiMessage(null);
 
       try {
         const imageForAi =
           (await resolveImageDataUrlForAi(base.intake.imageDataUrl)) ??
           base.intake.imageDataUrl;
+        if (abort.signal.aborted || cancelled) return;
         if (!imageForAi?.startsWith("data:")) {
           setAiMessage("找不到款式图，请重新上传后再试。");
           return;
@@ -405,12 +449,21 @@ export default function StudioPage() {
             description: base.intake.description,
             imageDataUrl: imageForAi,
           }),
+          signal: abort.signal,
         });
         const intent = await res.json();
-        if (cancelled) return;
+        if (abort.signal.aborted || cancelled) return;
         if (!res.ok) {
           setAiMessage(messageFromAiResponse(intent, "AI 分析失败"));
           setAiTip("可先手动标注；稍后可在左侧再试 AI。");
+          // 清掉 pending，避免反复弹
+          const latestFail = projectRef.current ?? base;
+          persist({
+            ...latestFail,
+            status: "studio",
+            intake: { ...latestFail.intake, pendingAiAnalysis: false },
+          });
+          clearPendingAiQuery();
           return;
         }
 
@@ -422,6 +475,8 @@ export default function StudioPage() {
         const updated: TechPackProject = {
           ...latest,
           intake: nextIntake,
+          // 登录后进普通画布，绝不自动开全量标注
+          status: "studio",
           title:
             (latest.title && latest.title !== "我的款式"
               ? latest.title
@@ -429,31 +484,26 @@ export default function StudioPage() {
             intent.suggestedTitle ||
             latest.intake.description.trim().slice(0, 40) ||
             latest.title,
-          status:
-            latest.status === "collecting" ? "collecting" : latest.status,
         };
         persist(updated);
         clearPendingAiQuery();
-        setAiTip("AI 分析完成。确认款式后可继续一键标注。");
-
-        // 需要选款则等选款；否则 collecting / pendingAi 时打开全量标注
-        if (!needsGarmentConfirmation(nextIntake)) {
-          const wantFull =
-            updated.status === "collecting" ||
-            (typeof window !== "undefined" &&
-              new URLSearchParams(window.location.search).get("fullCollect") ===
-                "1");
-          if (wantFull) setFullCollectOpen(true);
-        }
+        setAiTip(
+          needsGarmentConfirmation(nextIntake)
+            ? "款式已理解，请确认目标单款；之后可手动标注或点左侧 AI。"
+            : "款式已理解，已进入画布。需要时再点左侧「AI 一键标注」。",
+        );
       } catch (err) {
-        if (!cancelled) {
-          setAiMessage(
-            err instanceof Error ? err.message : "AI 分析失败，请稍后重试",
-          );
-        }
+        if (abort.signal.aborted || cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAiMessage(
+          err instanceof Error ? err.message : "AI 分析失败，请稍后重试",
+        );
       } finally {
+        if (pendingAiAbortRef.current === abort) {
+          pendingAiAbortRef.current = null;
+        }
         pendingAiRunningRef.current = false;
-        if (!cancelled) setAiTask(null);
+        if (!cancelled && !abort.signal.aborted) setAiTask(null);
       }
     };
 
@@ -472,12 +522,14 @@ export default function StudioPage() {
       try {
         const supabase = createClient();
         const { data } = supabase.auth.onAuthStateChange((event, session) => {
-          if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+          if (
+            session?.user &&
+            (event === "SIGNED_IN" || event === "INITIAL_SESSION")
+          ) {
             void runPendingIntake();
           }
         });
         authUnsub = data.subscription;
-        // 再主动探一次，避免错过已登录
         window.setTimeout(() => {
           void runPendingIntake();
         }, 400);
@@ -2611,6 +2663,22 @@ export default function StudioPage() {
               onError={(message) => {
                 setAiMessage(message);
               }}
+              onCancel={() => {
+                setFullCollectOpen(false);
+                const base = projectRef.current;
+                if (base && base.status === "collecting") {
+                  persist({ ...base, status: "studio" });
+                }
+                if (
+                  typeof window !== "undefined" &&
+                  new URLSearchParams(window.location.search).get("fullCollect") ===
+                    "1"
+                ) {
+                  router.replace(`/project/${id}/studio`);
+                }
+                setAiTip("已关闭全量标注。可先手动做，需要时再点左侧「AI 一键标注」。");
+                setAiMessage(null);
+              }}
             />
           )}
 
@@ -2623,6 +2691,19 @@ export default function StudioPage() {
                 activeAiPreset === "view-image"
                   ? viewImageSubtitleForTask(aiImageContext?.taskLabel)
                   : undefined
+              }
+              onCancel={
+                activeAiPreset === "intake" &&
+                (pendingAiAnalysis ||
+                  (typeof window !== "undefined" &&
+                    new URLSearchParams(window.location.search).get(
+                      "pendingAi",
+                    ) === "1") ||
+                  Boolean(aiTip?.includes("理解款式")))
+                  ? cancelPendingAiAnalysis
+                  : activeAiPreset === "intake"
+                    ? cancelPendingAiAnalysis
+                    : undefined
               }
               imagePreview={
                 activeAiImageSource?.previewUrl ??
