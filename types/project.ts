@@ -50,6 +50,8 @@ export type IntakeData = {
   flatFrontGenerated?: boolean;
   /** 用户选择暂不自动生成平铺正面，直接使用原参考图进入画布 */
   flatFrontSkipped?: boolean;
+  /** 项目库分类（相册整理用，随 intake jsonb 存云端，无需改表） */
+  libraryCategory?: string;
 };
 
 export type QuestionOption = {
