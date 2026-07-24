@@ -2,7 +2,9 @@ import Link from "next/link";
 import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
 
 type BrandMarkProps = {
-  /** 是否带 slogan；顶栏窄处可关掉 */
+  /**
+   * 是否带 slogan。默认关掉：宣传语只在首页底部出现，避免重复。
+   */
   showSlogan?: boolean;
   /** 是否可点回首页 */
   href?: string | false;
@@ -11,9 +13,9 @@ type BrandMarkProps = {
   sloganClassName?: string;
 };
 
-/** 前端主 logo：Packflow + 可选 slogan */
+/** 前端主 logo：Packflow（slogan 默认不显示） */
 export default function BrandMark({
-  showSlogan = true,
+  showSlogan = false,
   href = "/",
   className = "",
   nameClassName = "",
