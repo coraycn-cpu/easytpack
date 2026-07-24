@@ -17,7 +17,12 @@ import {
 import { listProjects } from "@/lib/project/storage";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
-import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
+import {
+  FREE_MONTHLY_AI_GIFT,
+  LOGIN_CTA_LABEL,
+  REGISTER_CTA_LABEL,
+  buildLoginHref,
+} from "@/lib/ai/login-gate";
 import {
   RECENT_PROJECTS_LIMIT,
   shortProjectTitle,
@@ -90,6 +95,19 @@ export default function CanvasHomePage() {
     );
   };
 
+  const handleCreatedNeedLogin = (
+    projectId: string,
+    authMode: "login" | "register",
+  ) => {
+    setNewOpen(false);
+    router.push(
+      buildLoginHref({
+        mode: authMode,
+        next: `/project/${projectId}/studio`,
+      }),
+    );
+  };
+
   if (booting) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#ececec] text-sm text-slate-500">
@@ -130,23 +148,28 @@ export default function CanvasHomePage() {
           <button
             type="button"
             onClick={() => setNewOpen(true)}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             新建款式
           </button>
 
           {configured && !loggedIn ? (
-            <div className="mt-4 space-y-2">
-              <GuestRegisterNudge next="/" />
-              <p className="text-center text-[11px] text-slate-400">
-                已有账号？
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Link
-                  href="/login?next=/"
-                  className="ml-1 text-blue-600 hover:underline"
+                  href={buildLoginHref({ mode: "register", next: "/" })}
+                  className="flex min-h-11 items-center justify-center rounded-xl bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700"
                 >
-                  去登录
+                  {REGISTER_CTA_LABEL}
                 </Link>
-              </p>
+                <Link
+                  href={buildLoginHref({ mode: "login", next: "/" })}
+                  className="flex min-h-11 items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-3 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  {LOGIN_CTA_LABEL}
+                </Link>
+              </div>
+              <GuestRegisterNudge next="/" showCta={false} />
             </div>
           ) : null}
 
@@ -208,7 +231,11 @@ export default function CanvasHomePage() {
             >
               ×
             </button>
-            <NewStyleEntryCard variant="overlay" onCreated={handleCreated} />
+            <NewStyleEntryCard
+              variant="overlay"
+              onCreated={handleCreated}
+              onCreatedNeedLogin={handleCreatedNeedLogin}
+            />
           </div>
         </div>
       )}

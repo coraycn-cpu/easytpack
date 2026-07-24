@@ -16,6 +16,8 @@ type GuestRegisterNudgeProps = {
   next?: string;
   /** 紧凑条 / 完整卡片 */
   variant?: "card" | "banner" | "inline";
+  /** 卡片底部是否显示注册按钮（首页已有大按钮时可关） */
+  showCta?: boolean;
   className?: string;
 };
 
@@ -25,6 +27,7 @@ type GuestRegisterNudgeProps = {
 export default function GuestRegisterNudge({
   next,
   variant = "card",
+  showCta = true,
   className = "",
 }: GuestRegisterNudgeProps) {
   const href = buildLoginHref({ mode: "register", next });
@@ -40,12 +43,14 @@ export default function GuestRegisterNudge({
             注册送每月 {FREE_MONTHLY_AI_GIFT} 点 AI + 云端存档。
           </span>
         </p>
-        <Link
-          href={href}
-          className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
-        >
-          {REGISTER_CTA_LABEL}
-        </Link>
+        {showCta ? (
+          <Link
+            href={href}
+            className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
+          >
+            {REGISTER_CTA_LABEL}
+          </Link>
+        ) : null}
       </div>
     );
   }
@@ -58,9 +63,11 @@ export default function GuestRegisterNudge({
           {FREE_MONTHLY_AI_GIFT} 点 AI
         </strong>
         ，还能云端存档。
-        <Link href={href} className="ml-1 text-blue-600 hover:underline">
-          {REGISTER_CTA_LABEL}
-        </Link>
+        {showCta ? (
+          <Link href={href} className="ml-1 text-blue-600 hover:underline">
+            {REGISTER_CTA_LABEL}
+          </Link>
+        ) : null}
       </p>
     );
   }
@@ -83,12 +90,14 @@ export default function GuestRegisterNudge({
       <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
         未登录限制：{GUEST_LIMIT_LINES.join("；")}。可先手动做款。
       </p>
-      <Link
-        href={href}
-        className="mt-2.5 flex w-full items-center justify-center rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
-      >
-        {REGISTER_CTA_LABEL}
-      </Link>
+      {showCta ? (
+        <Link
+          href={href}
+          className="mt-2.5 flex w-full items-center justify-center rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+        >
+          {REGISTER_CTA_LABEL}
+        </Link>
+      ) : null}
     </div>
   );
 }
