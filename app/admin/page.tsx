@@ -9,7 +9,14 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 
-type Tab = "overview" | "users" | "events" | "storage" | "logs" | "config";
+type Tab =
+  | "overview"
+  | "users"
+  | "events"
+  | "packs"
+  | "storage"
+  | "logs"
+  | "config";
 
 type OverviewPayload = {
   adminEmail: string;
@@ -63,6 +70,27 @@ type EventItem = {
   provider: string | null;
   model: string | null;
   createdAt: string;
+  reviewStatus?: string | null;
+  reviewNote?: string | null;
+};
+
+type PackItem = {
+  id: string;
+  userId: string;
+  email: string | null;
+  title: string;
+  styleNo: string | null;
+  workflowStatus: string;
+  versionCount: number;
+  updatedAt: string;
+};
+
+type PackVersionItem = {
+  id: string;
+  kind: string;
+  sourceAction: string | null;
+  createdAt: string;
+  projectUpdatedAt: string | null;
 };
 
 function formatTime(iso: string): string {
@@ -90,6 +118,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "overview", label: "总览" },
   { id: "users", label: "用户" },
   { id: "events", label: "训练" },
+  { id: "packs", label: "备份" },
   { id: "storage", label: "存储" },
   { id: "logs", label: "日志" },
   { id: "config", label: "配置" },
@@ -120,8 +149,20 @@ export default function AdminPage() {
   const [eventConsent, setEventConsent] = useState<"all" | "true" | "false">(
     "true",
   );
+  const [eventReview, setEventReview] = useState<
+    "all" | "pending" | "approved" | "rejected" | "unset"
+  >("pending");
   const [eventPage, setEventPage] = useState(1);
   const [eventTotalPages, setEventTotalPages] = useState(1);
+  const [eventBusyId, setEventBusyId] = useState<string | null>(null);
+  const [packs, setPacks] = useState<PackItem[]>([]);
+  const [packQ, setPackQ] = useState("");
+  const [packPage, setPackPage] = useState(1);
+  const [packTotalPages, setPackTotalPages] = useState(1);
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [packVersions, setPackVersions] = useState<PackVersionItem[]>([]);
+  const [packTip, setPackTip] = useState<string | null>(null);
+  const [packBusy, setPackBusy] = useState(false);
   const [storageItems, setStorageItems] = useState<
     Array<{
       userId: string;
@@ -135,6 +176,22 @@ export default function AdminPage() {
     totalBytes: number;
     note?: string;
   } | null>(null);
+  const [orphanItems, setOrphanItems] = useState<
+    Array<{
+      path: string;
+      size: number;
+      userId: string;
+      projectId: string | null;
+      reason: string;
+    }>
+  >([]);
+  const [orphanMeta, setOrphanMeta] = useState<{
+    orphanCount: number;
+    note?: string;
+  } | null>(null);
+  const [orphanUserId, setOrphanUserId] = useState("");
+  const [orphanBusy, setOrphanBusy] = useState(false);
+  const [orphanTip, setOrphanTip] = useState<string | null>(null);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [logKind, setLogKind] = useState<
     "audit" | "usage" | "invites" | "ai_errors" | "consent"
@@ -283,7 +340,11 @@ export default function AdminPage() {
   };
 
   const loadEvents = useCallback(
-    async (page: number, consent: "all" | "true" | "false") => {
+    async (
+      page: number,
+      consent: "all" | "true" | "false",
+      review: "all" | "pending" | "approved" | "rejected" | "unset",
+    ) => {
       setLoading(true);
       setError(null);
       try {
@@ -292,14 +353,21 @@ export default function AdminPage() {
           pageSize: "30",
         });
         if (consent !== "all") qs.set("consent", consent);
+        if (review !== "all") qs.set("reviewStatus", review);
         const res = await fetch(`/api/admin/events?${qs}`);
         const json = (await res.json().catch(() => null)) as {
           items?: EventItem[];
           totalPages?: number;
           page?: number;
           error?: string;
+          hint?: string;
         } | null;
-        if (!res.ok) throw new Error(json?.error || "读取事件失败");
+        if (!res.ok) {
+          throw new Error(
+            [json?.error, json?.hint].filter(Boolean).join(" · ") ||
+              "读取事件失败",
+          );
+        }
         setEvents(json?.items ?? []);
         setEventPage(json?.page ?? page);
         setEventTotalPages(json?.totalPages ?? 1);
@@ -311,6 +379,152 @@ export default function AdminPage() {
     },
     [],
   );
+
+  const reviewEvent = async (
+    eventId: string,
+    reviewStatus: "approved" | "rejected" | "pending",
+  ) => {
+    if (eventBusyId) return;
+    setEventBusyId(eventId);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reviewStatus }),
+        },
+      );
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        hint?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(
+          [json?.error, json?.hint].filter(Boolean).join(" · ") ||
+            "审核失败",
+        );
+      }
+      await loadEvents(eventPage, eventConsent, eventReview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "审核失败");
+    } finally {
+      setEventBusyId(null);
+    }
+  };
+
+  const loadPacks = useCallback(async (page: number, q: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/packs?page=${page}&pageSize=20&q=${encodeURIComponent(q)}`,
+      );
+      const json = (await res.json().catch(() => null)) as {
+        items?: PackItem[];
+        totalPages?: number;
+        page?: number;
+        error?: string;
+      } | null;
+      if (!res.ok) throw new Error(json?.error || "读取工艺包失败");
+      setPacks(json?.items ?? []);
+      setPackPage(json?.page ?? page);
+      setPackTotalPages(json?.totalPages ?? 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "读取工艺包失败");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const openPackVersions = async (packId: string) => {
+    setSelectedPackId(packId);
+    setPackTip(null);
+    setPackVersions([]);
+    setPackBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/packs/${encodeURIComponent(packId)}/versions`,
+      );
+      const json = (await res.json().catch(() => null)) as {
+        versions?: PackVersionItem[];
+        error?: string;
+        hint?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(
+          [json?.error, json?.hint].filter(Boolean).join(" · ") ||
+            "读取版本失败",
+        );
+      }
+      setPackVersions(json?.versions ?? []);
+    } catch (e) {
+      setPackTip(e instanceof Error ? e.message : "读取版本失败");
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const createPackCheckpoint = async () => {
+    if (!selectedPackId || packBusy) return;
+    setPackBusy(true);
+    setPackTip(null);
+    try {
+      const res = await fetch(
+        `/api/admin/packs/${encodeURIComponent(selectedPackId)}/versions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "checkpoint" }),
+        },
+      );
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+      } | null;
+      if (!res.ok) throw new Error(json?.error || "创建检查点失败");
+      setPackTip(json?.message || "已创建检查点");
+      await openPackVersions(selectedPackId);
+      await loadPacks(packPage, packQ);
+    } catch (e) {
+      setPackTip(e instanceof Error ? e.message : "创建检查点失败");
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const restorePackVersion = async (versionId: string) => {
+    if (!selectedPackId || packBusy) return;
+    const ok = window.confirm(
+      "确认把该工艺包恢复到选定版本？恢复前会自动再存一个检查点，方便回滚。",
+    );
+    if (!ok) return;
+    setPackBusy(true);
+    setPackTip(null);
+    try {
+      const res = await fetch(
+        `/api/admin/packs/${encodeURIComponent(selectedPackId)}/versions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restore", versionId }),
+        },
+      );
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+      } | null;
+      if (!res.ok) throw new Error(json?.error || "恢复失败");
+      setPackTip(json?.message || "已恢复");
+      await openPackVersions(selectedPackId);
+      await loadPacks(packPage, packQ);
+    } catch (e) {
+      setPackTip(e instanceof Error ? e.message : "恢复失败");
+    } finally {
+      setPackBusy(false);
+    }
+  };
 
   const loadStorage = useCallback(async () => {
     setLoading(true);
@@ -342,6 +556,82 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  const scanOrphans = async (userId?: string) => {
+    setOrphanBusy(true);
+    setOrphanTip(null);
+    setError(null);
+    try {
+      const qs = new URLSearchParams({ limit: "200" });
+      if (userId?.trim()) qs.set("userId", userId.trim());
+      const res = await fetch(`/api/admin/storage/orphans?${qs}`);
+      const json = (await res.json().catch(() => null)) as {
+        orphans?: Array<{
+          path: string;
+          size: number;
+          userId: string;
+          projectId: string | null;
+          reason: string;
+        }>;
+        orphanCount?: number;
+        note?: string;
+        error?: string;
+      } | null;
+      if (!res.ok) throw new Error(json?.error || "扫描孤儿文件失败");
+      setOrphanItems(json?.orphans ?? []);
+      setOrphanMeta({
+        orphanCount: json?.orphanCount ?? 0,
+        note: json?.note,
+      });
+      setOrphanTip(
+        `dry-run：找到 ${json?.orphanCount ?? 0} 个未被引用的文件（下列最多 200）`,
+      );
+    } catch (e) {
+      setOrphanTip(e instanceof Error ? e.message : "扫描失败");
+    } finally {
+      setOrphanBusy(false);
+    }
+  };
+
+  const deleteOrphans = async () => {
+    if (orphanBusy) return;
+    if (!orphanItems.length) {
+      setOrphanTip("请先点「扫描孤儿（dry-run）」");
+      return;
+    }
+    const ok = window.confirm(
+      `确认删除当前列表中的 ${orphanItems.length} 个孤儿文件？删除后文件本身不可自动还原（工艺包可用备份分区恢复元数据）。`,
+    );
+    if (!ok) return;
+    setOrphanBusy(true);
+    setOrphanTip(null);
+    try {
+      const res = await fetch("/api/admin/storage/orphans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: true,
+          paths: orphanItems.map((o) => o.path),
+          userId: orphanUserId.trim() || undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+        deleted?: number;
+        note?: string;
+      } | null;
+      if (!res.ok) throw new Error(json?.error || "删除失败");
+      setOrphanTip(json?.message || `已删除 ${json?.deleted ?? 0} 个`);
+      setOrphanItems([]);
+      setOrphanMeta(null);
+      await loadStorage();
+    } catch (e) {
+      setOrphanTip(e instanceof Error ? e.message : "删除失败");
+    } finally {
+      setOrphanBusy(false);
+    }
+  };
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -415,16 +705,22 @@ export default function AdminPage() {
     if (!ready || !allowed) return;
     if (tab === "overview") void loadOverview();
     if (tab === "users") void loadUsers(1, userQ);
-    if (tab === "events") void loadEvents(1, eventConsent);
+    if (tab === "events") void loadEvents(1, eventConsent, eventReview);
+    if (tab === "packs") void loadPacks(1, packQ);
     if (tab === "storage") void loadStorage();
     if (tab === "logs") void loadLogs(1, logKind, logQ);
     if (tab === "config") void loadConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tab switch loads; search has own triggers
   }, [ready, allowed, tab]);
 
-  const exportEvents = async (fmt: "jsonl" | "csv") => {
+  const exportEvents = async (fmt: "jsonl" | "csv" | "gold") => {
     const qs = new URLSearchParams({ export: fmt });
-    if (eventConsent !== "all") qs.set("consent", eventConsent);
+    if (fmt !== "gold" && eventConsent !== "all") {
+      qs.set("consent", eventConsent);
+    }
+    if (fmt !== "gold" && eventReview !== "all") {
+      qs.set("reviewStatus", eventReview);
+    }
     window.open(`/api/admin/events?${qs}`, "_blank");
   };
 
@@ -473,7 +769,7 @@ export default function AdminPage() {
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">管理后台</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              日常运营：用户 · 训练 · 额度巡查 · 存储（支付接口暂缓）
+              日常运营：用户 · 训练审核 · 备份恢复 · 存储清理（支付接口暂缓）
             </p>
           </div>
           <Link
@@ -735,13 +1031,28 @@ export default function AdminPage() {
                 onChange={(e) => {
                   const v = e.target.value as "all" | "true" | "false";
                   setEventConsent(v);
-                  void loadEvents(1, v);
+                  void loadEvents(1, v, eventReview);
                 }}
                 className="rounded-lg border border-zinc-200 px-2 py-1.5 text-[11px]"
               >
                 <option value="true">仅 consent=true</option>
                 <option value="false">仅 consent=false</option>
                 <option value="all">全部</option>
+              </select>
+              <select
+                value={eventReview}
+                onChange={(e) => {
+                  const v = e.target.value as typeof eventReview;
+                  setEventReview(v);
+                  void loadEvents(1, eventConsent, v);
+                }}
+                className="rounded-lg border border-zinc-200 px-2 py-1.5 text-[11px]"
+              >
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+                <option value="unset">未标记</option>
+                <option value="all">审核不限</option>
               </select>
               <button
                 type="button"
@@ -757,7 +1068,18 @@ export default function AdminPage() {
               >
                 导出 CSV
               </button>
+              <button
+                type="button"
+                onClick={() => void exportEvents("gold")}
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 hover:bg-emerald-100"
+              >
+                导出金标准包
+              </button>
             </div>
+            <p className="text-[10px] text-zinc-400">
+              金标准包 = consent=true 且审核通过；导出 JSON 含
+              manifest（过滤条件）与 events。
+            </p>
             <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
               {events.length === 0 ? (
                 <p className="px-3 py-6 text-center text-[11px] text-zinc-400">
@@ -770,7 +1092,7 @@ export default function AdminPage() {
                       key={ev.id}
                       className="flex items-start justify-between gap-2 px-3 py-2 text-[11px]"
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium text-zinc-800">
                           {ev.action}
                           {ev.outcome ? (
@@ -781,12 +1103,50 @@ export default function AdminPage() {
                           {!ev.consent ? (
                             <span className="ml-1 text-amber-600">无consent</span>
                           ) : null}
+                          {ev.reviewStatus ? (
+                            <span className="ml-1 text-zinc-500">
+                              ·{" "}
+                              {ev.reviewStatus === "approved"
+                                ? "通过"
+                                : ev.reviewStatus === "rejected"
+                                  ? "拒绝"
+                                  : "待审"}
+                            </span>
+                          ) : (
+                            <span className="ml-1 text-zinc-400">· 未标记</span>
+                          )}
                         </p>
                         <p className="truncate text-[10px] text-zinc-400">
                           {shortId(ev.userId)} ·{" "}
                           {[ev.provider, ev.model].filter(Boolean).join(" / ") ||
                             "—"}
                         </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            disabled={eventBusyId === ev.id}
+                            onClick={() => void reviewEvent(ev.id, "approved")}
+                            className="rounded border border-emerald-200 px-1.5 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
+                          >
+                            通过
+                          </button>
+                          <button
+                            type="button"
+                            disabled={eventBusyId === ev.id}
+                            onClick={() => void reviewEvent(ev.id, "rejected")}
+                            className="rounded border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-amber-50 disabled:opacity-40"
+                          >
+                            拒绝
+                          </button>
+                          <button
+                            type="button"
+                            disabled={eventBusyId === ev.id}
+                            onClick={() => void reviewEvent(ev.id, "pending")}
+                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                          >
+                            待审
+                          </button>
+                        </div>
                       </div>
                       <span className="shrink-0 tabular-nums text-zinc-400">
                         {formatTime(ev.createdAt)}
@@ -800,7 +1160,9 @@ export default function AdminPage() {
               <button
                 type="button"
                 disabled={loading || eventPage <= 1}
-                onClick={() => void loadEvents(eventPage - 1, eventConsent)}
+                onClick={() =>
+                  void loadEvents(eventPage - 1, eventConsent, eventReview)
+                }
                 className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
               >
                 上一页
@@ -811,7 +1173,181 @@ export default function AdminPage() {
               <button
                 type="button"
                 disabled={loading || eventPage >= eventTotalPages}
-                onClick={() => void loadEvents(eventPage + 1, eventConsent)}
+                onClick={() =>
+                  void loadEvents(eventPage + 1, eventConsent, eventReview)
+                }
+                className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "packs" ? (
+          <section className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={packQ}
+                onChange={(e) => setPackQ(e.target.value)}
+                placeholder="搜标题 / 款号 / 项目ID"
+                className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs"
+              />
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void loadPacks(1, packQ)}
+                className="rounded-md border border-zinc-200 px-3 py-1.5 text-[11px] hover:bg-zinc-50"
+              >
+                搜索
+              </button>
+            </div>
+            <p className="text-[10px] text-zinc-400">
+              用户把款设为「审阅中 / 已定稿」并同步到云端时，会自动写入版本快照。这里可手动建检查点或恢复。
+            </p>
+            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+              <div className="grid grid-cols-[1.4fr_0.6fr_0.5fr_0.55fr] gap-2 border-b border-zinc-100 bg-zinc-50 px-3 py-2 text-[10px] font-medium text-zinc-500">
+                <span>工艺包</span>
+                <span>状态</span>
+                <span>版本数</span>
+                <span>更新</span>
+              </div>
+              {packs.length === 0 ? (
+                <p className="px-3 py-6 text-center text-[11px] text-zinc-400">
+                  {loading ? "加载中…" : "暂无云端工艺包"}
+                </p>
+              ) : (
+                <ul className="divide-y divide-zinc-50">
+                  {packs.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => void openPackVersions(p.id)}
+                        className={`grid w-full grid-cols-[1.4fr_0.6fr_0.5fr_0.55fr] gap-2 px-3 py-2 text-left text-[11px] hover:bg-zinc-50 ${
+                          selectedPackId === p.id ? "bg-blue-50/60" : ""
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-zinc-800">
+                            {p.title}
+                          </p>
+                          <p className="truncate text-[10px] text-zinc-400">
+                            {p.email || shortId(p.userId)} · {shortId(p.id)}
+                          </p>
+                        </div>
+                        <span className="text-zinc-700">
+                          {p.workflowStatus === "finalized"
+                            ? "已定稿"
+                            : p.workflowStatus === "in_review"
+                              ? "审阅中"
+                              : "草稿"}
+                        </span>
+                        <span className="tabular-nums text-zinc-700">
+                          {p.versionCount}
+                        </span>
+                        <span className="tabular-nums text-zinc-400">
+                          {formatTime(p.updatedAt)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {selectedPackId ? (
+              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-zinc-800">
+                    版本列表 · {shortId(selectedPackId)}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={packBusy}
+                      onClick={() => void createPackCheckpoint()}
+                      className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] hover:bg-zinc-50 disabled:opacity-40"
+                    >
+                      {packBusy ? "处理中…" : "从当前稿建检查点"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPackId(null);
+                        setPackVersions([]);
+                        setPackTip(null);
+                      }}
+                      className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50"
+                    >
+                      收起
+                    </button>
+                  </div>
+                </div>
+                {packTip ? (
+                  <p className="mt-2 text-[11px] text-zinc-500">{packTip}</p>
+                ) : null}
+                <ul className="mt-3 divide-y divide-zinc-50">
+                  {packVersions.length === 0 ? (
+                    <li className="py-4 text-center text-[11px] text-zinc-400">
+                      {packBusy ? "加载中…" : "还没有版本；可先建检查点"}
+                    </li>
+                  ) : (
+                    packVersions.map((v) => (
+                      <li
+                        key={v.id}
+                        className="flex items-center justify-between gap-2 py-2 text-[11px]"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-zinc-800">
+                            {v.kind === "user_final"
+                              ? "定稿"
+                              : v.kind === "user_checkpoint"
+                                ? "检查点"
+                                : v.kind}
+                            {v.sourceAction ? (
+                              <span className="ml-1 font-normal text-zinc-400">
+                                · {v.sourceAction}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="text-[10px] text-zinc-400">
+                            {formatTime(v.createdAt)}
+                            {v.projectUpdatedAt
+                              ? ` · 稿 ${formatTime(v.projectUpdatedAt)}`
+                              : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={packBusy}
+                          onClick={() => void restorePackVersion(v.id)}
+                          className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-[10px] font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                        >
+                          恢复到此
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+              <button
+                type="button"
+                disabled={loading || packPage <= 1}
+                onClick={() => void loadPacks(packPage - 1, packQ)}
+                className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span>
+                第 {packPage} / {packTotalPages} 页
+              </span>
+              <button
+                type="button"
+                disabled={loading || packPage >= packTotalPages}
+                onClick={() => void loadPacks(packPage + 1, packQ)}
                 className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-40"
               >
                 下一页
@@ -835,7 +1371,7 @@ export default function AdminPage() {
                 onClick={() => void loadStorage()}
                 className="text-[11px] text-blue-600 hover:underline disabled:opacity-40"
               >
-                {loading ? "刷新中…" : "刷新"}
+                {loading ? "刷新中…" : "刷新占用"}
               </button>
             </div>
             {storageMeta?.note ? (
@@ -853,14 +1389,22 @@ export default function AdminPage() {
                       key={s.userId}
                       className="flex justify-between gap-2 px-3 py-2 text-[11px]"
                     >
-                      <div className="min-w-0">
+                      <button
+                        type="button"
+                        className="min-w-0 text-left hover:underline"
+                        onClick={() => {
+                          setOrphanUserId(s.userId);
+                          void scanOrphans(s.userId);
+                        }}
+                        title="按此用户扫描孤儿文件"
+                      >
                         <p className="truncate font-medium text-zinc-800">
                           {s.email || shortId(s.userId)}
                         </p>
                         <p className="text-[10px] text-zinc-400">
-                          {shortId(s.userId)}
+                          {shortId(s.userId)} · 点此按用户扫孤儿
                         </p>
-                      </div>
+                      </button>
                       <div className="shrink-0 text-right tabular-nums text-zinc-600">
                         <p>{s.objectCount} 文件</p>
                         <p className="text-[10px] text-zinc-400">
@@ -871,6 +1415,60 @@ export default function AdminPage() {
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+              <p className="text-xs font-medium text-zinc-800">孤儿文件治理</p>
+              <p className="mt-1 text-[10px] text-zinc-400">
+                先 dry-run 看名单，确认后再删。删除有审计；文件本身不可自动还原。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  value={orphanUserId}
+                  onChange={(e) => setOrphanUserId(e.target.value)}
+                  placeholder="可选：只扫某用户 UUID"
+                  className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs"
+                />
+                <button
+                  type="button"
+                  disabled={orphanBusy}
+                  onClick={() => void scanOrphans(orphanUserId || undefined)}
+                  className="rounded-md border border-zinc-200 px-2.5 py-1.5 text-[11px] hover:bg-zinc-50 disabled:opacity-40"
+                >
+                  {orphanBusy ? "扫描中…" : "扫描孤儿（dry-run）"}
+                </button>
+                <button
+                  type="button"
+                  disabled={orphanBusy || orphanItems.length === 0}
+                  onClick={() => void deleteOrphans()}
+                  className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                >
+                  确认删除列表
+                </button>
+              </div>
+              {orphanTip ? (
+                <p className="mt-2 text-[11px] text-zinc-500">{orphanTip}</p>
+              ) : null}
+              {orphanMeta?.note ? (
+                <p className="mt-1 text-[10px] text-zinc-400">{orphanMeta.note}</p>
+              ) : null}
+              {orphanItems.length > 0 ? (
+                <ul className="mt-3 max-h-56 overflow-auto divide-y divide-zinc-50 rounded-lg border border-zinc-100">
+                  {orphanItems.map((o) => (
+                    <li
+                      key={o.path}
+                      className="flex justify-between gap-2 px-2 py-1.5 text-[10px]"
+                    >
+                      <span className="min-w-0 truncate font-mono text-zinc-700">
+                        {o.path}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-zinc-400">
+                        {formatBytes(o.size)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -927,8 +1525,7 @@ export default function AdminPage() {
               <p className="text-[11px] text-amber-700">{logHint}</p>
             ) : null}
             <p className="text-[10px] text-zinc-400">
-              审计表记录：导出训练数据、搜索用户、查看存储等操作。写操作（加额度/暂停）将在
-              M2 一并记入。
+              审计表记录：导出、审核、备份恢复、孤儿清理、加额度/暂停等写操作。
             </p>
             <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
               {logItems.length === 0 ? (
@@ -1021,7 +1618,7 @@ export default function AdminPage() {
                     : ""}
                 </li>
                 <li className="pt-2 text-zinc-400">
-                  M2 已支持：用户档位 free/comped/paused、人工加赠月额度；操作写入审计日志。支付接口仍不接入。
+                  M3 已支持：备份恢复（pack_versions）、孤儿文件 dry-run/删除、训练审核队列与金标准导出。支付接口仍不接入。
                 </li>
               </ul>
             ) : (

@@ -129,6 +129,8 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 4. 入口只依赖 `ADMIN_EMAILS`；若缺 `SUPABASE_SERVICE_ROLE_KEY`，入口会出现，但打开后台拉数据会提示补密钥
 5. 「日志 → 管理操作审计」若报缺表：再执行最新 `schema.sql`（含 `admin_audit_log`）
 6. 「用户 → 编辑权益」若报缺表：再执行最新 `schema.sql`（含 `user_entitlements`）
+7. 「训练 → 审核 / 金标准」若报缺列：再执行最新 `schema.sql`（`ai_events.review_status` 等）
+8. 云端整库备份 / 导出步骤：见 `docs/SUPABASE_BACKUP_RUNBOOK.md`
 
 > `claim_invite_reward` / `ensure_user_profile` 是 **函数**，不是表。表侧看 `profiles`、`referrals`、`user_entitlements`；函数在 Database → Functions。
 

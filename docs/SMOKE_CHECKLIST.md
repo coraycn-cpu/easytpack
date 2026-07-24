@@ -57,6 +57,11 @@
 - [ ] `/admin` 分区：用户可搜索、训练可筛选/导出、存储有占用列表、日志可切换类型、配置页可见免费额度
 - [ ] `/admin` 用户：可设加赠额度 / paused；用户中心上限含加赠；暂停后 AI 返回 AI_PAUSED
 - [ ] 保存权益后「日志 → 管理操作审计」出现 `admin.entitlement.update`
+- [ ] `/admin` **备份**：能看到云端工艺包与版本；「从当前稿建检查点」后版本数 +1；「恢复到此」后用户拉取能打开该款
+- [ ] 用户将款设为「审阅中/已定稿」并同步后，`pack_versions` 有对应行（或管理端可见版本）
+- [ ] `/admin` **训练**：可按待审筛选；通过/拒绝后状态变化；「导出金标准包」得到含 manifest 的 JSON
+- [ ] `/admin` **存储**：孤儿 dry-run 有列表；确认删除后审计出现 `admin.storage.orphans.delete`
+- [ ]（文档）`docs/SUPABASE_BACKUP_RUNBOOK.md` 可按步骤打开 Dashboard 备份设置
 - [ ] 「我的项目」可导出 / 导入 JSON 备份；导入后能打开 Studio
 - [ ] 导出页对 failed / placeholder 视角有红色提示，导出前确认
 - [ ] Supabase **tech_packs** 出现对应行

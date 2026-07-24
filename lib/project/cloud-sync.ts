@@ -77,6 +77,20 @@ export async function mirrorSaveToCloud(
       onConflict: "id",
     });
     if (error) return { ok: false, error: error.message };
+    // M3：定稿 / 审阅中自动写版本快照（同 updatedAt 去重）
+    try {
+      const { writePackVersionAfterCloudSave } = await import(
+        "@/lib/project/pack-versions"
+      );
+      await writePackVersionAfterCloudSave(
+        supabase,
+        withImages,
+        userId,
+        "mirror_save",
+      );
+    } catch (verErr) {
+      console.warn("[pack-versions]", verErr);
+    }
     return { ok: true };
   } catch (err) {
     return {
