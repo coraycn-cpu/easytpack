@@ -31,9 +31,9 @@ export const GUEST_LIMIT_LINES = [
   "未登录不能同步到云端（稿只在本机浏览器）",
 ] as const;
 
-/** 画布顶栏旁短提示 */
+/** 画布顶栏旁短提示（并入顶栏，不再单独占一行） */
 export const STUDIO_GUEST_BAR_TEXT =
-  `手动标注已可用。注册可领每月 ${FREE_MONTHLY_AI_GIFT} 点 AI，并把稿存到云端。`;
+  `可手动标注，本机已自动保存。注册送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI + 云端存档。`;
 
 export function buildLoginHref(opts?: {
   next?: string;
