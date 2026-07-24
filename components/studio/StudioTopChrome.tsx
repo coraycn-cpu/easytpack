@@ -13,6 +13,7 @@ import {
   REGISTER_CTA_LABEL,
   STUDIO_GUEST_BAR_TEXT,
 } from "@/lib/ai/login-gate";
+import StudioAccountChip from "@/components/studio/StudioAccountChip";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -259,30 +260,11 @@ export default function StudioTopChrome({
             本机模式
           </span>
         ) : email ? (
-          <>
-            <Link
-              href="/account"
-              className="hidden max-w-[9rem] truncate text-[11px] text-slate-500 hover:text-blue-600 md:inline"
-              title="打开用户中心"
-            >
-              {email}
-            </Link>
-            <Link
-              href="/account"
-              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 md:hidden"
-              title="打开用户中心"
-            >
-              账号
-            </Link>
-            <button
-              type="button"
-              disabled={authBusy}
-              onClick={() => void handleSignOut()}
-              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              退出
-            </button>
-          </>
+          <StudioAccountChip
+            email={email}
+            authBusy={authBusy}
+            onSignOut={() => void handleSignOut()}
+          />
         ) : (
           <Link
             href={loginHref}
