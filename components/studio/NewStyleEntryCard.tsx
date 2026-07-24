@@ -24,12 +24,14 @@ import {
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import BrandMark from "@/components/brand/BrandMark";
 
+/** @deprecated 新建款不再区分 full；保留类型以免旧引用报错 */
 export type NewStyleMode = "quick" | "full";
 
 type NewStyleEntryCardProps = {
   variant?: "home" | "overlay";
-  onCreated?: (projectId: string, mode: NewStyleMode) => void;
-  /** 建款后先去登录/注册时调用（草稿已保存，next 指向画布） */
+  /** 建款完成进入画布（本卡片只做基础建款，不会带全量标注） */
+  onCreated?: (projectId: string) => void;
+  /** 建款后先去登录/注册（草稿已保存，登录后跑基础 AI 分析） */
   onCreatedNeedLogin?: (
     projectId: string,
     authMode: "login" | "register",
@@ -89,10 +91,15 @@ export default function NewStyleEntryCard({
     setImagePreview(dataUrl);
   };
 
-  const createProject = async (
-    mode: NewStyleMode,
-    opts?: { preferLogin?: "login" | "register" },
-  ) => {
+  /**
+   * 建款业务规则：
+   * - 已登录：必须调用 AI 基础分析（intake，非全量标注）→ 再进画布
+   * - 未登录「暂不登录」：不调用 AI，带图直接进画布
+   * - 未登录「先登录/注册」：先存草稿，登录后再跑基础 AI 分析
+   */
+  const createProject = async (opts?: {
+    preferLogin?: "login" | "register";
+  }) => {
     if (!canSubmit || !imageDataUrl) return;
     setLoading(true);
     setLoadingPreset("intake");
@@ -102,17 +109,17 @@ export default function NewStyleEntryCard({
     try {
       const sampleSize = sizeStandard.sampleSize.trim();
       const preferLogin = opts?.preferLogin;
+      const isLogged = await isLoggedInForCloud();
+      setLoggedIn(isLogged);
+
       let intake: IntakeData = {
         description,
         imageDataUrl,
         detectedCategory: "未分类",
-        // 未登录先存草稿：登录进画布后再用同一张图/描述跑 AI
-        ...(preferLogin ? { pendingAiAnalysis: true } : {}),
       };
 
-      const isLogged = await isLoggedInForCloud();
-      setLoggedIn(isLogged);
       if (isLogged) {
+        // 登录用户：基础建款分析（款式理解 / 选款引导），绝不是全量标注
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -123,7 +130,11 @@ export default function NewStyleEntryCard({
           throw new Error(messageFromAiResponse(intent, "分析失败"));
         }
         intake = applyIntentToIntake(intake, intent);
-      } else if (!preferLogin) {
+      } else if (preferLogin) {
+        // 即将去登录：草稿带标记，登录进画布后再跑同一套基础分析
+        intake = { ...intake, pendingAiAnalysis: true };
+      } else {
+        // 未登录直接进画布：不调用 AI
         setLoginHint(AI_LOGIN_REQUIRED_MESSAGE);
       }
 
@@ -135,8 +146,8 @@ export default function NewStyleEntryCard({
         intake,
         regionStandard: sizeStandard.regionStandard,
         sampleSize,
-        // 登录后继续：只进普通画布（studio），不自动开全量标注
-        status: mode === "full" && isLogged ? "collecting" : "studio",
+        // 新建款一律普通画布；全量标注只由画布内「AI 一键标注」触发
+        status: "studio",
       });
 
       if (!isLogged && preferLogin) {
@@ -144,10 +155,9 @@ export default function NewStyleEntryCard({
           onCreatedNeedLogin(project.id, preferLogin);
           return project;
         }
-        // 父级未接线时仍进画布，避免卡住
       }
 
-      onCreated?.(project.id, isLogged ? mode : "quick");
+      onCreated?.(project.id);
       return project;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "创建失败";
@@ -245,9 +255,9 @@ export default function NewStyleEntryCard({
                 建议先登录 / 注册再继续
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-950/80">
-                登录后可用 AI 一键标注与生图，并把稿存到云端（换电脑也能打开）。
-                注册免费，每月送 {FREE_MONTHLY_AI_GIFT} 点 AI。
-                你上传的图和填写内容会先保存；登录后自动做一次款式理解（不自动开全量标注），再进入画布。
+                登录后会自动做一次基础款式分析（理解图片与描述，不是全量标注），
+                并可用 AI / 云端存档。注册免费，每月送 {FREE_MONTHLY_AI_GIFT} 点
+                AI。未登录也可先带图进画布手动标注。
               </p>
             </div>
           ) : null}
@@ -259,7 +269,7 @@ export default function NewStyleEntryCard({
                   type="button"
                   disabled={!canSubmit || loading}
                   onClick={() =>
-                    void createProject("quick", { preferLogin: "register" })
+                    void createProject({ preferLogin: "register" })
                   }
                   className="rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40"
                 >
@@ -268,9 +278,7 @@ export default function NewStyleEntryCard({
                 <button
                   type="button"
                   disabled={!canSubmit || loading}
-                  onClick={() =>
-                    void createProject("quick", { preferLogin: "login" })
-                  }
+                  onClick={() => void createProject({ preferLogin: "login" })}
                   className="flex min-h-11 items-center justify-center rounded-xl border-2 border-blue-600 bg-white py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40"
                 >
                   {LOGIN_CTA_LABEL}
@@ -278,28 +286,35 @@ export default function NewStyleEntryCard({
                 <button
                   type="button"
                   disabled={!canSubmit || loading}
-                  onClick={() => void createProject("quick")}
+                  onClick={() => void createProject()}
                   className="rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                 >
-                  暂不登录，进入画布手动标注
+                  暂不登录，带图进入画布（不调用 AI）
                 </button>
               </>
             ) : (
               <button
                 type="button"
                 disabled={!canSubmit || loading}
-                onClick={() => void createProject("quick")}
+                onClick={() => void createProject()}
                 className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               >
-                进入画布（可手动标注）
+                {loggedIn
+                  ? "AI 理解款式并进入画布"
+                  : "进入画布（可手动标注）"}
               </button>
             )}
-            {!showGuestLoginPush ? (
+            {!loggedIn && !showGuestLoginPush ? (
               <GuestRegisterNudge
                 variant="inline"
                 next="/"
                 className="text-center"
               />
+            ) : null}
+            {loggedIn ? (
+              <p className="text-center text-[10px] leading-relaxed text-slate-500">
+                会先做基础款式分析（选款引导等），不会自动开全量一键标注。
+              </p>
             ) : null}
           </div>
 

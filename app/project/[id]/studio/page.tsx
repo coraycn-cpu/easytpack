@@ -2731,13 +2731,9 @@ export default function StudioPage() {
                 </button>
                 <NewStyleEntryCard
                   variant="overlay"
-                  onCreated={(projectId, mode) => {
+                  onCreated={(projectId) => {
                     setNewStyleOpen(false);
-                    router.push(
-                      mode === "full"
-                        ? `/project/${projectId}/studio?fullCollect=1`
-                        : `/project/${projectId}/studio`,
-                    );
+                    router.push(`/project/${projectId}/studio`);
                   }}
                   onCreatedNeedLogin={(projectId, authMode) => {
                     setNewStyleOpen(false);

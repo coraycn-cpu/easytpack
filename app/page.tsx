@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NewStyleEntryCard, {
   CanvasGridBackground,
-  type NewStyleMode,
 } from "@/components/studio/NewStyleEntryCard";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import BrandFooter from "@/components/brand/BrandFooter";
@@ -86,13 +85,10 @@ export default function CanvasHomePage() {
     };
   }, []);
 
-  const handleCreated = (projectId: string, mode: NewStyleMode) => {
+  const handleCreated = (projectId: string) => {
     setNewOpen(false);
-    router.push(
-      mode === "full"
-        ? `/project/${projectId}/studio?fullCollect=1`
-        : `/project/${projectId}/studio`,
-    );
+    // 新建款只进普通画布；全量标注由画布内手动点「AI 一键标注」
+    router.push(`/project/${projectId}/studio`);
   };
 
   const handleCreatedNeedLogin = (
@@ -103,7 +99,7 @@ export default function CanvasHomePage() {
     router.push(
       buildLoginHref({
         mode: authMode,
-        // 登录后带回草稿：用上传图+填写内容跑 AI，再填入画布
+        // 登录后带回草稿：跑基础 AI 分析（非全量标注）
         next: `/project/${projectId}/studio?pendingAi=1`,
       }),
     );
