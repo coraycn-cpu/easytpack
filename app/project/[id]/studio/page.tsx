@@ -15,6 +15,7 @@ import StudioDataPanel from "@/components/studio/StudioDataPanel";
 import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
+import { buildLoginHref } from "@/lib/ai/login-gate";
 import {
   applyIntentToIntake,
   confirmTargetGarment,
@@ -2543,6 +2544,15 @@ export default function StudioPage() {
                       mode === "full"
                         ? `/project/${projectId}/studio?fullCollect=1`
                         : `/project/${projectId}/studio`,
+                    );
+                  }}
+                  onCreatedNeedLogin={(projectId, authMode) => {
+                    setNewStyleOpen(false);
+                    router.push(
+                      buildLoginHref({
+                        mode: authMode,
+                        next: `/project/${projectId}/studio`,
+                      }),
                     );
                   }}
                 />
