@@ -11,7 +11,7 @@
 
 1. 一个 [Supabase](https://supabase.com) 账号（免费档够测试）
 2. 你的 Vercel 项目（已连着这个 GitHub 仓库）
-3. 测试时请用分支 **`feat/phase2-cloud`** 的预览地址（不要拿正式版 `main` 混测）
+3. 测试时请用分支 **`feat/phase2-cloud`**（或已合并 M3 的 Preview）；旧 `main` 若还没合云端，不要拿来当正式站混测。上线步骤见 **`docs/GO_LIVE.md`**。
 
 ---
 
@@ -40,7 +40,7 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 的 Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 的 anon / publishable 公钥 |
 
-5. **环境范围**：若你用分支预览（Preview）测试，这两项务必勾上 **Preview**，不要只勾 Production。  
+5. **环境范围**：Preview 测试要勾 **Preview**；正式上线还要勾 **Production**（两边都勾最省事）。  
 6. 改完变量后点一次 **Redeploy**（Deployments → 选中那次部署 → Redeploy），否则新钥匙不会进线上包。
 
 Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SUPABASE_SECRET_KEY` 等可以先留着，**当前登录功能用不到它们**；真正危险的是 Secret/密码类，不要贴到公开地方就行。
@@ -111,19 +111,20 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ## 第 9 步（可选）：管理后台
 
-只读后台路径：`/admin`（用量 / 邀请 / 已同意质量池的 AI 事件）。
+后台路径：`/admin`（总览 · 用户权益 · 训练审核 · 备份恢复 · 存储 · 日志 · 配置）。  
+支付仍不做；加额度 / 暂停 / 审核 / 恢复都走管理员白名单。
 
-在 Vercel → Environment Variables（**Preview 也要勾**）增加：
+在 Vercel → Environment Variables（**Preview 与 Production 都要勾**）增加：
 
 | 名字 | 值 |
 |------|----|
 | `ADMIN_EMAILS` | 管理员邮箱，如 `test@qq.com`（多个用逗号分隔，不要加引号） |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → API → **service_role**（机密，不要用 anon） |
 
-改完后必须 **Redeploy** 一次 Preview。用白名单邮箱登录 → 用户中心底部会出现「打开管理后台」。
+改完后必须 **Redeploy**。用白名单邮箱登录 → 用户中心底部会出现「打开管理后台」。
 
 排查：
-1. 变量是否勾了 **Preview**（不只 Production）
+1. 变量是否勾了你实际在测的环境（Preview 或 Production）
 2. 值是否就是登录邮箱，例如 `test@qq.com`（不要写成 `"test@qq.com"`）
 3. 是否 Redeploy 过；改环境变量不 Redeploy 线上读不到
 4. 入口只依赖 `ADMIN_EMAILS`；若缺 `SUPABASE_SERVICE_ROLE_KEY`，入口会出现，但打开后台拉数据会提示补密钥
@@ -131,6 +132,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 6. 「用户 → 编辑权益」若报缺表：再执行最新 `schema.sql`（含 `user_entitlements`）
 7. 「训练 → 审核 / 金标准」若报缺列：再执行最新 `schema.sql`（`ai_events.review_status` 等）
 8. 云端整库备份 / 导出步骤：见 `docs/SUPABASE_BACKUP_RUNBOOK.md`
+9. **正式上线总清单**：见 `docs/GO_LIVE.md`
 
 > `claim_invite_reward` / `ensure_user_profile` 是 **函数**，不是表。表侧看 `profiles`、`referrals`、`user_entitlements`；函数在 Database → Functions。
 
@@ -140,7 +142,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 | 现象 | 怎么办 |
 |------|--------|
-| 顶栏一直是「本机模式」 | Vercel 变量名不对、只勾了 Production 却在 Preview 测、或填完没 Redeploy |
+| 顶栏一直是「本机模式」 | Vercel 变量名不对、环境勾错（Preview/Production）、或填完没 Redeploy |
 | 登录失败 / 跳转怪 | 检查第 5 步回调地址；测试期关掉「确认邮箱」 |
 | SQL 报错 table already exists | 多半表已建过，可当成功 |
 | 登录后列表是空的 | 点「我的项目」→「从云端拉取」或「双向同步」；确认另一台曾同步成功；若开了「手动同步」，登录不会自动拉推 |
@@ -153,4 +155,6 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ## 和开发分支的关系
 
-请在 **`feat/phase2-cloud`** 的 Vercel Preview 上测；正式站 `main` 先别急着合。
+- **预览测试：** 用 `feat/phase2-cloud`（或已合并 M3 的 PR 分支）的 Vercel Preview  
+- **正式上线：** 确认正式部署包含云端提交后再切流量；步骤见 `docs/GO_LIVE.md`  
+- 旧 `main` 若尚未合并云端能力，不要单独当「第一个基础版」对外
