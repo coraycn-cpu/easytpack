@@ -25,8 +25,17 @@ function bindAuthListener() {
   listenerBound = true;
   try {
     const supabase = createClient();
-    supabase.auth.onAuthStateChange(() => {
-      cache = null;
+    supabase.auth.onAuthStateChange((_event, session) => {
+      // 用会话直接写入缓存，避免登录后 SIGNED_IN 把刚写入的缓存清掉又打 /user
+      cache = {
+        user: session?.user
+          ? {
+              id: session.user.id,
+              email: session.user.email ?? null,
+            }
+          : null,
+        expiresAt: Date.now() + TTL_MS,
+      };
       inflight = null;
     });
   } catch {
@@ -36,6 +45,19 @@ function bindAuthListener() {
 
 export function invalidateClientAuthCache(): void {
   cache = null;
+  inflight = null;
+}
+
+/** 登录/注册刚成功时写入缓存，避免下一页立刻再打 /user */
+export function seedClientAuthCache(
+  user: { id: string; email?: string | null } | null,
+): void {
+  cache = {
+    user: user
+      ? { id: user.id, email: user.email ?? null }
+      : null,
+    expiresAt: Date.now() + TTL_MS,
+  };
   inflight = null;
 }
 

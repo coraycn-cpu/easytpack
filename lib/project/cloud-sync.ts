@@ -328,11 +328,18 @@ export async function pushAllLocalProjectsToCloud(
   }
   let ok = 0;
   let fail = 0;
-  for (const p of localList) {
-    const res = await mirrorSaveToCloud(p);
-    if (res.ok) ok += 1;
-    else fail += 1;
+  // 并发上传，避免登录/同步时一个项目卡住整条队列
+  const concurrency = Math.min(3, localList.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < localList.length) {
+      const p = localList[cursor++];
+      const res = await mirrorSaveToCloud(p);
+      if (res.ok) ok += 1;
+      else fail += 1;
+    }
   }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
   const message =
     fail === 0
       ? `已同步 ${ok} 个项目到云端（含图片上传，可能稍慢）。`
