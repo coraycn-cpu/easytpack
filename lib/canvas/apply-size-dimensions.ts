@@ -4,6 +4,10 @@ import {
   findAnnotationsForSizePart,
   isDimensionAnnotation,
 } from "@/lib/canvas/size-annotations";
+import {
+  canonicalPartKey,
+  normalizePartKey,
+} from "@/lib/ai/merge-identity";
 import type { Annotation, SizeChart } from "@/types/project";
 
 export type AiBatchDimensionLine = {
@@ -16,36 +20,10 @@ export type AiBatchDimensionLine = {
 
 const MIN_LINE_LEN = 12;
 
-function partKey(part: string): string {
-  return part
-    .trim()
-    .toLowerCase()
-    .replace(/[（(].*?[）)]/g, "")
-    .replace(/\s/g, "");
-}
-
-/** 常见部位别名，便于 AI 返回「领宽」时匹配尺码表「领口横开」 */
-const PART_ALIASES: Record<string, string[]> = {
-  领口横开: ["领宽", "领围", "颈宽", "neckwidth", "neck"],
-  衣长: ["长度", "全长", "bodylength", "length"],
-  胸围: ["胸宽", "chest", "bust"],
-  肩宽: ["肩阔", "shoulder"],
-  袖长: ["袖子长", "sleeve"],
-  袖口: ["袖口宽", "cuff"],
-  下摆: ["下摆宽", "hem"],
-};
-
 function aliasKeysFor(part: string): string[] {
-  const key = partKey(part);
-  const keys = new Set<string>([key]);
-  for (const [canonical, aliases] of Object.entries(PART_ALIASES)) {
-    const ck = partKey(canonical);
-    if (key === ck || aliases.some((a) => partKey(a) === key)) {
-      keys.add(ck);
-      for (const a of aliases) keys.add(partKey(a));
-    }
-  }
-  return [...keys];
+  const key = normalizePartKey(part);
+  const canonical = canonicalPartKey(part);
+  return [...new Set([key, canonical].filter(Boolean))];
 }
 
 function resolveSizeRow(
@@ -54,11 +32,11 @@ function resolveSizeRow(
 ): SizeChart["rows"][number] | undefined {
   const keys = aliasKeysFor(linePart);
   for (const r of rows) {
-    const rk = partKey(r.part);
-    if (keys.includes(rk)) return r;
+    const rk = canonicalPartKey(r.part);
+    if (keys.includes(rk) || keys.includes(normalizePartKey(r.part))) return r;
   }
   for (const r of rows) {
-    const rk = partKey(r.part);
+    const rk = normalizePartKey(r.part);
     for (const key of keys) {
       if (rk.includes(key) || key.includes(rk)) return r;
     }
@@ -71,7 +49,7 @@ export function getLinkedSizeParts(annotations: Annotation[]): Set<string> {
   for (const ann of annotations) {
     if (!isDimensionAnnotation(ann)) continue;
     const p = ann.linkedSizePart?.trim();
-    if (p) parts.add(partKey(p));
+    if (p) parts.add(canonicalPartKey(p));
   }
   return parts;
 }
@@ -82,8 +60,16 @@ export function applyBatchSizeDimensions(
   sizeChart: SizeChart,
   imageFit: { x: number; y: number; width: number; height: number },
   imageOffset: { x: number; y: number },
+  /** 项目级已有部位（含其他画板），避免同款多图重复画线 */
+  projectLinkedParts?: Iterable<string>,
 ): { annotations: Annotation[]; added: number; skipped: number } {
   const linked = getLinkedSizeParts(existingAnnotations);
+  if (projectLinkedParts) {
+    for (const p of projectLinkedParts) {
+      const key = canonicalPartKey(p) || normalizePartKey(p);
+      if (key) linked.add(key);
+    }
+  }
   const sampleSize = sizeChart.sampleSize ?? "";
 
   const newAnnotations: Annotation[] = [...existingAnnotations];
@@ -97,7 +83,7 @@ export function applyBatchSizeDimensions(
       continue;
     }
     const linkedPart = row.part.trim();
-    const key = partKey(linkedPart);
+    const key = canonicalPartKey(linkedPart);
     if (!key) {
       skipped += 1;
       continue;

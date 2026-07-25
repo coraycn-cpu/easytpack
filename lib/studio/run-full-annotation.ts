@@ -5,6 +5,11 @@ import {
 } from "@/lib/canvas/apply-size-dimensions";
 import { getPrimaryArtboardId } from "@/lib/canvas/sizing-artboard";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
+import {
+  findProcessIndexByPart,
+  mergeProcessItem,
+  upsertBomItems,
+} from "@/lib/ai/merge-identity";
 import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-chart/apply-assist";
 import { buildInitialSizeChart } from "@/lib/project/create-style";
 import { createDefaultCanvasData, PART_ANNOTATION_COLOR } from "@/lib/project/hotspots";
@@ -101,19 +106,34 @@ export async function runFullTechPackAnnotation(
 
   for (const [i, region] of (batchData.regions ?? []).entries()) {
     let processId = region.linkToExistingProcessId as string | undefined;
-    const existingIdx = processId ? processItems.findIndex((p) => p.id === processId) : -1;
+    let existingIdx = processId ? processItems.findIndex((p) => p.id === processId) : -1;
+
+    if (existingIdx < 0 && region.process?.part?.trim()) {
+      existingIdx = findProcessIndexByPart(processItems, region.process.part);
+      if (existingIdx >= 0) {
+        processId = processItems[existingIdx].id;
+      }
+    }
 
     if (existingIdx >= 0) {
-      processItems[existingIdx] = {
-        ...processItems[existingIdx],
-        ...region.process,
-        id: processItems[existingIdx].id,
-      };
+      processItems[existingIdx] = mergeProcessItem(
+        processItems[existingIdx],
+        region.process ?? {},
+      );
       processId = processItems[existingIdx].id;
     } else {
       processId = generateProcessId();
       processItems.push({ id: processId, ...region.process });
     }
+
+    const alreadyOnBoard =
+      primaryArtboard.annotations.some(
+        (a) =>
+          (a.type === "rect" || a.type === "circle") &&
+          a.linkedProcessIds?.includes(processId!),
+      ) ||
+      processAnnotations.some((a) => a.linkedProcessIds?.includes(processId!));
+    if (alreadyOnBoard) continue;
 
     processAnnotations.push(
       mapAiAnnotationToCanvas(
@@ -168,14 +188,14 @@ export async function runFullTechPackAnnotation(
     });
     const bomData = await bomRes.json();
     if (bomRes.ok) {
-      const existingNames = new Set(project.bom_items.map((b) => b.name.trim()));
-      const newItems = (bomData.bom_items ?? []).filter(
-        (b: BomItem) => b.name?.trim() && !existingNames.has(b.name.trim()),
+      const { items, added } = upsertBomItems(
+        project.bom_items,
+        (bomData.bom_items ?? []) as BomItem[],
       );
-      bomAdded = newItems.length;
+      bomAdded = added;
       project = {
         ...project,
-        bom_items: [...project.bom_items, ...newItems],
+        bom_items: items,
       };
     }
   } catch {
@@ -246,6 +266,7 @@ export async function runFullTechPackAnnotation(
                   size_chart,
                   fit,
                   offset,
+                  skipParts,
                 );
                 dimensionsAdded = result.added;
                 return { ...ab, annotations: result.annotations };

@@ -6,6 +6,7 @@ import BomExpandDialog from "@/components/studio/BomExpandDialog";
 import ProcessExpandDialog from "@/components/studio/ProcessExpandDialog";
 import ReviewExpandDialog from "@/components/studio/ReviewExpandDialog";
 import SizeChartEditor from "@/components/studio/SizeChartEditor";
+import SizeChartExpandDialog from "@/components/studio/SizeChartExpandDialog";
 import { resolveSelectionMode } from "@/lib/studio/annotation-ux";
 import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 import {
@@ -15,14 +16,15 @@ import {
   isLinkableShape,
 } from "@/lib/canvas/part-annotations";
 import {
-  clearSizePartFromAnnotations,
   countDimensionsLinkedToSizePart,
   isDimensionAnnotation,
+  removeDimensionAnnotationsForPart,
+  syncDimensionTextsFromSizeChart,
 } from "@/lib/canvas/size-annotations";
 import { generateProcessId } from "@/lib/process/ids";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import type { BomItem, ProcessItem } from "@/types/process";
-import type { Annotation, TechPackProject } from "@/types/project";
+import type { Annotation, SizeChart, TechPackProject } from "@/types/project";
 
 type Tab = "process" | "bom" | "size" | "review";
 
@@ -108,6 +110,7 @@ export default function StudioDataPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [processExpandOpen, setProcessExpandOpen] = useState(false);
   const [bomExpandOpen, setBomExpandOpen] = useState(false);
+  const [sizeExpandOpen, setSizeExpandOpen] = useState(false);
   const [reviewExpandOpen, setReviewExpandOpen] = useState(false);
   const primaryAnn = selectedAnns.length === 1 ? selectedAnns[0] : null;
   const selectionMode = resolveSelectionMode(selectedAnns);
@@ -191,6 +194,29 @@ export default function StudioDataPanel({
     onPersist({
       ...project,
       bom_items: project.bom_items.filter((_, i) => i !== index),
+    });
+  };
+
+  /** 尺码表一次写入：可删部位对应尺寸线，并把基准码数字同步到标注文字 */
+  const persistSizeChart = (
+    size_chart: SizeChart,
+    opts?: { removedParts?: string[] },
+  ) => {
+    let artboards = project.canvas_data.artboards;
+    for (const part of opts?.removedParts ?? []) {
+      artboards = artboards.map((ab) => ({
+        ...ab,
+        annotations: removeDimensionAnnotationsForPart(ab.annotations, part),
+      }));
+    }
+    artboards = artboards.map((ab) => ({
+      ...ab,
+      annotations: syncDimensionTextsFromSizeChart(ab.annotations, size_chart),
+    }));
+    onPersist({
+      ...project,
+      size_chart,
+      canvas_data: { ...project.canvas_data, artboards },
     });
   };
 
@@ -493,29 +519,37 @@ export default function StudioDataPanel({
           )}
 
           {activeTab === "size" && (
-            <SizeChartEditor
-              chart={project.size_chart}
-              onChange={(size_chart) => onPersist({ ...project, size_chart })}
-              compact
-              flat
-              selectedAnnId={selectedAnnIds[0] ?? null}
-              dimensionLinkable={dimensionLinkable}
-              linkedSizePartForSelection={linkedSizePartForSelection}
-              onToggleSizeLink={onToggleSizeLink}
-              highlightedSizePart={highlightedSizePart}
-              onSizeRowSelect={onSizeRowSelect}
-              dimensionCounts={dimensionCounts}
-              onRemoveRowPart={(part) => {
-                const artboards = project.canvas_data.artboards.map((ab) => ({
-                  ...ab,
-                  annotations: clearSizePartFromAnnotations(ab.annotations, part),
-                }));
-                onPersist({
-                  ...project,
-                  canvas_data: { ...project.canvas_data, artboards },
-                });
-              }}
-            />
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] leading-relaxed text-slate-500">
+                  改数字会同步到画布尺寸线；删除部位会去掉对应标注线。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSizeExpandOpen(true)}
+                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  title="打开大面板编辑尺码表"
+                >
+                  展开编辑
+                </button>
+              </div>
+              <SizeChartEditor
+                chart={project.size_chart}
+                onChange={(size_chart) => persistSizeChart(size_chart)}
+                compact
+                flat
+                selectedAnnId={selectedAnnIds[0] ?? null}
+                dimensionLinkable={dimensionLinkable}
+                linkedSizePartForSelection={linkedSizePartForSelection}
+                onToggleSizeLink={onToggleSizeLink}
+                highlightedSizePart={highlightedSizePart}
+                onSizeRowSelect={onSizeRowSelect}
+                dimensionCounts={dimensionCounts}
+                onRemoveRowPart={(part, nextChart) =>
+                  persistSizeChart(nextChart, { removedParts: [part] })
+                }
+              />
+            </div>
           )}
 
           {activeTab === "review" && (
@@ -588,6 +622,16 @@ export default function StudioDataPanel({
         onClose={() => setBomExpandOpen(false)}
         items={project.bom_items}
         onChange={(bom_items) => onPersist({ ...project, bom_items })}
+      />
+      <SizeChartExpandDialog
+        open={sizeExpandOpen}
+        onClose={() => setSizeExpandOpen(false)}
+        chart={project.size_chart}
+        onChange={(size_chart) => persistSizeChart(size_chart)}
+        onRemoveRowPart={(part, nextChart) =>
+          persistSizeChart(nextChart, { removedParts: [part] })
+        }
+        dimensionCounts={dimensionCounts}
       />
       <ReviewExpandDialog
         open={reviewExpandOpen}
