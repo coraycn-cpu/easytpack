@@ -1,12 +1,16 @@
 import { Suspense } from "react";
+import BusyOverlay from "@/components/ui/BusyOverlay";
 import LoginClient from "./LoginClient";
 
 export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
-          加载中…
+        <div className="relative min-h-screen bg-zinc-50">
+          <BusyOverlay
+            title="正在打开登录页…"
+            subtitle="请稍候"
+          />
         </div>
       }
     >

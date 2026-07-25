@@ -4,13 +4,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import BusyOverlay from "@/components/ui/BusyOverlay";
 import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
-import {
-  captureInviteRefFromSearch,
-} from "@/lib/invite/claim-pending";
+import { captureInviteRefFromSearch } from "@/lib/invite/claim-pending";
 import { startPostAuthBackgroundWork } from "@/lib/auth/post-auth-bootstrap";
 import {
   FREE_MONTHLY_AI_GIFT,
@@ -55,19 +54,15 @@ function friendlyAuthError(message: string): string {
   if (m.includes("signups not allowed") || m.includes("signup is disabled")) {
     return "云端暂时关闭了注册，请到 Authentication → Providers → Email 打开注册。";
   }
-  // 只有明确说格式无效时，才提示邮箱格式
   if (
     m.includes("invalid format") ||
     m.includes("unable to validate email") ||
-    m.includes("email address") && m.includes("invalid")
+    (m.includes("email address") && m.includes("invalid"))
   ) {
     return "邮箱格式不对，请写成 名字@网站.com 这种。";
   }
 
-  // 其它错误：白话 + 原文，方便排查
-  return raw
-    ? `注册/登录失败：${raw}`
-    : "操作失败，请稍后重试。";
+  return raw ? `注册/登录失败：${raw}` : "操作失败，请稍后重试。";
 }
 
 export default function LoginClient() {
@@ -89,6 +84,8 @@ export default function LoginClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  /** 登录/注册已成功，正在跳转下一页（保持遮罩，避免误以为没反应） */
+  const [entering, setEntering] = useState(false);
   const [message, setMessage] = useState<string | null>(
     urlError === "confirm"
       ? "邮箱确认出了问题，请再试一次注册或登录。"
@@ -96,15 +93,15 @@ export default function LoginClient() {
   );
   const [okTip, setOkTip] = useState<string | null>(null);
 
+  const showBusy = busy || entering;
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setMessage(null);
     setOkTip(null);
 
     if (!configured) {
-      setMessage(
-        "还没配置云端。请先按「云端账号准备」说明填好钥匙再来。",
-      );
+      setMessage("还没配置云端。请先按「云端账号准备」说明填好钥匙再来。");
       return;
     }
 
@@ -115,6 +112,7 @@ export default function LoginClient() {
     }
 
     setBusy(true);
+    let willEnter = false;
     try {
       const supabase = createClient();
       if (mode === "login") {
@@ -123,7 +121,8 @@ export default function LoginClient() {
           password,
         });
         if (error) throw error;
-        // 先进入产品；邀请领取 + 云端同步放后台，避免登录按钮卡很久
+        willEnter = true;
+        setEntering(true);
         startPostAuthBackgroundWork({ user: data.user });
         router.replace(nextPath);
         router.refresh();
@@ -140,6 +139,8 @@ export default function LoginClient() {
       if (error) throw error;
 
       if (data.session) {
+        willEnter = true;
+        setEntering(true);
         startPostAuthBackgroundWork({ user: data.user });
         router.replace(nextPath);
         router.refresh();
@@ -154,13 +155,32 @@ export default function LoginClient() {
       setMessage(
         friendlyAuthError(err instanceof Error ? err.message : String(err)),
       );
+      setEntering(false);
     } finally {
-      setBusy(false);
+      if (!willEnter) setBusy(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-zinc-50">
+      {showBusy && (
+        <BusyOverlay
+          title={
+            entering
+              ? mode === "register"
+                ? "注册成功，正在进入…"
+                : "登录成功，正在进入…"
+              : mode === "register"
+                ? "正在注册…"
+                : "正在登录…"
+          }
+          subtitle={
+            entering
+              ? "请稍候，马上跳转到你刚才的页面"
+              : "正在连接账号服务，请不要关闭或重复点击"
+          }
+        />
+      )}
       <AppHeader />
       <main className="mx-auto flex max-w-md flex-col px-4 py-10">
         <h1 className="text-2xl font-semibold text-zinc-900">
@@ -214,12 +234,13 @@ export default function LoginClient() {
         <div className="mt-6 flex gap-2 rounded-lg border border-zinc-200 bg-white p-1">
           <button
             type="button"
+            disabled={showBusy}
             onClick={() => {
               setMode("login");
               setMessage(null);
               setOkTip(null);
             }}
-            className={`flex-1 rounded-md py-2 text-sm ${
+            className={`flex-1 rounded-md py-2 text-sm disabled:opacity-50 ${
               mode === "login"
                 ? "bg-zinc-900 text-white"
                 : "text-zinc-600 hover:bg-zinc-50"
@@ -229,12 +250,13 @@ export default function LoginClient() {
           </button>
           <button
             type="button"
+            disabled={showBusy}
             onClick={() => {
               setMode("register");
               setMessage(null);
               setOkTip(null);
             }}
-            className={`flex-1 rounded-md py-2 text-sm ${
+            className={`flex-1 rounded-md py-2 text-sm disabled:opacity-50 ${
               mode === "register"
                 ? "bg-zinc-900 text-white"
                 : "text-zinc-600 hover:bg-zinc-50"
@@ -246,7 +268,9 @@ export default function LoginClient() {
 
         <form
           onSubmit={(e) => void onSubmit(e)}
-          className="mt-4 space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+          className={`mt-4 space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ${
+            showBusy ? "pointer-events-none opacity-60" : ""
+          }`}
         >
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-600">
@@ -257,7 +281,8 @@ export default function LoginClient() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+              disabled={showBusy}
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-blue-400 disabled:bg-zinc-50"
               placeholder="you@example.com"
             />
           </div>
@@ -272,7 +297,8 @@ export default function LoginClient() {
               }
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+              disabled={showBusy}
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-blue-400 disabled:bg-zinc-50"
               placeholder="••••••••"
             />
           </div>
@@ -282,11 +308,15 @@ export default function LoginClient() {
 
           <button
             type="submit"
-            disabled={busy || !configured}
+            disabled={showBusy || !configured}
             className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
           >
-            {busy
-              ? "请稍候…"
+            {showBusy
+              ? entering
+                ? "正在进入…"
+                : mode === "login"
+                  ? "登录中…"
+                  : "注册中…"
               : mode === "login"
                 ? "登录"
                 : REGISTER_CTA_LABEL}
@@ -295,8 +325,8 @@ export default function LoginClient() {
 
         <p className="mt-4 text-center text-xs text-zinc-400">
           <Link href="/" className="text-blue-600 hover:underline">
-          先回首页继续手动标注
-        </Link>
+            先回首页继续手动标注
+          </Link>
         </p>
       </main>
     </div>
