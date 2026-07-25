@@ -254,8 +254,12 @@ export async function generateBomAssist(input: {
       .join("\n") ?? "（尚无工艺条目）";
 
   const existingText =
-    input.existingBom?.map((b) => `- ${b.name}（${b.category ?? "未分类"}）`).join("\n") ??
-    "（尚无物料）";
+    input.existingBom
+      ?.map(
+        (b) =>
+          `- ${b.name}（${b.category ?? "未分类"}${b.garmentPart ? `/${b.garmentPart}` : ""}${b.spec ? `，${b.spec}` : ""}）`,
+      )
+      .join("\n") ?? "（尚无物料）";
 
   const context = prependScope(
     `
@@ -263,7 +267,7 @@ export async function generateBomAssist(input: {
 描述：${input.description ?? "无"}
 现有工艺：
 ${processText}
-已有物料（勿重复，可补充完善）：
+已有物料（同款主面料/里料勿因正背面换名重复；仅补充新物料或完善空字段）：
 ${existingText}
 补充信息：${JSON.stringify(input.answers ?? {})}
 `.trim(),
@@ -281,7 +285,7 @@ ${existingText}
 1. 仅列出目标单款的面辅料；非目标款、配饰、鞋包物料不得加入。
 2. 列出主要面辅料（面料、里料、衬、拉链、纽扣、线、标等），${setBomRule}
 3. category 必须是 fabric/trim/accessory/packaging 之一。
-4. 不要删除用户已有物料；新条目不与已有 name 重复。
+4. 不要删除用户已有物料。同款主面料/里料名称尽量与已有清单一致，勿因正面/背面再输出一条「主面料」；仅当正背面面料确实不同，或出现新的辅料/配件时才新增。
 5. plainExplanation 用小白能懂的话说明物料选择依据。`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
@@ -310,7 +314,8 @@ ${parts || "（尚无，请识别主要结构部位并创建工艺描述）"}
 
 画布尺寸：${CANVAS_W}×${CANVAS_H} 像素，原点在左上角。
 请输出最多 6 个矩形区域（x,y,width,height），每个区域对应一条工艺。
-若已有工艺 id 匹配，填 linkToExistingProcessId；否则在 process 字段给出 part/process/stitch/seam_allowance。
+若已有工艺 id 匹配，填 linkToExistingProcessId；同部位（如袖口）即使换一张图也优先复用已有 id，不要重复新建。
+否则在 process 字段给出 part/process/stitch/seam_allowance。
 只输出 rect 区域数据，不要 arrow/marker/text。
 userTips 简要说明标注了什么。`.trim(),
     input.intake,
@@ -318,7 +323,8 @@ userTips 简要说明标注了什么。`.trim(),
 
   return callStructured({
     instructions: `你是服装 Tech Pack 版师，在款式图上标注目标单款的结构部位区域。
-坐标必须落在目标款服装结构上；不得标注人脸、手、鞋、包、背景或其他非目标服装。每个区域一个矩形框。`,
+坐标必须落在目标款服装结构上；不得标注人脸、手、鞋、包、背景或其他非目标服装。每个区域一个矩形框。
+同一部位已有工艺条目时必须填 linkToExistingProcessId，可补充工艺说明，勿因换图新建重复工艺行。`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: BatchAnnotateSchema,

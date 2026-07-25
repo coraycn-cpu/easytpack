@@ -18,7 +18,8 @@ type SizeChartEditorProps = {
   highlightedSizePart?: string;
   onSizeRowSelect?: (part: string, index: number) => void;
   dimensionCounts?: Record<string, number>;
-  onRemoveRowPart?: (part: string) => void;
+  /** 删除部位行：传入部位名与删后尺码表，由父级一次持久化（避免旧表覆盖） */
+  onRemoveRowPart?: (part: string, nextChart: SizeChart) => void;
 };
 
 export default function SizeChartEditor({
@@ -89,8 +90,12 @@ export default function SizeChartEditor({
 
   const removeRow = (index: number) => {
     const part = chart.rows[index]?.part?.trim();
-    onChange({ ...chart, rows: chart.rows.filter((_, i) => i !== index) });
-    if (part) onRemoveRowPart?.(part);
+    const next = { ...chart, rows: chart.rows.filter((_, i) => i !== index) };
+    if (part && onRemoveRowPart) {
+      onRemoveRowPart(part, next);
+      return;
+    }
+    onChange(next);
   };
 
   if (chart.sizes.length === 0 && chart.rows.length === 0) {

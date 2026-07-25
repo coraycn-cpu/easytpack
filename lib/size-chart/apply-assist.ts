@@ -1,3 +1,4 @@
+import { canonicalPartKey } from "@/lib/ai/merge-identity";
 import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
 import type { SizeChart } from "@/types/project";
 
@@ -58,10 +59,6 @@ export function abbreviateMethod(method: string): string {
   return trimmed.slice(0, METHOD_MAX_LEN);
 }
 
-function partKey(part: string): string {
-  return part.trim().toLowerCase();
-}
-
 function mergeRows(
   aiRows: AiSizeChartRow[] | undefined,
   existingRows: SizeChart["rows"] | undefined,
@@ -79,21 +76,32 @@ function mergeRows(
 
   if (!existingRows?.length) return rows;
 
-  const aiMap = new Map(rows.map((r) => [partKey(r.part), r]));
+  const aiMap = new Map(rows.map((r) => [canonicalPartKey(r.part), r]));
   const merged: AiSizeChartRow[] = [];
   const seen = new Set<string>();
 
   for (const ex of existingRows) {
-    const pk = partKey(ex.part);
+    const pk = canonicalPartKey(ex.part);
     const aiRow = aiMap.get(pk);
     seen.add(pk);
+    // 已有数值优先：只补空号型，不覆盖用户手改
+    const mergedValues = { ...(aiRow?.values ?? {}), ...ex.values };
+    if (aiRow?.values) {
+      for (const [size, val] of Object.entries(aiRow.values)) {
+        const cur = String(ex.values[size] ?? "").trim();
+        if (!cur) mergedValues[size] = val;
+      }
+    }
     merged.push(
       aiRow
         ? {
             part: ex.part,
             method: aiRow.method || ex.method,
-            baseline_cm: extractBaselineCm(aiRow, sampleSize) || ex.values[sampleSize],
-            values: { ...ex.values, ...aiRow.values },
+            baseline_cm:
+              String(ex.values[sampleSize] ?? "").trim() ||
+              extractBaselineCm(aiRow, sampleSize) ||
+              ex.values[sampleSize],
+            values: mergedValues,
           }
         : {
             part: ex.part,
@@ -105,8 +113,11 @@ function mergeRows(
   }
 
   for (const aiRow of rows) {
-    const pk = partKey(aiRow.part);
-    if (!seen.has(pk)) merged.push(aiRow);
+    const pk = canonicalPartKey(aiRow.part);
+    if (!seen.has(pk)) {
+      seen.add(pk);
+      merged.push(aiRow);
+    }
   }
 
   return merged.length > 0 ? merged : rows;

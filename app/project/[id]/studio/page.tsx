@@ -118,6 +118,11 @@ import {
   type StudioLayout,
 } from "@/lib/studio/layout";
 import { applySizeChartAssist, countFilledBaselineValues } from "@/lib/size-chart/apply-assist";
+import {
+  findProcessIndexByPart,
+  mergeProcessItem,
+  upsertBomItems,
+} from "@/lib/ai/merge-identity";
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
 import { viewImageSubtitleForTask } from "@/lib/ai/loading-presets";
 import {
@@ -1863,16 +1868,23 @@ export default function StudioPage() {
 
       for (const [i, region] of rawRegions.entries()) {
         let processId = region.linkToExistingProcessId as string | undefined;
-        const existingIdx = processId
+        let existingIdx = processId
           ? processItems.findIndex((p) => p.id === processId)
           : -1;
 
+        // AI 未回传 id 时，按同部位归一键合并，避免正背面各建一条
+        if (existingIdx < 0 && region.process?.part?.trim()) {
+          existingIdx = findProcessIndexByPart(processItems, region.process.part);
+          if (existingIdx >= 0) {
+            processId = processItems[existingIdx].id;
+          }
+        }
+
         if (existingIdx >= 0) {
-          processItems[existingIdx] = {
-            ...processItems[existingIdx],
-            ...region.process,
-            id: processItems[existingIdx].id,
-          };
+          processItems[existingIdx] = mergeProcessItem(
+            processItems[existingIdx],
+            region.process ?? {},
+          );
           processId = processItems[existingIdx].id;
         } else {
           processId = generateProcessId();
@@ -1884,6 +1896,16 @@ export default function StudioPage() {
             seam_allowance: region.process?.seam_allowance ?? "",
           });
         }
+
+        // 当前画板已有同工艺点则跳过，避免同图双框
+        const alreadyOnBoard =
+          activeArtboard.annotations.some(
+            (a) =>
+              (a.type === "rect" || a.type === "circle") &&
+              a.linkedProcessIds?.includes(processId!),
+          ) ||
+          newAnnotations.some((a) => a.linkedProcessIds?.includes(processId!));
+        if (alreadyOnBoard) continue;
 
         const ann = mapAiAnnotationToCanvas(
           {
@@ -1962,14 +1984,22 @@ export default function StudioPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      const existingNames = new Set(project.bom_items.map((b) => b.name.trim()));
-      const newItems = (data.bom_items ?? []).filter(
-        (b: BomItem) => b.name?.trim() && !existingNames.has(b.name.trim()),
+      const { items, added, merged } = upsertBomItems(
+        project.bom_items,
+        (data.bom_items ?? []) as BomItem[],
       );
 
-      persist({ ...project, bom_items: [...project.bom_items, ...newItems] });
+      persist({ ...project, bom_items: items });
       setAiTip(data.plainExplanation ?? "物料清单已生成");
-      setAiMessage(newItems.length > 0 ? `已添加 ${newItems.length} 条物料` : "物料已是最新");
+      if (added > 0 || merged > 0) {
+        const bits = [
+          merged > 0 ? `合并 ${merged} 条` : null,
+          added > 0 ? `新增 ${added} 条` : null,
+        ].filter(Boolean);
+        setAiMessage(`物料已更新（${bits.join("，")}）`);
+      } else {
+        setAiMessage("物料已是最新");
+      }
     } catch (e) {
       setAiMessage(e instanceof Error ? e.message : "填物料失败");
     } finally {
@@ -2224,6 +2254,7 @@ export default function StudioPage() {
                 size_chart,
                 imageFit,
                 imageOffset,
+                skipParts,
               );
               addedDimensions = result.added;
               skippedDimensions = result.skipped;
