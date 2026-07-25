@@ -87,7 +87,8 @@ export async function analyzeIntent(input: {
 - 若各件为独立搭配、非成套，则不必生成 g_set
 - 模特图、拼贴或多于 1 件可见服装时 requiresGarmentPick=true；单款平铺且高置信时 requiresGarmentPick=false
 - detectedCategory、suggestedTitle、recommendedGarmentId 须对齐 AI 推荐的主款（单件或 g_set 均可）；推荐可偏向最显眼主件，但 visibleGarments 仍须列全
-- summary 用通俗易懂中文；detectedFeatures 为结构/工艺特征`,
+- summary 必须是可直接写入 Tech Pack「款式说明」的专业一句话：写清品类、廓形、关键设计点（如「蓝色牛仔阔腿长裤，高腰，阔腿直筒」）；禁止写「用户上传了…」「需要对其进行款式分析」等过程说明
+- detectedFeatures 为结构/工艺特征`,
     userText,
     imageDataUrl: input.imageDataUrl,
     schema: IntentAnalysisSchema,

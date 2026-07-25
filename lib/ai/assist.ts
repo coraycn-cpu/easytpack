@@ -573,9 +573,10 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
 【注意事项】版型风险、对格对条、缩水/色牢度、车版与质检要点
 
 写作要求：
-1. 使用业内术语，简洁专业，可直接用于工艺沟通。
+1. 使用业内术语，简洁专业，可直接用于工艺沟通与客户确认。
 2. 四段内容连贯，不要写成无关清单。
-3. 总字数严格控制在 ${STYLE_REVIEW_MAX} 字以内（含标点与段落标题）。`;
+3. 禁止写「用户上传了图片」「需要分析」「已生成初稿」等产品使用过程话。
+4. 总字数严格控制在 ${STYLE_REVIEW_MAX} 字以内（含标点与段落标题）。`;
 
   const userContent = buildContent(context, input.imageDataUrl);
 
