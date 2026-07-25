@@ -12,6 +12,7 @@ import StudioTopChrome from "@/components/studio/StudioTopChrome";
 import FullCollectFlowOverlay from "@/components/studio/FullCollectFlowOverlay";
 import SizeChartAiDialog from "@/components/studio/SizeChartAiDialog";
 import StudioDataPanel from "@/components/studio/StudioDataPanel";
+import StudioBootOverlay from "@/components/studio/StudioBootOverlay";
 import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
@@ -109,6 +110,8 @@ import {
 import { notifyAiQuotaChanged } from "@/lib/ai/quota-client";
 import {
   computeArtboardSlots,
+  artboardImageLayoutKey,
+  countArtboardsWithImages,
   nextArtboardOrigin,
   type ArtboardSlot,
 } from "@/lib/studio/artboard-layout";
@@ -245,6 +248,9 @@ export default function StudioPage() {
   }, [id, router]);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
+  const [canvasBooting, setCanvasBooting] = useState(true);
+  const [bootImageTotal, setBootImageTotal] = useState(0);
+  const [bootImageLoaded, setBootImageLoaded] = useState(0);
   const [selectedAnnIds, setSelectedAnnIds] = useState<string[]>([]);
   const [highlightedProcessIds, setHighlightedProcessIds] = useState<string[]>([]);
   const [linkedHighlightAnnIds, setLinkedHighlightAnnIds] = useState<string[]>([]);
@@ -342,16 +348,43 @@ export default function StudioPage() {
     };
   }, [id, router]);
 
+  const artboardImageKey = useMemo(
+    () =>
+      project ? artboardImageLayoutKey(project.canvas_data.artboards) : "",
+    [project],
+  );
+
   useEffect(() => {
-    if (!project) return;
+    if (!project) {
+      setCanvasBooting(true);
+      setBootImageTotal(0);
+      setBootImageLoaded(0);
+      return;
+    }
     let cancelled = false;
-    computeArtboardSlots(project.canvas_data.artboards).then((slots) => {
-      if (!cancelled) setArtboardSlots(slots);
+    const total = countArtboardsWithImages(project.canvas_data.artboards);
+    setCanvasBooting(true);
+    setBootImageTotal(total);
+    setBootImageLoaded(0);
+
+    void computeArtboardSlots(project.canvas_data.artboards, {
+      onProgress: (done, t) => {
+        if (cancelled) return;
+        setBootImageLoaded(done);
+        setBootImageTotal(t);
+      },
+    }).then((slots) => {
+      if (cancelled) return;
+      setArtboardSlots(slots);
+      setCanvasBooting(false);
     });
+
     return () => {
       cancelled = true;
     };
-  }, [project?.canvas_data.artboards]);
+    // 仅图片布局变化时重算；标注改动不打断画布
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by artboardImageKey
+  }, [project?.id, artboardImageKey]);
 
   const activeArtboard = useMemo(
     () => project?.canvas_data.artboards.find((a) => a.id === activeArtboardId),
@@ -2427,11 +2460,7 @@ export default function StudioPage() {
   };
 
   if (!project || !activeArtboard) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#ececec] text-sm text-[#64748b]">
-        加载工作台…
-      </div>
-    );
+    return <StudioBootOverlay title="正在加载项目…" />;
   }
 
   const compliance = checkCompliance(project);
@@ -2440,7 +2469,14 @@ export default function StudioPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
-      {garmentBlocked && (
+      {canvasBooting && (
+        <StudioBootOverlay
+          imageTotal={bootImageTotal}
+          imageLoaded={bootImageLoaded}
+          title="正在打开工作台…"
+        />
+      )}
+      {garmentBlocked && !canvasBooting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md">
             <GarmentPickerStep
@@ -2452,7 +2488,7 @@ export default function StudioPage() {
           </div>
         </div>
       )}
-      {flatFrontPromptOpen && (
+      {flatFrontPromptOpen && !canvasBooting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md">
             <FlatFrontPromptStep

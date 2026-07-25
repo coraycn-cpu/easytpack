@@ -14,16 +14,25 @@ export type ArtboardSlot = {
   hasImage: boolean;
 };
 
+export type ComputeArtboardSlotsOptions = {
+  /** 每张图解码完成后回调（用于进入加载进度） */
+  onProgress?: (done: number, total: number) => void;
+};
+
 export async function computeArtboardSlots(
   artboards: Artboard[],
+  options?: ComputeArtboardSlotsOptions,
 ): Promise<ArtboardSlot[]> {
+  const withImages = artboards.filter((ab) => Boolean(ab.imageDataUrl));
+  const total = withImages.length;
+  options?.onProgress?.(0, total);
+
   const slots: ArtboardSlot[] = [];
   let cursorX = 0;
+  let done = 0;
 
-  for (const ab of artboards) {
-    if (!ab.imageDataUrl) continue;
-
-    const imageFit = await loadImagePlacement(ab.imageDataUrl);
+  for (const ab of withImages) {
+    const imageFit = await loadImagePlacement(ab.imageDataUrl!);
     const imageOffset = ab.imageOffset ?? { x: 0, y: 0 };
     const origin = ab.canvasOrigin ?? { x: cursorX, y: ARTBOARD_LABEL_HEIGHT };
 
@@ -37,9 +46,32 @@ export async function computeArtboardSlots(
     });
 
     cursorX = origin.x + imageFit.width + ARTBOARD_GAP;
+    done += 1;
+    options?.onProgress?.(done, total);
   }
 
   return slots;
+}
+
+/** 仅随图片增删/替换变化，标注改动不触发重算 */
+export function artboardImageLayoutKey(artboards: Artboard[]): string {
+  return artboards
+    .map((a) => {
+      const url = a.imageDataUrl ?? "";
+      const tip = url
+        ? `${url.length}:${url.slice(0, 32)}:${url.slice(-24)}`
+        : "0";
+      const ox = a.imageOffset?.x ?? 0;
+      const oy = a.imageOffset?.y ?? 0;
+      const cx = a.canvasOrigin?.x ?? "";
+      const cy = a.canvasOrigin?.y ?? "";
+      return `${a.id}:${tip}:${ox}:${oy}:${cx}:${cy}`;
+    })
+    .join("|");
+}
+
+export function countArtboardsWithImages(artboards: Artboard[]): number {
+  return artboards.filter((a) => Boolean(a.imageDataUrl)).length;
 }
 
 export function findArtboardSlot(slots: ArtboardSlot[], artboardId: string) {
