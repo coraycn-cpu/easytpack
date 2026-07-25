@@ -1,5 +1,6 @@
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
+import { sanitizeExportReview } from "@/lib/export/client-facing-copy";
 import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 
 const SECTION_GAP = 28;
@@ -314,7 +315,10 @@ export function buildSheetSections(
   );
   const bom = buildBomSection(project.bom_items, w);
   const size = buildSizeSection(project.size_chart, w);
-  const remarks = buildRemarksSection(project.style_review ?? "", w);
+  const remarks = buildRemarksSection(
+    sanitizeExportReview(project.style_review ?? ""),
+    w,
+  );
   if (process) sections.push(process);
   if (bom) sections.push(bom);
   if (size) sections.push(size);

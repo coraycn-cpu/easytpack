@@ -1,5 +1,9 @@
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { TechPackProject } from "@/types/project";
+import {
+  buildExportDescription,
+  sanitizeExportReview,
+} from "@/lib/export/client-facing-copy";
 
 /** AI 英译结果（不覆盖中文原稿，仅作导出预览叠加） */
 export type TechPackEnOverlay = {
@@ -122,7 +126,7 @@ export function applyEnOverlay(
 export function slimProjectForTranslate(project: TechPackProject) {
   return {
     title: project.title,
-    description: project.intake.description ?? "",
+    description: buildExportDescription(project),
     category:
       project.intake.targetGarment?.category ||
       project.intake.detectedCategory ||
@@ -131,7 +135,7 @@ export function slimProjectForTranslate(project: TechPackProject) {
       project.intake.targetGarment?.label ||
       project.title ||
       "",
-    style_review: project.style_review ?? "",
+    style_review: sanitizeExportReview(project.style_review),
     process_items: project.process_items.map((p) => ({
       part: p.part ?? "",
       process: p.process ?? "",

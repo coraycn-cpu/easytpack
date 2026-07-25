@@ -3,6 +3,7 @@ import {
   downloadBlob,
   exportFilename,
 } from "@/lib/export/filename";
+import { sanitizeExportReview } from "@/lib/export/client-facing-copy";
 import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
 import {
   buildDocMeta,
@@ -228,7 +229,7 @@ export async function exportTechPackXlsx(
   const reviewSheet = wb.addWorksheet(en ? "Remarks" : "评语");
   reviewSheet.getColumn(1).width = 80;
   reviewSheet.addRow([en ? "Style remarks" : "款式评语"]);
-  reviewSheet.addRow([project.style_review?.trim() || ""]);
+  reviewSheet.addRow([sanitizeExportReview(project.style_review) || ""]);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
