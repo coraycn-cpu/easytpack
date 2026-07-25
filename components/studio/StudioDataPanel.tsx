@@ -522,15 +522,15 @@ export default function StudioDataPanel({
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] leading-relaxed text-slate-500">
-                  改数字会同步到画布尺寸线；删除部位会去掉对应标注线。
+                  改数字会同步到画布尺寸线；删除部位会去掉对应标注线。跳码与大表编辑在同一窗口。
                 </p>
                 <button
                   type="button"
                   onClick={() => setSizeExpandOpen(true)}
                   className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
-                  title="打开大面板编辑尺码表"
+                  title="打开大面板：改数字、删行、跳码放码"
                 >
-                  展开编辑
+                  编辑 / 跳码
                 </button>
               </div>
               <SizeChartEditor

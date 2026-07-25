@@ -255,9 +255,6 @@ export default function FullCollectFlowOverlay({
             answers: answersWithSize,
             isComplete: true,
           },
-          ...(summary && !annotated.style_review?.trim()
-            ? { style_review: `初稿说明：${summary}`.slice(0, 280) }
-            : {}),
         };
         onProjectPatch(updated);
         onComplete(updated, summary);

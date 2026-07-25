@@ -57,7 +57,11 @@ export const VisibleGarmentSchema = z.object({
 });
 
 export const IntentAnalysisSchema = z.object({
-  summary: z.string().describe("对用户意图的简要理解"),
+  summary: z
+    .string()
+    .describe(
+      "面向版师的款式一句话描述（品类/廓形/关键设计点），禁止写用户上传或需要分析等过程话",
+    ),
   detectedCategory: z.string().describe("识别出的品类，如：针织T恤，应对齐推荐主款"),
   detectedFeatures: z.array(z.string()).describe("识别出的结构或工艺特征"),
   suggestedTitle: z.string().describe("建议的款式名称，应对齐推荐主款"),

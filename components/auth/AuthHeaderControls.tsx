@@ -74,7 +74,19 @@ export default function AuthHeaderControls() {
   };
 
   if (!ready) {
-    return <span className="text-xs text-zinc-300">…</span>;
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-xs text-zinc-400"
+        role="status"
+        aria-live="polite"
+      >
+        <span
+          className="inline-block h-3 w-3 animate-spin rounded-full border border-zinc-300 border-t-zinc-500"
+          aria-hidden
+        />
+        检查登录…
+      </span>
+    );
   }
 
   if (!configured) {

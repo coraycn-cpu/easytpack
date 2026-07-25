@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { regionStandardLabel } from "@/lib/size-chart/standards";
-import SizeGradeDialog from "@/components/studio/SizeGradeDialog";
 import type { SizeChart } from "@/types/project";
 import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 
@@ -20,6 +18,8 @@ type SizeChartEditorProps = {
   dimensionCounts?: Record<string, number>;
   /** 删除部位行：传入部位名与删后尺码表，由父级一次持久化（避免旧表覆盖） */
   onRemoveRowPart?: (part: string, nextChart: SizeChart) => void;
+  /** 打开统一大面板（编辑 + 跳码）；侧栏用，避免再套一层跳码窗 */
+  onOpenWorkspace?: () => void;
 };
 
 export default function SizeChartEditor({
@@ -35,8 +35,8 @@ export default function SizeChartEditor({
   onSizeRowSelect,
   dimensionCounts,
   onRemoveRowPart,
+  onOpenWorkspace,
 }: SizeChartEditorProps) {
-  const [gradeOpen, setGradeOpen] = useState(false);
   const sampleSize = chart.sampleSize;
   const regionLabel = regionStandardLabel(chart.regionStandard);
 
@@ -53,7 +53,7 @@ export default function SizeChartEditor({
 
   const removeSize = (size: string) => {
     if (size === sampleSize) {
-      window.alert("不能删除基准码列；请先在跳码面板中调整");
+      window.alert("不能删除基准码列；请先在「编辑 / 跳码」大面板中调整");
       return;
     }
     const sizes = chart.sizes.filter((s) => s !== size);
@@ -109,8 +109,16 @@ export default function SizeChartEditor({
               sizes: ["S", "M", "L", "XL"],
               sampleSize: "M",
               rows: [
-                { part: "胸宽", method: "夹下1cm", values: { S: "", M: "", L: "", XL: "" } },
-                { part: "衣长", method: "后中直量", values: { S: "", M: "", L: "", XL: "" } },
+                {
+                  part: "胸宽",
+                  method: "夹下1cm",
+                  values: { S: "", M: "", L: "", XL: "" },
+                },
+                {
+                  part: "衣长",
+                  method: "后中直量",
+                  values: { S: "", M: "", L: "", XL: "" },
+                },
               ],
             })
           }
@@ -123,36 +131,51 @@ export default function SizeChartEditor({
   }
 
   return (
-    <div className={`text-xs ${compact ? "overflow-hidden" : flat ? "" : "max-h-80 overflow-auto"}`}>
+    <div
+      className={`text-xs ${compact ? "overflow-hidden" : flat ? "" : "max-h-80 overflow-auto"}`}
+    >
       {(regionLabel || sampleSize) && (
         <p className="mb-2 text-[10px] text-slate-500">
           {regionLabel && <span>{regionLabel}</span>}
           {regionLabel && sampleSize && " · "}
           {sampleSize && (
             <span>
-              基准码 <span className="font-medium text-blue-600">{sampleSize}</span>
+              基准码{" "}
+              <span className="font-medium text-blue-600">{sampleSize}</span>
             </span>
           )}
         </p>
       )}
       <div className="mb-2 flex flex-wrap gap-2">
-        <button type="button" onClick={addSize} className="text-blue-600 hover:underline">
+        <button
+          type="button"
+          onClick={addSize}
+          className="text-blue-600 hover:underline"
+        >
           + 尺码
-        </button>
-        <button type="button" onClick={addRow} className="text-blue-600 hover:underline">
-          + 部位
         </button>
         <button
           type="button"
-          onClick={() => setGradeOpen(true)}
-          className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
-          title="打开大面板：跳码、增减码段、手改"
+          onClick={addRow}
+          className="text-blue-600 hover:underline"
         >
-          跳码 / 放码
+          + 部位
         </button>
+        {onOpenWorkspace && (
+          <button
+            type="button"
+            onClick={onOpenWorkspace}
+            className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+            title="打开大面板：改数字、删行、跳码放码"
+          >
+            编辑 / 跳码
+          </button>
+        )}
       </div>
       <p className="mb-2 text-[10px] leading-snug text-slate-400">
-        码段可增减；跳码在大面板操作，默认只填空格、不覆盖手改。
+        {onOpenWorkspace
+          ? "侧栏可快速改数；跳码、加减码段请点「编辑 / 跳码」。"
+          : "侧栏可快速改数；跳码、加减码段请点上方「编辑 / 跳码」。"}
       </p>
       <table className="w-full border-collapse">
         <thead>
@@ -167,7 +190,9 @@ export default function SizeChartEditor({
                 <span className="inline-flex items-center gap-0.5">
                   {s}
                   {s === sampleSize && (
-                    <span className="text-[8px] font-normal text-blue-400">基准</span>
+                    <span className="text-[8px] font-normal text-blue-400">
+                      基准
+                    </span>
                   )}
                   {s !== sampleSize && (
                     <button
@@ -187,7 +212,7 @@ export default function SizeChartEditor({
         <tbody>
           {chart.rows.map((row, i) => {
             const partKey = row.part.trim();
-            const dimCount = partKey ? dimensionCounts?.[partKey] ?? 0 : 0;
+            const dimCount = partKey ? (dimensionCounts?.[partKey] ?? 0) : 0;
             const isHighlighted = partKey && highlightedSizePart === partKey;
             const isLinkedToSelection =
               partKey && linkedSizePartForSelection === partKey;
@@ -209,16 +234,21 @@ export default function SizeChartEditor({
               >
                 <td className="py-1 pr-1">
                   <div className="flex items-center gap-0.5">
-                    {selectedAnnId && dimensionLinkable && partKey && onToggleSizeLink && (
-                      <input
-                        type="checkbox"
-                        checked={Boolean(isLinkedToSelection)}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => onToggleSizeLink(partKey, e.target.checked)}
-                        className="shrink-0"
-                        title="关联当前选中尺寸线"
-                      />
-                    )}
+                    {selectedAnnId &&
+                      dimensionLinkable &&
+                      partKey &&
+                      onToggleSizeLink && (
+                        <input
+                          type="checkbox"
+                          checked={Boolean(isLinkedToSelection)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            onToggleSizeLink(partKey, e.target.checked)
+                          }
+                          className="shrink-0"
+                          title="关联当前选中尺寸线"
+                        />
+                      )}
                     <input
                       value={row.part}
                       onClick={(e) => e.stopPropagation()}
@@ -226,7 +256,9 @@ export default function SizeChartEditor({
                       className="w-14 bg-transparent outline-none"
                     />
                     {dimCount > 0 && (
-                      <span className="text-[8px] text-emerald-600">{dimCount}线</span>
+                      <span className="text-[8px] text-emerald-600">
+                        {dimCount}线
+                      </span>
                     )}
                   </div>
                 </td>
@@ -249,7 +281,9 @@ export default function SizeChartEditor({
                       onChange={(e) => updateCell(i, s, e.target.value)}
                       placeholder={s === sampleSize ? "—" : ""}
                       className={`w-9 bg-transparent text-center outline-none ${
-                        s === sampleSize ? "font-medium text-slate-800" : "text-zinc-400"
+                        s === sampleSize
+                          ? "font-medium text-slate-800"
+                          : "text-zinc-400"
                       }`}
                     />
                   </td>
@@ -271,13 +305,6 @@ export default function SizeChartEditor({
           })}
         </tbody>
       </table>
-
-      <SizeGradeDialog
-        chart={chart}
-        open={gradeOpen}
-        onClose={() => setGradeOpen(false)}
-        onChange={onChange}
-      />
     </div>
   );
 }

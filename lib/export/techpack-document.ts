@@ -1,6 +1,10 @@
-import { originalIntentAnalysis } from "@/lib/ai/chat-context";
 import { photoTypeLabel } from "@/lib/intake/apply-intent";
 import { normalizeProcessItemsForExport } from "@/lib/export/normalize-process";
+import {
+  buildExportDescription,
+  buildExportStyleBrief,
+  sanitizeExportReview,
+} from "@/lib/export/client-facing-copy";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { SizeChart, TechPackProject } from "@/types/project";
 import { formatDate, WORKFLOW_LABELS } from "@/lib/project/progress";
@@ -171,7 +175,7 @@ export function buildDocMeta(
       (locale === "en" ? "Draft" : "草稿"),
     materialsHint: materials || "—",
     sizeRange: sizes.length ? `${sizes[0]}–${sizes[sizes.length - 1]}` : "—",
-    description: project.intake.description?.trim() || "",
+    description: buildExportDescription(project),
   };
 }
 
@@ -205,14 +209,8 @@ export function buildCoverOverview(
     (b) => b.category && b.category !== "fabric",
   );
 
-  const analysis = originalIntentAnalysis(project.intake.aiIntentAnalysis);
-  const styleBrief =
-    project.intake.description?.trim() ||
-    analysis ||
-    project.intake.suggestedTitle ||
-    "";
-
-  const review = project.style_review?.trim() || "";
+  const styleBrief = buildExportStyleBrief(project);
+  const review = sanitizeExportReview(project.style_review);
   const reviewBrief = review.length > 220 ? `${review.slice(0, 220)}…` : review;
 
   const processItems = normalizeProcessItemsForExport(project.process_items);
@@ -317,7 +315,7 @@ export function buildTechPackDocument(
     });
   }
 
-  const reviewText = project.style_review?.trim() || "";
+  const reviewText = sanitizeExportReview(project.style_review);
   const sizeRows = project.size_chart.rows;
 
   if (sizeRows.length > 0) {
