@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/metering";
 import { getCloudSyncMode } from "@/lib/project/sync-preference";
 import { consumeInviteClaimTip } from "@/lib/invite/claim-pending";
+import { INVITE_REWARD_POINTS } from "@/lib/invite/constants";
 
 type AiUsageItem = {
   id: string;
@@ -515,7 +516,7 @@ function AccountPageInner() {
                 </button>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                双方各得 {invite?.rewardPoints ?? 50} 分 · 最多{" "}
+                双方各得 {invite?.rewardPoints ?? INVITE_REWARD_POINTS} 分 · 最多{" "}
                 {invite?.maxSuccess ?? 6} 人 · 上限{" "}
                 {invite?.pointsCap ?? 300}
               </p>

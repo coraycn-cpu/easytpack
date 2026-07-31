@@ -17,6 +17,7 @@ import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
 import { buildLoginHref } from "@/lib/ai/login-gate";
+import { confirmAiMenuIfNeeded } from "@/lib/ai/confirm-existing";
 import {
   applyIntentToIntake,
   confirmTargetGarment,
@@ -422,6 +423,36 @@ export default function StudioPage() {
   const pendingAiAnalysis = Boolean(project?.intake.pendingAiAnalysis);
   const pendingAiRunningRef = useRef(false);
   const pendingAiAbortRef = useRef<AbortController | null>(null);
+  /** 顶栏 AI 菜单进行中的请求（可点遮罩「取消」中断） */
+  const studioAiAbortRef = useRef<AbortController | null>(null);
+
+  const beginStudioAiFetch = useCallback(() => {
+    studioAiAbortRef.current?.abort();
+    const ac = new AbortController();
+    studioAiAbortRef.current = ac;
+    return ac;
+  }, []);
+
+  const clearStudioAiFetch = useCallback((ac?: AbortController) => {
+    if (!ac || studioAiAbortRef.current === ac) {
+      studioAiAbortRef.current = null;
+    }
+  }, []);
+
+  const isAbortError = (e: unknown) => {
+    if (!e || typeof e !== "object") return false;
+    const name = (e as { name?: string }).name;
+    return name === "AbortError";
+  };
+
+  const cancelStudioAiTask = useCallback(() => {
+    studioAiAbortRef.current?.abort();
+    studioAiAbortRef.current = null;
+    setAiTask(null);
+    setAiImageContext(null);
+    setAiMessage("已中断 AI 操作，现有标注未改动。");
+    setAiTip("可继续手动标注，或稍后再点顶部 AI 菜单。");
+  }, []);
 
   const cancelPendingAiAnalysis = useCallback(() => {
     pendingAiAbortRef.current?.abort();
@@ -730,8 +761,14 @@ export default function StudioPage() {
       if (!(await requireAiLogin())) return;
       const { AI_UNITS_FULL_COLLECT_ESTIMATE, fullCollectCostHint } =
         await import("@/lib/ai/quota-units");
+      const { projectHasSectionContent } = await import(
+        "@/lib/ai/confirm-existing"
+      );
+      const hasExisting = projectHasSectionContent(project, "full-collect");
       const ok = window.confirm(
-        `开始「AI 一键标注」？\n\n${fullCollectCostHint()}\n不够额度时会中途失败。\n\n确定继续？`,
+        hasExisting
+          ? `「AI 一键标注」对应版块已有内容。\n\n重新跑可能改动工艺/物料/尺寸/评语。\n${fullCollectCostHint()}\n\n点「确定」重新标注；点「取消」中断，保留现有内容。`
+          : `开始「AI 一键标注」？\n\n${fullCollectCostHint()}\n不够额度时会中途失败。\n\n确定继续？`,
       );
       if (!ok) return;
       // 额度不够时先拦一层（预估），真正扣费仍以各接口成功为准
@@ -1853,6 +1890,7 @@ export default function StudioPage() {
   const handleBatchAnnotate = async () => {
     if (aiBusy || !project || !activeArtboard) return;
     if (!(await requireAiLogin())) return;
+    if (!confirmAiMenuIfNeeded(project, "annotate-process")) return;
     focusTab("process");
     setAiImageContext({
       action: "annotate-process",
@@ -1861,6 +1899,7 @@ export default function StudioPage() {
     });
     setAiTask("annotate-process");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: activeArtboard.id,
@@ -1868,6 +1907,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/annotate-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
@@ -1987,8 +2027,10 @@ export default function StudioPage() {
           : "AI 标工艺完成",
       );
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "标工艺失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -1997,6 +2039,7 @@ export default function StudioPage() {
   const handleFillBom = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (!confirmAiMenuIfNeeded(project, "fill-bom")) return;
     focusTab("bom");
     setAiImageContext({
       action: "fill-bom",
@@ -2005,6 +2048,7 @@ export default function StudioPage() {
     });
     setAiTask("fill-bom");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         preferIntake: true,
@@ -2012,6 +2056,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/bom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
@@ -2042,8 +2087,10 @@ export default function StudioPage() {
         setAiMessage("物料已是最新");
       }
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "填物料失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2163,6 +2210,7 @@ export default function StudioPage() {
     if (aiBusy || !project) return;
     void (async () => {
       if (!(await requireAiLogin())) return;
+      if (!confirmAiMenuIfNeeded(project, "fill-size")) return;
       focusTab("size");
       setSizeAiDialogOpen(true);
     })();
@@ -2181,6 +2229,7 @@ export default function StudioPage() {
     });
     setAiTask("fill-size");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: activeArtboard?.id,
@@ -2189,6 +2238,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/size-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
@@ -2255,6 +2305,7 @@ export default function StudioPage() {
           const dimRes = await fetch("/api/ai/size-dimension-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
             body: JSON.stringify({
               category: current.intake.detectedCategory,
               description: current.intake.description,
@@ -2342,8 +2393,10 @@ export default function StudioPage() {
           : `已填入 ${input.sampleSize} 码 ${filled} 项估算值`,
       );
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2352,6 +2405,7 @@ export default function StudioPage() {
   const handleEnhanceAll = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (!confirmAiMenuIfNeeded(project, "enhance")) return;
     setAiImageContext({
       action: "enhance",
       preferIntake: true,
@@ -2359,10 +2413,12 @@ export default function StudioPage() {
     });
     setAiTask("enhance");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const res = await fetch("/api/ai/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({ project }),
       });
       const data = await res.json();
@@ -2404,8 +2460,10 @@ export default function StudioPage() {
       setAiTip(data.summary);
       setAiMessage("工艺包已补全");
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "补全失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2414,6 +2472,7 @@ export default function StudioPage() {
   const handleStyleReview = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (!confirmAiMenuIfNeeded(project, "explain")) return;
     setAiImageContext({
       action: "explain",
       sourceArtboardId: primaryArtboardId ?? activeArtboard?.id,
@@ -2421,6 +2480,7 @@ export default function StudioPage() {
     });
     setAiTask("explain");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: primaryArtboardId ?? activeArtboard?.id,
@@ -2429,6 +2489,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/style-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           title: project.title,
           category: project.intake.detectedCategory,
@@ -2460,8 +2521,10 @@ export default function StudioPage() {
       focusTab("review");
       setAiMessage(saved ? "款式评语已生成" : "评语已显示但未能保存到本地，请清理存储空间");
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "评语生成失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2813,7 +2876,14 @@ export default function StudioPage() {
               onCancel={
                 activeAiPreset === "intake"
                   ? cancelPendingAiAnalysis
-                  : undefined
+                  : activeAiPreset && activeAiPreset !== "view-image"
+                    ? cancelStudioAiTask
+                    : undefined
+              }
+              cancelLabel={
+                activeAiPreset === "intake"
+                  ? "跳过，先手动标注"
+                  : "取消，中断本次 AI"
               }
               imagePreview={
                 activeAiImageSource?.previewUrl ??

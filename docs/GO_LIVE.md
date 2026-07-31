@@ -34,7 +34,7 @@
 | `AI_PROVIDER` 等模型变量 | 建议 | 见 `.env.example` |
 | `ADMIN_EMAILS` | 要用后台 | 如 `you@qq.com`（不要加引号） |
 | `SUPABASE_SERVICE_ROLE_KEY` | 要用后台 | service_role（机密，勿进前端） |
-| `AI_FREE_MONTHLY_UNITS` | 可选 | 默认 200 |
+| `AI_FREE_MONTHLY_UNITS` | 可选 | 默认 50 |
 
 详细配钥匙步骤：`docs/SUPABASE_SETUP.md`。
 
@@ -62,7 +62,7 @@
 - [ ] 登录后保存或点同步 → `tech_packs` 有行；`style-images` 有图  
 - [ ] 换无痕窗口登录同一账号 → 能打开旧款且图正常  
 - [ ] 用户中心：用量（免费+邀请+加赠）、邀请链接、同步偏好  
-- [ ] 邀请第二邮箱注册 → 双方各 +50（最多 6 人 / 上限 300）  
+- [ ] 邀请第二邮箱注册 → 双方各 +10（最多 5 人 / 上限 50）  
 - [ ] AI 超额有提示；管理员暂停后返回明确文案  
 - [ ] 导出：Excel / 打印 PDF；失败/占位图有红字提示  
 

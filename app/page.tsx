@@ -19,9 +19,11 @@ import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
 import {
   FREE_MONTHLY_AI_GIFT,
+  HOME_AI_QUOTA_HINT,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
 import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
+import HomeTechpackCarousel from "@/components/home/HomeTechpackCarousel";
 import {
   RECENT_PROJECTS_LIMIT,
   shortProjectTitle,
@@ -142,69 +144,31 @@ function HomeEntryInner() {
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col">
         <div className="flex flex-1 flex-col lg:flex-row">
-        {/* 左侧品牌介绍 */}
-        <section className="relative flex flex-1 flex-col justify-center px-6 pb-4 pt-10 lg:px-12 lg:pb-6 lg:pt-16">
+        {/* 左侧：品牌 + 精简说明 + 工艺包示例轮播 */}
+        <section className="relative flex flex-1 flex-col justify-center px-6 pb-4 pt-10 lg:px-12 lg:pb-6 lg:pt-14">
           <BrandMark
             href={false}
             nameClassName="max-w-md text-base leading-snug sm:text-lg"
             iconClassName="h-8 w-8"
           />
-          <h1 className="mt-8 max-w-lg text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
+          <h1 className="mt-6 max-w-lg text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
             {BRAND_NAME}
           </h1>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-muted sm:text-base">
-            {BRAND_SLOGAN}
-            。从款式图到可沟通的工艺包，注册后还能云端存档、换设备继续。
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
+            {BRAND_SLOGAN}。右侧新建款式即可开始；注册后可用 AI 与云端存档。
           </p>
-          <ul className="mt-8 space-y-3 text-sm text-muted">
-            <li className="flex items-start gap-3">
-              <span
-                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"
-                aria-hidden
-              >
-                ★
-              </span>
-              <span>
-                <strong className="font-semibold text-foreground">速度快</strong>
-                {" — "}几分钟内完成标注与导出准备
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"
-                aria-hidden
-              >
-                ✦
-              </span>
-              <span>
-                <strong className="font-semibold text-foreground">AI 辅助</strong>
-                {" — "}一键标注、生图、补全（注册后每月送{" "}
-                {FREE_MONTHLY_AI_GIFT} 点）
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"
-                aria-hidden
-              >
-                ▤
-              </span>
-              <span>
-                <strong className="font-semibold text-foreground">可交付</strong>
-                {" — "}导出给版师沟通用的工艺包预览
-              </span>
-            </li>
-          </ul>
-          <div className="mt-8 rounded-[var(--radius-sm)] bg-brand-soft/70 px-3 py-3 text-left text-[11px] leading-relaxed text-muted lg:max-w-md">
-            <p className="font-medium text-foreground">怎么开始</p>
-            <ol className="mt-1.5 list-decimal space-y-1 pl-4">
-              <li>点右侧「新建款式」上传正面图</li>
-              <li>在画布里用方框/尺寸线/表格手动标注</li>
-              <li>
-                需要 AI 或云端存档时，注册领取每月 {FREE_MONTHLY_AI_GIFT} 点
-              </li>
-            </ol>
+          <p className="mt-3 max-w-md text-[12px] leading-relaxed text-muted">
+            {HOME_AI_QUOTA_HINT}
+          </p>
+
+          <div className="mt-5">
+            <HomeTechpackCarousel />
           </div>
+
+          <p className="mt-3 max-w-md text-[11px] leading-relaxed text-muted">
+            上图为导出工艺包示例（自动翻页）。手动标注不限次数；需要 AI
+            时注册领取每月 {FREE_MONTHLY_AI_GIFT} 点。
+          </p>
         </section>
 
         {/* 右侧：登录/注册 或 已登录 + 新建款式 */}
