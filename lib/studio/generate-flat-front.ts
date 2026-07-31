@@ -1,4 +1,7 @@
-import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import {
+  resolveImageDataUrlForAiDetailed,
+  resolveAiImageFailureMessage,
+} from "@/lib/ai/image-for-request";
 import { getPrimaryArtboardId } from "@/lib/canvas/sizing-artboard";
 import {
   appendPhotoReferenceArtboard,
@@ -52,14 +55,18 @@ export async function generateFlatFrontForPrimary(
     };
   }
 
-  const imageForAi = await resolveImageDataUrlForAi(sourceImageUrl);
-  if (!imageForAi) {
+  const prepared = await resolveImageDataUrlForAiDetailed(sourceImageUrl);
+  if (!prepared.ok) {
     return {
       project,
       success: false,
-      message: "参考图过大，自动压缩后仍无法生成平铺正面，请换稍小的图",
+      message:
+        prepared.reason === "too_large"
+          ? "参考图过大，自动压缩后仍无法生成平铺正面，请换稍小的图"
+          : resolveAiImageFailureMessage(prepared.reason),
     };
   }
+  const imageForAi = prepared.dataUrl;
 
   const { width: sourceWidth, height: sourceHeight } =
     await getImageDimensions(sourceImageUrl);
