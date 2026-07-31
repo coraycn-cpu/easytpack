@@ -276,13 +276,18 @@ function computeStageExportBounds(
   for (const slot of slots) {
     const ab = artboards.find((a) => a.id === slot.id);
     if (!ab) continue;
-    const ox = slot.origin.x + slot.imageOffset.x;
-    const oy = slot.origin.y + slot.imageOffset.y;
+    const scaleX = Math.abs(ab.imageScale?.x ?? 1) || 1;
+    const scaleY = Math.abs(ab.imageScale?.y ?? 1) || 1;
+    const drawW = slot.imageFit.width * scaleX;
+    const drawH = slot.imageFit.height * scaleY;
+    const offset = ab.imageOffset ?? slot.imageOffset;
+    const ox = slot.origin.x + offset.x;
+    const oy = slot.origin.y + offset.y;
     const imageRect: RectBounds = {
       minX: ox + slot.imageFit.x,
       minY: oy + slot.imageFit.y,
-      maxX: ox + slot.imageFit.x + slot.imageFit.width,
-      maxY: oy + slot.imageFit.y + slot.imageFit.height,
+      maxX: ox + slot.imageFit.x + drawW,
+      maxY: oy + slot.imageFit.y + drawH,
     };
     content = content ? mergeRect(content, imageRect) : imageRect;
 
@@ -407,9 +412,14 @@ async function renderStudioStageToCanvas(
     if (!ab?.imageDataUrl) continue;
 
     const img = await loadImage(ab.imageDataUrl);
-    const drawX = offsetX + slot.origin.x + slot.imageOffset.x + slot.imageFit.x;
-    const drawY = offsetY + slot.origin.y + slot.imageOffset.y + slot.imageFit.y;
-    ctx.drawImage(img, drawX, drawY, slot.imageFit.width, slot.imageFit.height);
+    const scaleX = Math.abs(ab.imageScale?.x ?? 1) || 1;
+    const scaleY = Math.abs(ab.imageScale?.y ?? 1) || 1;
+    const drawW = slot.imageFit.width * scaleX;
+    const drawH = slot.imageFit.height * scaleY;
+    const imgOffset = ab.imageOffset ?? slot.imageOffset;
+    const drawX = offsetX + slot.origin.x + imgOffset.x + slot.imageFit.x;
+    const drawY = offsetY + slot.origin.y + imgOffset.y + slot.imageFit.y;
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
     ctx.fillStyle = "#64748b";
     ctx.font = "600 13px sans-serif";

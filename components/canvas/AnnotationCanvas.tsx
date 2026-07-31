@@ -234,8 +234,32 @@ export default function AnnotationCanvas({
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
   const [artboardImages, setArtboardImages] = useState<
-    Map<string, { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }>
+    Map<
+      string,
+      {
+        img: HTMLImageElement;
+        fit: ReturnType<typeof computeImagePlacement>;
+        sourceUrl: string;
+      }
+    >
   >(new Map());
+  const artboardImagesRef = useRef(artboardImages);
+  artboardImagesRef.current = artboardImages;
+  const multiArtboardsRef = useRef(multiArtboards);
+  multiArtboardsRef.current = multiArtboards;
+
+  const artboardImageUrlsKey = useMemo(() => {
+    if (!multiArtboards?.length) return "";
+    return multiArtboards
+      .map((a) => {
+        const url = a.imageDataUrl ?? "";
+        const tip = url
+          ? `${url.length}:${url.slice(0, 32)}:${url.slice(-24)}`
+          : "0";
+        return `${a.id}:${tip}`;
+      })
+      .join("|");
+  }, [multiArtboards]);
   const [tool, setTool] = useState<CanvasTool>("select");
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -406,16 +430,26 @@ export default function AnnotationCanvas({
   }, [imageUrl, loadImage, multiMode]);
 
   useEffect(() => {
-    if (!multiMode || !multiArtboards) return;
+    if (!multiMode) return;
+    const boards = multiArtboardsRef.current;
+    if (!boards) {
+      setArtboardImages(new Map());
+      return;
+    }
     let cancelled = false;
-    const next = new Map<
-      string,
-      { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }
-    >();
 
     const loadAll = async () => {
-      for (const ab of multiArtboards) {
+      const prev = artboardImagesRef.current;
+      const next = new Map(prev);
+      const keepIds = new Set<string>();
+
+      for (const ab of boards) {
         if (!ab.imageDataUrl) continue;
+        keepIds.add(ab.id);
+        const existing = next.get(ab.id);
+        if (existing && existing.sourceUrl === ab.imageDataUrl) {
+          continue;
+        }
         await new Promise<void>((resolve) => {
           const img = new window.Image();
           img.crossOrigin = "anonymous";
@@ -424,6 +458,7 @@ export default function AnnotationCanvas({
             next.set(ab.id, {
               img,
               fit: computeImagePlacement(img.naturalWidth, img.naturalHeight),
+              sourceUrl: ab.imageDataUrl!,
             });
             resolve();
           };
@@ -431,14 +466,19 @@ export default function AnnotationCanvas({
           img.src = ab.imageDataUrl!;
         });
       }
+
+      for (const id of [...next.keys()]) {
+        if (!keepIds.has(id)) next.delete(id);
+      }
+
       if (!cancelled) setArtboardImages(new Map(next));
     };
 
-    loadAll();
+    void loadAll();
     return () => {
       cancelled = true;
     };
-  }, [multiMode, multiArtboards]);
+  }, [multiMode, artboardImageUrlsKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -510,6 +550,38 @@ export default function AnnotationCanvas({
       : CANVAS_H;
   const contentOffsetX = fixedChrome ? studioBounds!.offsetX : 0;
   const contentOffsetY = fixedChrome ? studioBounds!.offsetY : 0;
+
+  /** 舞台 offset 随内容左/上扩展时，补偿视口 pan，避免拖图「弹回」 */
+  const contentOffsetPrevRef = useRef({ x: contentOffsetX, y: contentOffsetY });
+  const viewportRefForOffset = useRef(viewport);
+  const onViewportChangeRefForOffset = useRef(onViewportChange);
+  useEffect(() => {
+    viewportRefForOffset.current = viewport;
+  }, [viewport]);
+  useEffect(() => {
+    onViewportChangeRefForOffset.current = onViewportChange;
+  }, [onViewportChange]);
+  useEffect(() => {
+    if (!fixedChrome) {
+      contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+      return;
+    }
+    const prev = contentOffsetPrevRef.current;
+    const dOx = contentOffsetX - prev.x;
+    const dOy = contentOffsetY - prev.y;
+    contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+    if (dOx === 0 && dOy === 0) return;
+    const vp = viewportRefForOffset.current;
+    const change = onViewportChangeRefForOffset.current;
+    if (!vp || !change) return;
+    const s = vp.scale || 1;
+    change({
+      panX: vp.panX - dOx * s,
+      panY: vp.panY - dOy * s,
+      scale: vp.scale,
+    });
+  }, [contentOffsetX, contentOffsetY, fixedChrome]);
+
   const transparentStage = fixedChrome || splitOnCanvas;
   const baseFit = fixedChrome
     ? 1

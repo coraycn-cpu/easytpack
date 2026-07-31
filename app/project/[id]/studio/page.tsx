@@ -1258,7 +1258,7 @@ export default function StudioPage() {
         }
 
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
-        const origin = nextArtboardOrigin(slots);
+        const origin = nextArtboardOrigin(slots, project.canvas_data.artboards);
         const name = nextPasteArtboardName(project.canvas_data.artboards);
         const newBoard = createArtboard(name, imageDataUrl);
         newBoard.canvasOrigin = origin;
@@ -1670,7 +1670,7 @@ export default function StudioPage() {
         setAiTip(COMM_PACK_COPY.annotateAfterAi);
       } else {
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
-        const origin = nextArtboardOrigin(slots);
+        const origin = nextArtboardOrigin(slots, project.canvas_data.artboards);
         const newBoard = createArtboard(displayName, imageDataUrl);
         newBoard.canvasOrigin = origin;
         newBoard.viewImageMeta = viewMeta;
