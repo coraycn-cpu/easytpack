@@ -13,7 +13,7 @@ export async function GET(request: Request) {
       const supabase = await createClient();
       await supabase.auth.exchangeCodeForSession(code);
     } catch {
-      return NextResponse.redirect(`${origin}/login?error=confirm`);
+      return NextResponse.redirect(`${origin}/?error=confirm`);
     }
   }
 
