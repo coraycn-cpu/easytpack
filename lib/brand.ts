@@ -11,3 +11,6 @@ export const BRAND_SITE_URL = "https://packflow.cn";
 
 /** 用户指定的产品 slogan（展示用，拼写保持原样；首页底部统一出现） */
 export const BRAND_SLOGAN = "AI驱动辅助工艺包(Techpack)快速生成工具";
+
+/** 业务联系邮箱（首页底部） */
+export const BRAND_CONTACT_EMAIL = "coraycn@gmail.com";
