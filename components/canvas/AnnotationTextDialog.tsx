@@ -56,7 +56,7 @@ export default function AnnotationTextDialog({
 
   const submit = () => onConfirm(value);
   const fieldClass =
-    "mt-3 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
+    "mt-3 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-blue-100";
 
   return createPortal(
     <div
@@ -119,7 +119,7 @@ export default function AnnotationTextDialog({
           <button
             type="button"
             onClick={submit}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
           >
             {confirmLabel}
           </button>

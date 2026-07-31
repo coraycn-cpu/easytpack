@@ -71,7 +71,7 @@ export default function RegionEditDialog({
               key={chip}
               type="button"
               disabled={busy}
-              className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50"
+              className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-brand-light hover:bg-brand-soft disabled:opacity-50"
               onClick={() => appendChip(chip)}
             >
               {chip}
@@ -85,7 +85,7 @@ export default function RegionEditDialog({
           placeholder="必填：选区要改成什么样…"
           rows={4}
           disabled={busy}
-          className="mb-3 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-violet-400 disabled:opacity-60"
+          className="mb-3 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand disabled:opacity-60"
         />
         <div className="flex justify-end gap-2">
           <button
@@ -98,7 +98,7 @@ export default function RegionEditDialog({
           <button
             type="button"
             disabled={busy || !text.trim()}
-            className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => onSubmit(text.trim())}
           >
             {busy ? "重绘中…" : REGION_EDIT_LABELS.submit}

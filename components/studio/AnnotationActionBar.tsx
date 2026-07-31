@@ -31,7 +31,7 @@ function actionBtn(primary?: boolean, danger?: boolean) {
     return "rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50";
   }
   if (primary) {
-    return "rounded-md bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-700 disabled:opacity-50";
+    return "rounded-md bg-brand px-2 py-1 text-[10px] font-medium text-white hover:bg-brand-dark disabled:opacity-50";
   }
   return "rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
 }
@@ -112,10 +112,10 @@ export default function AnnotationActionBar({
   }
 
   const isProcess = mode === "process";
-  const border = isProcess ? "border-blue-200 bg-blue-50/90" : "border-emerald-200 bg-emerald-50/90";
+  const border = isProcess ? "border-blue-200 bg-brand-soft/90" : "border-emerald-200 bg-emerald-50/90";
   const titleColor = isProcess ? "text-blue-900" : "text-emerald-900";
-  const bodyColor = isProcess ? "text-blue-700" : "text-emerald-700";
-  const aiPrimary = isProcess ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700";
+  const bodyColor = isProcess ? "text-brand-dark" : "text-emerald-700";
+  const aiPrimary = isProcess ? "bg-brand hover:bg-brand-dark" : "bg-emerald-600 hover:bg-emerald-700";
   const aiLoading = isProcess ? regionAiLoading : dimensionAiLoading;
   const onAi = isProcess ? onRegionAi : onDimensionAi;
   const aiLabel =

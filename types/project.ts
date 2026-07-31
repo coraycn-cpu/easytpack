@@ -209,7 +209,7 @@ export type TechPackProject = {
   /** 导出记录（轻量沉淀） */
   exportHistory?: Array<{
     at: string;
-    kind: "pdf" | "xlsx" | "composite" | "share";
+    kind: "pdf" | "xlsx" | "composite" | "share" | "word";
     basename: string;
     pageCount?: number;
     imageMode?: "merged" | "split";

@@ -61,14 +61,14 @@ export default function ProcessExpandDialog({
             className="rounded-lg border border-slate-200 bg-slate-50/80 p-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">
                 {i + 1}
               </span>
               <input
                 value={item.part}
                 onChange={(e) => update(i, { part: e.target.value })}
                 placeholder="部位名称"
-                className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-blue-400"
+                className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand"
               />
               <button
                 type="button"
@@ -84,20 +84,20 @@ export default function ProcessExpandDialog({
               onChange={(e) => update(i, { process: e.target.value })}
               placeholder="工艺描述"
               rows={3}
-              className="mb-2 w-full resize-y rounded border border-slate-200 bg-white px-2.5 py-2 text-[13px] leading-relaxed text-slate-700 outline-none focus:border-blue-400"
+              className="mb-2 w-full resize-y rounded border border-slate-200 bg-white px-2.5 py-2 text-[13px] leading-relaxed text-slate-700 outline-none focus:border-brand"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
                 value={item.stitch ?? ""}
                 onChange={(e) => update(i, { stitch: e.target.value })}
                 placeholder="针法/线迹"
-                className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-400"
+                className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-brand"
               />
               <input
                 value={item.seam_allowance ?? ""}
                 onChange={(e) => update(i, { seam_allowance: e.target.value })}
                 placeholder="缝份"
-                className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-400"
+                className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-brand"
               />
             </div>
           </div>

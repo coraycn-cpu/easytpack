@@ -23,7 +23,7 @@ export default function StudioBootOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#ececec]/90 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#f9fafb]/90 backdrop-blur-[2px]"
       role="status"
       aria-live="polite"
       aria-busy="true"

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   cloudSyncModeLabel,
   getCloudSyncMode,
@@ -8,6 +7,7 @@ import {
   subscribeCloudSyncMode,
   type CloudSyncMode,
 } from "@/lib/project/sync-preference";
+import { useEffect, useState } from "react";
 
 type SyncPreferenceControlsProps = {
   onChanged?: (mode: CloudSyncMode, tip: string) => void;
@@ -28,8 +28,8 @@ export default function SyncPreferenceControls({
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <span className="text-[11px] text-zinc-600">同步方式</span>
-      <div className="inline-flex overflow-hidden rounded-md border border-zinc-200 bg-white">
+      <span className="text-[11px] text-muted">同步方式</span>
+      <div className="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-border bg-surface">
         <button
           type="button"
           onClick={() => {
@@ -39,10 +39,10 @@ export default function SyncPreferenceControls({
               "已改为自动同步：之后登录/保存会自动上传",
             );
           }}
-          className={`px-2.5 py-1 text-[11px] ${
+          className={`px-2.5 py-1 text-[11px] font-medium ${
             mode === "auto"
-              ? "bg-zinc-900 text-white"
-              : "text-zinc-700 hover:bg-zinc-50"
+              ? "bg-brand text-white"
+              : "text-muted hover:bg-brand-soft hover:text-brand"
           }`}
         >
           自动
@@ -56,16 +56,16 @@ export default function SyncPreferenceControls({
               "已改为手动同步：保存只留本机，需点同步才上传",
             );
           }}
-          className={`px-2.5 py-1 text-[11px] ${
+          className={`px-2.5 py-1 text-[11px] font-medium ${
             mode === "manual"
-              ? "bg-zinc-900 text-white"
-              : "text-zinc-700 hover:bg-zinc-50"
+              ? "bg-brand text-white"
+              : "text-muted hover:bg-brand-soft hover:text-brand"
           }`}
         >
           手动
         </button>
       </div>
-      <span className="text-[10px] text-zinc-400">
+      <span className="text-[10px] text-muted">
         当前 {cloudSyncModeLabel(mode)}
       </span>
     </div>

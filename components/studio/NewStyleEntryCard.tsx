@@ -221,7 +221,7 @@ export default function NewStyleEntryCard({
           <button
             type="button"
             onClick={openFilePicker}
-            className="flex w-full flex-col items-center border-b border-dashed border-slate-200 bg-slate-50/80 py-10 text-slate-400 transition hover:bg-blue-50/50 hover:text-blue-600"
+            className="flex w-full flex-col items-center border-b border-dashed border-slate-200 bg-slate-50/80 py-10 text-slate-400 transition hover:bg-brand-soft/50 hover:text-brand"
           >
             <span className="text-3xl">📷</span>
             <span className="mt-2 text-sm font-medium">上传款式图</span>
@@ -239,7 +239,7 @@ export default function NewStyleEntryCard({
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               placeholder="例如：夏季休闲马甲，胸口有扣..."
-              className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-blue-400"
+              className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-brand"
             />
           </div>
 
@@ -250,7 +250,7 @@ export default function NewStyleEntryCard({
           />
 
           {showGuestLoginPush ? (
-            <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-3 text-left">
+            <div className="rounded-xl border border-blue-200 bg-brand-soft/70 px-3 py-3 text-left">
               <p className="text-xs font-semibold text-blue-950">
                 登录后可用 AI 基础分析
               </p>
@@ -268,7 +268,7 @@ export default function NewStyleEntryCard({
                   type="button"
                   disabled={!canSubmit || loading}
                   onClick={() => void createProject({ preferLogin: "login" })}
-                  className="flex min-h-11 items-center justify-center rounded-xl border-2 border-blue-600 bg-white py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+                  className="pf-btn-secondary flex min-h-11 items-center justify-center py-2.5 text-sm disabled:opacity-40"
                 >
                   {LOGIN_CTA_LABEL}
                 </button>
@@ -276,7 +276,7 @@ export default function NewStyleEntryCard({
                   type="button"
                   disabled={!canSubmit || loading}
                   onClick={() => void createProject()}
-                  className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                  className="pf-btn-primary py-2.5 text-sm disabled:opacity-40"
                 >
                   暂不登录，带图进入画布（不调用 AI）
                 </button>
@@ -286,7 +286,7 @@ export default function NewStyleEntryCard({
                 type="button"
                 disabled={!canSubmit || loading}
                 onClick={() => void createProject()}
-                className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                className="pf-btn-primary py-2.5 text-sm disabled:opacity-40"
               >
                 {loggedIn
                   ? "AI 理解款式并进入画布"
@@ -323,7 +323,7 @@ export default function NewStyleEntryCard({
               {/存储空间已满/.test(error) && (
                 <Link
                   href="/projects"
-                  className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
+                  className="inline-block text-[11px] font-medium text-brand hover:underline"
                 >
                   打开我的项目 · 删除或清理空间 →
                 </Link>
@@ -331,7 +331,7 @@ export default function NewStyleEntryCard({
               {/注册|使用 AI|AI 额度/.test(error) && (
                 <Link
                   href={buildLoginHref({ mode: "register", next: "/" })}
-                  className="inline-block text-[11px] font-medium text-blue-600 hover:underline"
+                  className="inline-block text-[11px] font-medium text-brand hover:underline"
                 >
                   {REGISTER_CTA_LABEL} →
                 </Link>
@@ -374,7 +374,7 @@ export function CanvasHubChrome({
       <div className="pointer-events-auto flex flex-col items-end gap-2">
         <Link
           href="/projects"
-          className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur hover:text-blue-600"
+          className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur hover:text-brand"
         >
           我的项目
         </Link>
@@ -388,7 +388,7 @@ export function CanvasHubChrome({
                 <li key={p.id}>
                   <Link
                     href={p.href}
-                    className="block truncate text-[11px] text-slate-700 hover:text-blue-600"
+                    className="block truncate text-[11px] text-slate-700 hover:text-brand"
                   >
                     {p.title}
                     <span className="ml-1 text-slate-400">{p.progress}%</span>
@@ -408,7 +408,7 @@ export function CanvasGridBackground() {
     <div
       className="absolute inset-0"
       style={{
-        backgroundColor: "#ececec",
+        backgroundColor: "#f9fafb",
         backgroundImage:
           "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
         backgroundSize: "20px 20px",

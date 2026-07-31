@@ -405,8 +405,8 @@ export default function StudioAiDock({
           ))}
 
           {pendingActions.length > 0 && !loading && (
-            <div className="rounded-lg border border-violet-200 bg-violet-50/90 p-2">
-              <p className="mb-1.5 text-[10px] font-medium text-violet-800">
+            <div className="rounded-lg border border-brand-light bg-brand-soft p-2">
+              <p className="mb-1.5 text-[10px] font-medium text-brand-dark">
                 AI 建议执行（需确认）：
               </p>
               <div className="flex flex-col gap-1">
@@ -429,12 +429,12 @@ export default function StudioAiDock({
                         },
                       ]);
                     }}
-                    className="rounded border border-violet-300 bg-white px-2 py-1.5 text-left text-[11px] text-violet-900 transition hover:border-violet-500 disabled:opacity-40"
+                    className="rounded border border-brand-light bg-white px-2 py-1.5 text-left text-[11px] text-brand-dark transition hover:border-brand disabled:opacity-40"
                   >
                     <span className="font-semibold">
                       {actionTitle(s.action)}
                     </span>
-                    <span className="mt-0.5 block text-[10px] text-violet-600">
+                    <span className="mt-0.5 block text-[10px] text-brand">
                       {s.reason}
                     </span>
                   </button>

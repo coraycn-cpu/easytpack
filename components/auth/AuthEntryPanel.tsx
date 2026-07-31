@@ -15,7 +15,7 @@ import {
 } from "@/lib/ai/login-gate";
 import { BRAND_NAME } from "@/lib/brand";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "forgot";
 
 function friendlyAuthError(message: string): string {
   const raw = (message || "").trim();
@@ -86,7 +86,11 @@ export default function AuthEntryPanel({
 
   const configured = useMemo(() => isSupabaseConfigured(), []);
   const [mode, setMode] = useState<Mode>(
-    urlMode === "register" || Boolean(inviteRef) ? "register" : "login",
+    urlMode === "register" || Boolean(inviteRef)
+      ? "register"
+      : urlMode === "forgot"
+        ? "forgot"
+        : "login",
   );
 
   useEffect(() => {
@@ -94,7 +98,7 @@ export default function AuthEntryPanel({
   }, [inviteRef]);
 
   useEffect(() => {
-    if (urlMode === "register" || urlMode === "login") {
+    if (urlMode === "register" || urlMode === "login" || urlMode === "forgot") {
       setMode(urlMode);
     }
   }, [urlMode]);
@@ -124,7 +128,11 @@ export default function AuthEntryPanel({
     }
 
     const trimmed = email.trim();
-    if (!trimmed || !password) {
+    if (!trimmed) {
+      setMessage("请填写邮箱。");
+      return;
+    }
+    if (mode !== "forgot" && !password) {
       setMessage("请填写邮箱和密码。");
       return;
     }
@@ -133,6 +141,16 @@ export default function AuthEntryPanel({
     let willEnter = false;
     try {
       const supabase = createClient();
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/account?reset=1")}`,
+        });
+        if (error) throw error;
+        setOkTip(
+          "重置邮件已发送（若该邮箱已注册）。请到邮箱点链接，然后在用户中心设置新密码。",
+        );
+        return;
+      }
       if (mode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmed,
@@ -201,12 +219,18 @@ export default function AuthEntryPanel({
       )}
 
       <h2 className="text-2xl font-bold text-foreground">
-        {mode === "login" ? "欢迎回来" : "创建账号"}
+        {mode === "login"
+          ? "欢迎回来"
+          : mode === "forgot"
+            ? "重置密码"
+            : "创建账号"}
       </h2>
       <p className="mt-1 text-sm text-muted">
         {mode === "login"
           ? `登录后继续使用 ${BRAND_NAME}`
-          : `注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
+          : mode === "forgot"
+            ? "输入注册邮箱，我们会发重置链接给你"
+            : `注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
       </p>
 
       {mode === "register" && !inviteRef ? (
@@ -234,6 +258,7 @@ export default function AuthEntryPanel({
         </div>
       )}
 
+      {mode !== "forgot" ? (
       <div className="mt-5 flex gap-1 rounded-[var(--radius-sm)] border border-border bg-background p-1">
         <button
           type="button"
@@ -268,6 +293,20 @@ export default function AuthEntryPanel({
           注册
         </button>
       </div>
+      ) : (
+        <button
+          type="button"
+          disabled={showBusy}
+          onClick={() => {
+            setMode("login");
+            setMessage(null);
+            setOkTip(null);
+          }}
+          className="pf-btn-text mt-5 text-sm"
+        >
+          ← 返回登录
+        </button>
+      )}
 
       <form
         onSubmit={(e) => void onSubmit(e)}
@@ -301,10 +340,27 @@ export default function AuthEntryPanel({
             />
           </div>
         </div>
+        {mode !== "forgot" ? (
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">
-            密码（至少 6 位）
-          </label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="block text-sm font-medium text-foreground">
+              密码{mode === "register" ? "（至少 6 位）" : ""}
+            </label>
+            {mode === "login" ? (
+              <button
+                type="button"
+                disabled={showBusy}
+                onClick={() => {
+                  setMode("forgot");
+                  setMessage(null);
+                  setOkTip(null);
+                }}
+                className="pf-btn-text text-xs"
+              >
+                忘记密码？
+              </button>
+            ) : null}
+          </div>
           <div className="relative">
             <span
               className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted"
@@ -345,6 +401,7 @@ export default function AuthEntryPanel({
             </button>
           </div>
         </div>
+        ) : null}
 
         {message && <p className="text-xs text-danger">{message}</p>}
         {okTip && <p className="text-xs text-emerald-700">{okTip}</p>}
@@ -357,21 +414,28 @@ export default function AuthEntryPanel({
           {showBusy
             ? entering
               ? "正在进入…"
+              : mode === "forgot"
+                ? "发送中…"
+                : mode === "login"
+                  ? "登录中…"
+                  : "注册中…"
+            : mode === "forgot"
+              ? "发送重置邮件"
               : mode === "login"
-                ? "登录中…"
-                : "注册中…"
-            : mode === "login"
-              ? "登录"
-              : REGISTER_CTA_LABEL}
+                ? "登录"
+                : REGISTER_CTA_LABEL}
         </button>
       </form>
 
+      {mode !== "forgot" ? (
       <div className="mt-6 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-border" />
         或
         <span className="h-px flex-1 bg-border" />
       </div>
+      ) : null}
 
+      {mode !== "forgot" ? (
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "login" ? (
           <>
@@ -407,6 +471,7 @@ export default function AuthEntryPanel({
           </>
         )}
       </p>
+      ) : null}
     </div>
   );
 }

@@ -23,7 +23,7 @@ export function FlatFrontChoiceActions({
         type="button"
         disabled={generateLoading}
         onClick={onGenerate}
-        className="w-full rounded-lg bg-violet-600 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+        className="w-full rounded-lg bg-brand py-2 text-xs font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
       >
         {generateLoading ? "生成中…" : "生成平铺图并继续"}
       </button>
@@ -54,7 +54,7 @@ export default function FlatFrontPromptStep({
   generateLoading,
 }: FlatFrontPromptStepProps) {
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+    <div className="rounded-xl border border-brand-light bg-brand-soft p-4">
       <p className="text-sm font-semibold text-slate-800">生成平铺正面主款图？</p>
       <p className="mt-1 text-[11px] leading-snug text-slate-600">
         检测到{photoTypeLabel(intake.photoType)}，建议生成平铺正面便于标注工艺与尺寸。

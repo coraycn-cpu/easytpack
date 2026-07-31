@@ -1,4 +1,5 @@
 import AuthHeaderControls from "@/components/auth/AuthHeaderControls";
+import AiCreditsChip from "@/components/auth/AiCreditsChip";
 import BrandMark from "@/components/brand/BrandMark";
 import Link from "next/link";
 
@@ -20,6 +21,7 @@ export default function AppHeader() {
           >
             用户中心
           </Link>
+          <AiCreditsChip />
           <AuthHeaderControls />
         </nav>
       </div>

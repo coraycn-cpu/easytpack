@@ -15,6 +15,7 @@ import {
   STUDIO_GUEST_BAR_TEXT,
 } from "@/lib/ai/login-gate";
 import StudioAccountChip from "@/components/studio/StudioAccountChip";
+import BrandMark from "@/components/brand/BrandMark";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -163,6 +164,12 @@ export default function StudioTopChrome({
         overlayOpen ? "z-[80]" : "z-40"
       }`}
     >
+      <BrandMark
+        href="/"
+        nameClassName="hidden text-sm leading-none sm:inline"
+        iconClassName="h-6 w-6"
+        className="shrink-0"
+      />
       <div className="relative min-w-0 shrink overflow-visible" ref={menuRef}>
         <button
           type="button"
