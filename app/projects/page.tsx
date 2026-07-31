@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
-import AppSideNav from "@/components/layout/AppSideNav";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import ProjectThumb from "@/components/projects/ProjectThumb";
@@ -269,9 +268,7 @@ export default function ProjectsPage() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
-      <div className="mx-auto flex max-w-6xl">
-        <AppSideNav />
-        <main className="min-w-0 flex-1 px-4 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">项目库</h1>
@@ -626,7 +623,6 @@ export default function ProjectsPage() {
           </>
         )}
       </main>
-      </div>
     </div>
   );
 }

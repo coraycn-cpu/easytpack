@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import AppHeader from "@/components/layout/AppHeader";
-import AppSideNav from "@/components/layout/AppSideNav";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import {
   createClient,
@@ -309,9 +307,7 @@ function AccountPageInner() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
-      <div className="mx-auto flex max-w-5xl">
-        <AppSideNav />
-      <main className="min-w-0 flex-1 px-4 py-8 sm:py-10">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
         {/* 顶栏：身份 + 快捷入口 */}
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -656,7 +652,6 @@ function AccountPageInner() {
           </section>
         </div>
       </main>
-      </div>
     </div>
   );
 }
