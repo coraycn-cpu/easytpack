@@ -7,6 +7,7 @@ import {
 } from "@/lib/project/cloud-sync";
 import { isCloudSyncAuto } from "@/lib/project/sync-preference";
 import { reportCloudSyncResult } from "@/lib/project/sync-status";
+import { sortProjectsByUpdatedAtDesc } from "@/lib/project/library-display";
 import {
   deleteProject as localDelete,
   getProject as localGet,
@@ -22,7 +23,7 @@ export const hybridProjectRepository: ProjectRepository = {
   async list() {
     const local = await listLocalProjectsOnly();
     if (!(await isLoggedInForCloud())) return local;
-    return mergeLocalWithCloud(local);
+    return sortProjectsByUpdatedAtDesc(await mergeLocalWithCloud(local));
   },
 
   async get(id) {

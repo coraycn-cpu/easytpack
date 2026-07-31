@@ -28,7 +28,7 @@ import {
   subscribeCloudSyncStatus,
 } from "@/lib/project/sync-status";
 import type { TechPackProject } from "@/types/project";
-import { RECENT_PROJECTS_LIMIT, shortProjectTitle } from "@/lib/project/library-display";
+import { RECENT_PROJECTS_LIMIT, shortProjectTitle, takeRecentProjects } from "@/lib/project/library-display";
 
 type StudioTopChromeProps = {
   currentProjectId: string;
@@ -70,7 +70,8 @@ export default function StudioTopChrome({
     try {
       const repo = await resolveProjectRepository();
       const list = await repo.list();
-      setProjects(list.slice(0, RECENT_PROJECTS_LIMIT + 1));
+      // 保留完整列表，展示时再按最近更新截取（避免先截断导致顺序错乱）
+      setProjects(list);
     } catch {
       setProjects([]);
     }
@@ -150,9 +151,11 @@ export default function StudioTopChrome({
     }
   };
 
-  const others = projects
-    .filter((p) => p.id !== currentProjectId)
-    .slice(0, RECENT_PROJECTS_LIMIT);
+  const others = takeRecentProjects(
+    projects,
+    RECENT_PROJECTS_LIMIT,
+    currentProjectId,
+  );
   const loginHref = `/?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 

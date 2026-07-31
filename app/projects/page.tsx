@@ -48,6 +48,7 @@ import {
   getProjectLibraryCategory,
   getProjectThumbRef,
   shortProjectTitle,
+  sortProjectsByUpdatedAtDesc,
   studioHrefForProject,
 } from "@/lib/project/library-display";
 
@@ -104,7 +105,7 @@ export default function ProjectsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return projects
+    const list = projects
       .filter((p) =>
         workflowFilter === "all" ? true : p.workflowStatus === workflowFilter,
       )
@@ -118,11 +119,8 @@ export default function ProjectsPage() {
         const cat = getProjectLibraryCategory(p).toLowerCase();
         const style = (p.styleNo || "").toLowerCase();
         return title.includes(q) || cat.includes(q) || style.includes(q);
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
+      });
+    return sortProjectsByUpdatedAtDesc(list);
   }, [projects, workflowFilter, categoryFilter, query]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
