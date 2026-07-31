@@ -33,7 +33,7 @@ function BrandIcon({ className = "" }: { className?: string }) {
   );
 }
 
-/** 前端主 logo：Packflow（slogan 默认不显示） */
+/** 前端主 logo：PackFlow 全称（slogan 默认不显示） */
 export default function BrandMark({
   showSlogan = false,
   href = "/",
@@ -48,7 +48,8 @@ export default function BrandMark({
       {showIcon ? <BrandIcon className={iconClassName} /> : null}
       <span className="inline-flex min-w-0 flex-col">
         <span
-          className={`font-semibold tracking-tight text-zinc-900 ${nameClassName}`}
+          className={`max-w-[14rem] text-left text-[13px] font-semibold leading-snug tracking-tight text-zinc-900 sm:max-w-[18rem] sm:text-sm ${nameClassName}`}
+          title={BRAND_NAME}
         >
           {BRAND_NAME}
         </span>

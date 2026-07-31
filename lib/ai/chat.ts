@@ -4,6 +4,7 @@ import {
   type ChatProjectContext,
 } from "@/lib/ai/chat-context";
 import { AiChatResponseSchema } from "@/types/process";
+import { BRAND_NAME } from "@/lib/brand";
 import { getModel } from "./assist";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -59,7 +60,7 @@ function describeAttachments(images: ChatImageAttachment[]): string {
   return lines.join("\n");
 }
 
-const CHAT_SYSTEM = `你是 EasytPack 版房 AI 助手，只服务「当前这一件/一套」Tech Pack 对应的服装款式。
+const CHAT_SYSTEM = `你是 ${BRAND_NAME} 的版房 AI 助手，只服务「当前这一件/一套」Tech Pack 对应的服装款式。
 
 【数据源 — 硬规则】
 1. 款式本体分析（品类、结构、面料、领口/袖长做法等）：只依据「原始建款信息」与【上传原始参考图】。禁止用背面图、线稿、裁切图、AI 生成图重新定义本款。
