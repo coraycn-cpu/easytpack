@@ -19,6 +19,7 @@ import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
 import {
   FREE_MONTHLY_AI_GIFT,
+  HOME_AI_QUOTA_HINT,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
 import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
@@ -195,7 +196,10 @@ function HomeEntryInner() {
               </span>
             </li>
           </ul>
-          <div className="mt-8 rounded-[var(--radius-sm)] bg-brand-soft/70 px-3 py-3 text-left text-[11px] leading-relaxed text-muted lg:max-w-md">
+          <p className="mt-5 max-w-md rounded-[var(--radius-sm)] border border-brand/20 bg-brand-soft/50 px-3 py-2.5 text-[12px] leading-relaxed text-foreground">
+            {HOME_AI_QUOTA_HINT}
+          </p>
+          <div className="mt-5 rounded-[var(--radius-sm)] bg-brand-soft/70 px-3 py-3 text-left text-[11px] leading-relaxed text-muted lg:max-w-md">
             <p className="font-medium text-foreground">怎么开始</p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4">
               <li>点右侧「新建款式」上传正面图</li>

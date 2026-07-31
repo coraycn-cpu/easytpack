@@ -13,6 +13,11 @@ import {
   FREE_MONTHLY_AI_GIFT,
   REGISTER_CTA_LABEL,
 } from "@/lib/ai/login-gate";
+import {
+  INVITE_MAX_SUCCESS,
+  INVITE_POINTS_CAP,
+  INVITE_REWARD_POINTS,
+} from "@/lib/invite/constants";
 import { BRAND_NAME } from "@/lib/brand";
 
 type Mode = "login" | "register" | "forgot";
@@ -237,13 +242,14 @@ export default function AuthEntryPanel({
         <ul className="mt-4 space-y-1 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-950">
           <li>✓ 每月 {FREE_MONTHLY_AI_GIFT} 点 AI 调用额度</li>
           <li>✓ 云端存档，换设备不丢稿</li>
-          <li>✓ 邀请好友双方再各得 50 分</li>
+          <li>✓ 邀请好友双方再各得 {INVITE_REWARD_POINTS} 分</li>
         </ul>
       ) : null}
       {inviteRef ? (
         <p className="mt-4 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          你正在通过好友邀请注册。注册成功后，双方各得 50
-          积分（邀请人最多可成功邀请 6 人，上限 300 分）。
+          你正在通过好友邀请注册。注册成功后，双方各得 {INVITE_REWARD_POINTS}{" "}
+          积分（邀请人最多可成功邀请 {INVITE_MAX_SUCCESS} 人，上限{" "}
+          {INVITE_POINTS_CAP} 分）。
         </p>
       ) : null}
 

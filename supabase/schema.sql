@@ -179,7 +179,7 @@ create policy "用户可删除自己的款式图"
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
--- ========== 邀请好友注册积分（双方各得 50；每人最多成功邀请 6 人；积分上限 300）==========
+-- ========== 邀请好友注册积分（双方各得 10；每人最多成功邀请 5 人；积分上限 50）==========
 create table if not exists profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -266,7 +266,7 @@ $$;
 revoke all on function ensure_user_profile() from public;
 grant execute on function ensure_user_profile() to authenticated;
 
--- 被邀请人注册后领取：双方各 +50；邀请人最多成功 6 人；积分上限 300
+-- 被邀请人注册后领取：双方各 +10；邀请人最多成功 5 人；积分上限 50
 create or replace function claim_invite_reward(p_code text)
 returns jsonb
 language plpgsql
@@ -279,9 +279,9 @@ declare
   inviter profiles;
   invitee profiles;
   success_count int;
-  reward int := 50;
-  max_success int := 6;
-  points_cap int := 300;
+  reward int := 10;
+  max_success int := 5;
+  points_cap int := 50;
   inviter_before int;
   invitee_before int;
   inviter_gain int;
@@ -322,7 +322,7 @@ begin
     return jsonb_build_object(
       'ok', false,
       'error', 'inviter_limit',
-      'message', '对方邀请名额已满（最多 6 人 / 上限 300 分）'
+      'message', '对方邀请名额已满（最多 5 人 / 上限 50 分）'
     );
   end if;
 
@@ -332,7 +332,7 @@ begin
     return jsonb_build_object(
       'ok', false,
       'error', 'inviter_limit',
-      'message', '对方邀请积分已达上限（300 分）'
+      'message', '对方邀请积分已达上限（50 分）'
     );
   end if;
 
