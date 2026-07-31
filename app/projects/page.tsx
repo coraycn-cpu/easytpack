@@ -390,7 +390,7 @@ export default function ProjectsPage() {
               </>
             ) : (
               <Link
-                href="/login?next=/projects"
+                href="/?mode=login&next=/projects"
                 className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
               >
                 已有账号？去登录

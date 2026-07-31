@@ -152,7 +152,7 @@ export default function StudioTopChrome({
   const others = projects
     .filter((p) => p.id !== currentProjectId)
     .slice(0, RECENT_PROJECTS_LIMIT);
-  const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
+  const loginHref = `/?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 
   const overlayOpen = menuOpen || accountMenuOpen;

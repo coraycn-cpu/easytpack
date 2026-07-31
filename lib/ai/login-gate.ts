@@ -67,7 +67,8 @@ export function buildLoginHref(opts?: {
       ? `${window.location.pathname}${window.location.search}`
       : "/");
   const qs = new URLSearchParams();
-  if (mode === "register") qs.set("mode", "register");
+  qs.set("mode", mode);
   qs.set("next", next);
-  return `/login?${qs.toString()}`;
+  // 进站页已合并登录/注册；旧 /login 仍会重定向到这里
+  return `/?${qs.toString()}`;
 }
