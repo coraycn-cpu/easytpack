@@ -25,12 +25,14 @@ import {
 } from "@/lib/export/filename";
 import { buildTechPackDocument } from "@/lib/export/techpack-document";
 import { exportTechPackXlsx } from "@/lib/export/xlsx";
+import { exportTechPackWordDoc } from "@/lib/export/docx-html";
 import { sortArtboardsForExport } from "@/lib/export/artboard-order";
 import { calcProgress } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import type { TechPackProject } from "@/types/project";
 
 import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
+import BrandMark from "@/components/brand/BrandMark";
 
 /** 分页导出统一用合并标注；分图开关已去掉 */
 const IMAGE_MODE = "merged" as const;
@@ -184,7 +186,7 @@ export default function ExportPage() {
   }, [project]);
 
   const persistHistory = async (
-    kind: "pdf" | "xlsx" | "composite",
+    kind: "pdf" | "xlsx" | "composite" | "word",
     extra?: { pageCount?: number },
   ) => {
     if (!project) return;
@@ -300,6 +302,28 @@ export default function ExportPage() {
       .finally(() => setBusy(null));
   };
 
+  const handleExportWord = () => {
+    if (!displayProject) return;
+    if (exportLocale === "en" && !enOverlay) {
+      window.alert("请先点「AI 英译」，再导出英文版 Word。");
+      return;
+    }
+    if (
+      honestyIssues.length > 0 &&
+      !window.confirm(
+        `检测到可能不适合发给版师的图：\n- ${honestyIssues.join("\n- ")}\n\n仍要继续导出 Word 吗？`,
+      )
+    ) {
+      return;
+    }
+    setBusy("word");
+    void exportTechPackWordDoc(displayProject, displayAnnotatedImages, {
+      locale: exportLocale,
+    })
+      .then(() => persistHistory("word"))
+      .finally(() => setBusy(null));
+  };
+
   const handleDownloadComposite = () => {
     if (!stageCompositeUrl || !project) return;
     if (
@@ -337,12 +361,20 @@ export default function ExportPage() {
         <header className="border-b border-border bg-surface px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
             <div>
-              <Link
-                href={`/project/${id}/studio`}
-                className="pf-btn-text text-xs"
-              >
-                ← 返回画板
-              </Link>
+              <div className="mb-1 flex items-center gap-2">
+                <BrandMark
+                  href="/"
+                  nameClassName="text-sm leading-none"
+                  iconClassName="h-6 w-6"
+                />
+                <span className="text-xs text-muted">/</span>
+                <Link
+                  href={`/project/${id}/studio`}
+                  className="pf-btn-text text-xs"
+                >
+                  返回画板
+                </Link>
+              </div>
               <h1 className="text-lg font-bold text-foreground">
                 导出工艺包
               </h1>
@@ -377,6 +409,18 @@ export default function ExportPage() {
                   : isEn
                     ? "导出 Excel（英文）"
                     : "导出 Excel"}
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={handleExportWord}
+                className="pf-btn-secondary px-3 py-2 text-xs disabled:opacity-40"
+              >
+                {busy === "word"
+                  ? "…"
+                  : isEn
+                    ? "导出 Word（英文）"
+                    : "导出 Word"}
               </button>
               <button
                 type="button"

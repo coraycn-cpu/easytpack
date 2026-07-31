@@ -1334,7 +1334,7 @@ export default function AnnotationCanvas({
               y={displayAnn.y}
               width={displayAnn.width ?? 0}
               height={displayAnn.height ?? 0}
-              stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+              stroke={isSelected ? "#3b82f6" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
               dash={strokeDash}
               fill={`${c}22`}
@@ -1371,7 +1371,7 @@ export default function AnnotationCanvas({
             width={displayAnn.width ?? 0}
             height={displayAnn.height ?? 0}
             cornerRadius={9999}
-            stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+            stroke={isSelected ? "#3b82f6" : isLinkedHighlight ? "#f59e0b" : c}
             strokeWidth={isSelected || isLinkedHighlight ? sw + 2 : sw}
             fill={`${c}22`}
             listening={listening}
@@ -1392,7 +1392,7 @@ export default function AnnotationCanvas({
         const rdx = x2 - x1;
         const rdy = y2 - y1;
         const lineStroke = isSelected
-          ? "#2563eb"
+          ? "#3b82f6"
           : isLinkedHighlight
             ? "#f59e0b"
             : c;
@@ -1472,7 +1472,7 @@ export default function AnnotationCanvas({
           >
             <Line
               points={[0, 0, ldx, ldy]}
-              stroke={isSelected ? "#2563eb" : isLinkedHighlight ? "#f59e0b" : c}
+              stroke={isSelected ? "#3b82f6" : isLinkedHighlight ? "#f59e0b" : c}
               strokeWidth={isSelected || isLinkedHighlight ? sw + 1 : sw}
               dash={ann.dashed ? [8, 5] : undefined}
               hitStrokeWidth={24}
@@ -1787,7 +1787,7 @@ export default function AnnotationCanvas({
                           height={displayH}
                           listening={!isPanActive && !isDrawingMode}
                           draggable={false}
-                          stroke={isActive && imageSelected ? "#2563eb" : isActive ? "#93c5fd" : undefined}
+                          stroke={isActive && imageSelected ? "#3b82f6" : isActive ? "#93c5fd" : undefined}
                           strokeWidth={isActive ? (imageSelected ? 2 : 1) : 0}
                           opacity={isActive ? 1 : 0.92}
                           onTransformEnd={handleImageTransformEnd}
@@ -1867,7 +1867,7 @@ export default function AnnotationCanvas({
                               x={b.x - imageAnchor.x + 14}
                               y={b.y - imageAnchor.y + 14}
                               radius={14}
-                              fill="#2563eb"
+                              fill="#3b82f6"
                             />
                             <Text
                               x={b.x - imageAnchor.x + 14}
@@ -1994,7 +1994,7 @@ export default function AnnotationCanvas({
                     height={imageFit.height}
                     listening={!isDrawingMode && !isPanActive}
                     draggable={false}
-                    stroke={imageSelected ? "#2563eb" : undefined}
+                    stroke={imageSelected ? "#3b82f6" : undefined}
                     strokeWidth={imageSelected ? 2 : 0}
                     onClick={(e) => {
                       if (tool !== "select" || cropSession) return;
@@ -2034,7 +2034,7 @@ export default function AnnotationCanvas({
                         x={b.x - singleImageAnchor.x + 14}
                         y={b.y - singleImageAnchor.y + 14}
                         radius={14}
-                        fill="#2563eb"
+                        fill="#3b82f6"
                       />
                       <Text
                         x={b.x - singleImageAnchor.x + 14}

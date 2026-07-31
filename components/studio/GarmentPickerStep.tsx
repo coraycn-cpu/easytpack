@@ -75,7 +75,7 @@ export default function GarmentPickerStep({
 
   return (
     <div
-      className={`rounded-xl border border-violet-200 bg-violet-50/50 ${
+      className={`rounded-xl border border-brand-light bg-brand-soft ${
         compact ? "p-3" : "p-4"
       }`}
     >
@@ -84,7 +84,7 @@ export default function GarmentPickerStep({
         一个项目对应一个目标款式（单件或套装）。当前为{photoTypeLabel(intake.photoType)}
         ，请选择本次 Tech Pack 要做的款式：
         {willNeedFlatFront && (
-          <span className="mt-1 block text-violet-700">
+          <span className="mt-1 block text-brand-dark">
             确认后可生成平铺正面主款图，或暂不生成直接进入画布；
             {photoTypeLabel(intake.photoType)}原图会保留在参考画板。
             选单件时只会提取该件（例如选短裤不会带上马甲），选整套才会上下装一起生成。
@@ -111,15 +111,15 @@ export default function GarmentPickerStep({
               onClick={() => setSelectedId(g.id)}
               className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
                 active
-                  ? "border-violet-400 bg-white ring-1 ring-violet-200"
+                  ? "border-brand bg-white ring-1 ring-brand-light"
                   : isSet
-                    ? "border-violet-200 bg-violet-50/80 hover:border-violet-300"
-                    : "border-slate-200 bg-white/80 hover:border-violet-200"
+                    ? "border-brand-light bg-brand-soft hover:border-brand-light"
+                    : "border-slate-200 bg-white/80 hover:border-brand-light"
               }`}
             >
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  active ? "border-violet-600 bg-violet-600" : "border-slate-300"
+                  active ? "border-brand bg-brand" : "border-slate-300"
                 }`}
               >
                 {active && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -146,7 +146,7 @@ export default function GarmentPickerStep({
           type="button"
           disabled={!selected}
           onClick={() => confirmGarment()}
-          className="mt-3 w-full rounded-lg bg-violet-600 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+          className="mt-3 w-full rounded-lg bg-brand py-2 text-xs font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
         >
           确认，继续
         </button>

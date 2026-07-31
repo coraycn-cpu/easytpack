@@ -117,7 +117,7 @@ export default function AiAnalysisOverlay({
                     className="h-32 w-32 rounded-xl object-cover shadow-lg ring-2 ring-blue-100"
                   />
                   <div className="absolute inset-0 animate-pulse rounded-xl bg-blue-400/20" />
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-medium text-white">
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-brand px-3 py-0.5 text-[10px] font-medium text-white">
                     参考图
                   </div>
                 </div>
@@ -131,7 +131,7 @@ export default function AiAnalysisOverlay({
               />
             </div>
 
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/80 p-4">
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-brand-soft/80 p-4">
               <span className="text-2xl">{step.icon}</span>
               <div className="min-h-[3rem]">
                 <p className="font-medium text-slate-800">{step.title}</p>
@@ -145,7 +145,7 @@ export default function AiAnalysisOverlay({
                   <div
                     key={s.title}
                     className={`h-1.5 w-8 rounded-full transition-colors ${
-                      i === stepIndex ? "bg-blue-600" : i < stepIndex ? "bg-blue-300" : "bg-slate-200"
+                      i === stepIndex ? "bg-brand" : i < stepIndex ? "bg-brand-light" : "bg-slate-200"
                     }`}
                   />
                 ))}

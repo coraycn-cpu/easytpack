@@ -122,7 +122,7 @@ export default function SizeChartEditor({
               ],
             })
           }
-          className="mt-2 text-blue-600 hover:underline"
+          className="mt-2 text-brand hover:underline"
         >
           + 从模板创建
         </button>
@@ -141,7 +141,7 @@ export default function SizeChartEditor({
           {sampleSize && (
             <span>
               基准码{" "}
-              <span className="font-medium text-blue-600">{sampleSize}</span>
+              <span className="font-medium text-brand">{sampleSize}</span>
             </span>
           )}
         </p>
@@ -150,14 +150,14 @@ export default function SizeChartEditor({
         <button
           type="button"
           onClick={addSize}
-          className="text-blue-600 hover:underline"
+          className="text-brand hover:underline"
         >
           + 尺码
         </button>
         <button
           type="button"
           onClick={addRow}
-          className="text-blue-600 hover:underline"
+          className="text-brand hover:underline"
         >
           + 部位
         </button>
@@ -165,7 +165,7 @@ export default function SizeChartEditor({
           <button
             type="button"
             onClick={onOpenWorkspace}
-            className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+            className="rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
             title="打开大面板：改数字、删行、跳码放码"
           >
             编辑 / 跳码
@@ -185,7 +185,7 @@ export default function SizeChartEditor({
             {chart.sizes.map((s) => (
               <th
                 key={s}
-                className={`px-0.5 py-1 ${s === sampleSize ? "bg-blue-50 text-blue-600" : ""}`}
+                className={`px-0.5 py-1 ${s === sampleSize ? "bg-brand-soft text-brand" : ""}`}
               >
                 <span className="inline-flex items-center gap-0.5">
                   {s}
@@ -274,7 +274,7 @@ export default function SizeChartEditor({
                 {chart.sizes.map((s) => (
                   <td
                     key={s}
-                    className={`px-0.5 py-1 ${s === sampleSize ? "bg-blue-50/60" : ""}`}
+                    className={`px-0.5 py-1 ${s === sampleSize ? "bg-brand-soft/60" : ""}`}
                   >
                     <input
                       value={row.values[s] ?? ""}

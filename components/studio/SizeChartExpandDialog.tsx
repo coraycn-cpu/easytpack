@@ -152,7 +152,7 @@ export default function SizeChartExpandDialog({
                 {sampleSize ? (
                   <>
                     基准码{" "}
-                    <span className="font-medium text-blue-600">{sampleSize}</span>
+                    <span className="font-medium text-brand">{sampleSize}</span>
                   </>
                 ) : (
                   "未设置基准码"
@@ -233,7 +233,7 @@ export default function SizeChartExpandDialog({
           <button
             type="button"
             onClick={applyGrade}
-            className="rounded bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-blue-700"
+            className="rounded bg-brand px-3 py-1.5 text-[11px] font-medium text-white hover:bg-brand-dark"
           >
             按档差跳码
           </button>
@@ -265,7 +265,7 @@ export default function SizeChartExpandDialog({
                   <th
                     key={s}
                     className={`px-1 py-2 text-center ${
-                      s === sampleSize ? "bg-blue-50 text-blue-700" : ""
+                      s === sampleSize ? "bg-brand-soft text-brand-dark" : ""
                     }`}
                   >
                     <div className="inline-flex flex-col items-center gap-0.5">
@@ -357,7 +357,7 @@ export default function SizeChartExpandDialog({
                       return (
                         <td
                           key={s}
-                          className={`px-1 py-1.5 ${isSample ? "bg-blue-50/50" : ""}`}
+                          className={`px-1 py-1.5 ${isSample ? "bg-brand-soft/50" : ""}`}
                         >
                           <input
                             value={val}
@@ -372,7 +372,7 @@ export default function SizeChartExpandDialog({
                               };
                               onChange({ ...chart, rows });
                             }}
-                            className={`w-14 rounded border px-1 py-1.5 text-center outline-none focus:border-blue-400 ${
+                            className={`w-14 rounded border px-1 py-1.5 text-center outline-none focus:border-brand ${
                               isSample
                                 ? "border-blue-200 font-medium text-slate-800"
                                 : isManual

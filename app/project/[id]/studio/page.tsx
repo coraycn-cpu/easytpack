@@ -2468,7 +2468,7 @@ export default function StudioPage() {
   const scale = layout.viewport.scale;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#ececec]">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#f9fafb]">
       {canvasBooting && (
         <StudioBootOverlay
           imageTotal={bootImageTotal}

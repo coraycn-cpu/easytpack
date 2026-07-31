@@ -46,7 +46,7 @@ export default function GuestRegisterNudge({
         {showCta ? (
           <Link
             href={href}
-            className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
+            className="pf-btn-primary shrink-0 px-2.5 py-1 text-[11px]"
           >
             {REGISTER_CTA_LABEL}
           </Link>
@@ -93,7 +93,7 @@ export default function GuestRegisterNudge({
       {showCta ? (
         <Link
           href={href}
-          className="mt-2.5 flex w-full items-center justify-center rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+          className="pf-btn-primary mt-2.5 w-full py-2 text-xs"
         >
           {REGISTER_CTA_LABEL}
         </Link>

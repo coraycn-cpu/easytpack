@@ -80,7 +80,7 @@ function RailButton({
   const tones: Record<string, string> = {
     neutral: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
     primary: "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
-    accent: "border-violet-300 bg-violet-600 text-white hover:bg-violet-700",
+    accent: "border-brand-light bg-brand text-white hover:bg-brand-dark",
     danger: "border-red-200 bg-red-50 text-red-600 hover:bg-red-100",
     success: "border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600",
   };
@@ -462,7 +462,7 @@ export default function ViewRegenerateOverlays({
                     key={chip}
                     type="button"
                     disabled={composerLocked}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50"
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-brand-light hover:bg-brand-soft disabled:opacity-50"
                     onClick={() => {
                       const cur = drafts[composerId] ?? "";
                       const next = cur.trim()
@@ -486,7 +486,7 @@ export default function ViewRegenerateOverlays({
                 }
                 rows={6}
                 disabled={composerLocked}
-                className="mb-3 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-violet-400 disabled:opacity-60"
+                className="mb-3 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand disabled:opacity-60"
               />
               <div className="flex justify-end gap-2">
                 <button
@@ -499,7 +499,7 @@ export default function ViewRegenerateOverlays({
                 <button
                   type="button"
                   disabled={composerLocked || !composerDraft.trim()}
-                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={submitComposer}
                 >
                   {composerBusy ? "生成中…" : "提交并重新生成"}

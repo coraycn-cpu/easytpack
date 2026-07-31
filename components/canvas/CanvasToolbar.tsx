@@ -122,11 +122,11 @@ export default function CanvasToolbar({
     light
       ? `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium transition ${
           active
-            ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
+            ? "bg-white text-brand shadow-sm ring-1 ring-brand-light"
             : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
         }`
       : `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs transition ${
-          active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-700"
+          active ? "bg-brand text-white" : "text-zinc-300 hover:bg-zinc-700"
         }`;
 
   const zoomBtn = light
@@ -136,9 +136,9 @@ export default function CanvasToolbar({
   const aiBtn = (primary?: boolean) =>
     `inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
       primary
-        ? "bg-blue-600 text-white hover:bg-blue-700"
+        ? "bg-brand text-white hover:bg-brand-dark"
         : light
-          ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          ? "border border-blue-200 bg-brand-soft text-brand-dark hover:bg-blue-100"
           : "border border-blue-500/40 bg-blue-950 text-blue-200 hover:bg-blue-900"
     }`;
 

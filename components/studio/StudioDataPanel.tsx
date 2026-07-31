@@ -234,10 +234,10 @@ export default function StudioDataPanel({
             onClick={() => onTabChange(tab)}
             className={`rounded px-2 py-1 text-[11px] font-medium transition ${
               activeTab === tab
-                ? "bg-slate-700 text-white"
+                ? "bg-brand text-white"
                 : highlightTab === tab
-                  ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  ? "bg-brand-soft text-brand-dark ring-1 ring-brand-light"
+                  : "bg-background text-muted hover:bg-brand-soft"
             }`}
           >
             {tab === "process"
@@ -265,6 +265,41 @@ export default function StudioDataPanel({
           <p className="mb-2 rounded-md bg-slate-50 px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
             {COMM_PACK_COPY.annotateAfterAi}
           </p>
+          {(() => {
+            const ab = project.canvas_data.artboards.find(
+              (a) => a.id === project.canvas_data.activeArtboardId,
+            );
+            const layers = ab?.annotations ?? [];
+            if (layers.length === 0) return null;
+            return (
+              <div className="mb-2 rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  图层 · 当前图 {layers.length}
+                </p>
+                <ul className="max-h-28 space-y-0.5 overflow-y-auto">
+                  {layers.map((ann, idx) => {
+                    const selected = selectedAnnIds?.includes(ann.id);
+                    const label =
+                      (ann.text || "").trim() ||
+                      `${getMarkerLabel(idx + 1)} · ${ann.type}`;
+                    return (
+                      <li
+                        key={ann.id}
+                        className={`truncate rounded px-1.5 py-0.5 text-[10px] ${
+                          selected
+                            ? "bg-brand-soft font-medium text-brand-dark"
+                            : "text-muted"
+                        }`}
+                        title={label}
+                      >
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })()}
           <AnnotationActionBar
             selected={selectedAnns}
             mode={selectionMode}
@@ -284,7 +319,7 @@ export default function StudioDataPanel({
             <p className="mb-2 text-[10px] text-slate-400">装饰标注不可关联工艺/尺寸</p>
           )}
           {selectedAnnIds.length === 1 && shapeLinkable && activeTab === "process" && (
-            <p className="mb-2 text-[10px] text-blue-600">勾选工艺行以关联当前区域</p>
+            <p className="mb-2 text-[10px] text-brand">勾选工艺行以关联当前区域</p>
           )}
           {selectedAnnIds.length === 1 && dimensionLinkable && activeTab === "size" && (
             <p className="mb-2 text-[10px] text-emerald-600">勾选尺寸行以关联当前尺寸线</p>
@@ -299,7 +334,7 @@ export default function StudioDataPanel({
                 <button
                   type="button"
                   onClick={() => setProcessExpandOpen(true)}
-                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
                   title="打开大面板编辑工艺"
                 >
                   展开编辑
@@ -332,7 +367,7 @@ export default function StudioDataPanel({
                       isHighlighted
                         ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300"
                         : shapeCount > 0
-                          ? "border-blue-200 bg-blue-50/50 hover:border-blue-300"
+                          ? "border-blue-200 bg-brand-soft/50 hover:border-brand-light"
                           : "border-slate-200 bg-slate-50 hover:border-slate-300"
                     }`}
                   >
@@ -349,7 +384,7 @@ export default function StudioDataPanel({
                       )}
                       <span
                         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                          shapeCount > 0 ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-500"
+                          shapeCount > 0 ? "bg-brand text-white" : "bg-slate-200 text-slate-500"
                         }`}
                       >
                         {getMarkerLabel(i + 1)}
@@ -426,7 +461,7 @@ export default function StudioDataPanel({
                 <button
                   type="button"
                   onClick={() => setBomExpandOpen(true)}
-                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
                   title="打开大面板编辑物料"
                 >
                   展开编辑
@@ -527,7 +562,7 @@ export default function StudioDataPanel({
                 <button
                   type="button"
                   onClick={() => setSizeExpandOpen(true)}
-                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
                   title="打开大面板：改数字、删行、跳码放码"
                 >
                   编辑 / 跳码
@@ -561,7 +596,7 @@ export default function StudioDataPanel({
                 <button
                   type="button"
                   onClick={() => setReviewExpandOpen(true)}
-                  className="shrink-0 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                  className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
                   title="打开大面板编辑评语"
                 >
                   展开编辑
@@ -572,7 +607,7 @@ export default function StudioDataPanel({
                   <button
                     key={chip}
                     type="button"
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600 hover:border-blue-300 hover:bg-blue-50"
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600 hover:border-brand-light hover:bg-brand-soft"
                     onClick={() => {
                       const cur = (project.style_review ?? "").trim();
                       const next = cur.includes(chip)
@@ -601,7 +636,7 @@ export default function StudioDataPanel({
                 rows={10}
                 maxLength={REVIEW_MAX}
                 placeholder={`【款式特点】连帽卫衣，落肩廓形，罗纹收口\n【面料建议】…\n【工艺建议】…\n【注意事项】…`}
-                className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-blue-400"
+                className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-brand"
               />
               <p className="text-right text-[10px] text-slate-400">
                 {(project.style_review ?? "").length}/{REVIEW_MAX} 字

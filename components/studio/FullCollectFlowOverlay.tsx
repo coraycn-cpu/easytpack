@@ -103,7 +103,7 @@ function Shell({
                     alt="本次参考图"
                     className="h-28 w-28 rounded-xl object-cover shadow-lg ring-2 ring-blue-100"
                   />
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-medium text-white">
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-brand px-3 py-0.5 text-[10px] font-medium text-white">
                     参考图
                   </div>
                 </div>
@@ -156,7 +156,7 @@ function LoadingBody({
           style={{ width: `${progress}%` }}
         />
       </div>
-      <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/80 p-4">
+      <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-brand-soft/80 p-4">
         <span className="text-2xl">{icon}</span>
         <div className="min-h-[3rem]">
           <p className="font-medium text-slate-800">{title}</p>
@@ -473,7 +473,7 @@ export default function FullCollectFlowOverlay({
           progress={progress}
         />
         <div className="flex justify-center gap-2">
-          <div className="h-1.5 w-8 rounded-full bg-blue-600" />
+          <div className="h-1.5 w-8 rounded-full bg-brand" />
           <div className="h-1.5 w-8 rounded-full bg-slate-200" />
         </div>
       </Shell>
@@ -535,7 +535,7 @@ export default function FullCollectFlowOverlay({
           <button
             type="button"
             onClick={() => void startDraft(answers)}
-            className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="flex-1 rounded-lg bg-brand py-2.5 text-sm font-medium text-white hover:bg-brand-dark"
           >
             开始生成初稿
           </button>
@@ -567,16 +567,16 @@ export default function FullCollectFlowOverlay({
             key={q.id}
             className={`h-1.5 flex-1 max-w-[2.5rem] rounded-full transition-colors ${
               i < index
-                ? "bg-blue-300"
+                ? "bg-brand-light"
                 : i === index
-                  ? "bg-blue-600"
+                  ? "bg-brand"
                   : "bg-slate-200"
             }`}
           />
         ))}
       </div>
 
-      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/80 p-4">
+      <div className="mb-4 rounded-xl border border-blue-100 bg-brand-soft/80 p-4">
         <p className="text-sm font-medium text-slate-800">
           {current.question}
           {current.required ? <span className="text-red-500"> *</span> : null}
@@ -594,7 +594,7 @@ export default function FullCollectFlowOverlay({
                 }}
                 className={`rounded-full border px-3.5 py-1.5 text-sm transition ${
                   selected === opt.id
-                    ? "border-blue-500 bg-white text-blue-700 shadow-sm"
+                    ? "border-blue-500 bg-white text-brand-dark shadow-sm"
                     : "border-slate-200 bg-white/70 text-slate-600 hover:border-slate-300"
                 }`}
               >
@@ -622,7 +622,7 @@ export default function FullCollectFlowOverlay({
                   }}
                   className={`rounded-full border px-3.5 py-1.5 text-sm transition ${
                     on
-                      ? "border-blue-500 bg-white text-blue-700 shadow-sm"
+                      ? "border-blue-500 bg-white text-brand-dark shadow-sm"
                       : "border-slate-200 bg-white/70 text-slate-600 hover:border-slate-300"
                   }`}
                 >
@@ -640,7 +640,7 @@ export default function FullCollectFlowOverlay({
               setTextDraft(e.target.value);
               setLocalError(null);
             }}
-            className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400"
+            className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
             placeholder="简短回答即可"
           />
         ) : null}
@@ -662,7 +662,7 @@ export default function FullCollectFlowOverlay({
         <button
           type="button"
           onClick={goNext}
-          className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+          className="flex-1 rounded-lg bg-brand py-2.5 text-sm font-medium text-white hover:bg-brand-dark"
         >
           {index + 1 >= total ? "下一步" : "下一题"}
         </button>

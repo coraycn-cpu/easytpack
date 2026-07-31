@@ -73,7 +73,7 @@ export default function SizeChartAiDialog({
                 sampleSize: value.sampleSize.trim(),
               })
             }
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-40"
           >
             开始分析
           </button>

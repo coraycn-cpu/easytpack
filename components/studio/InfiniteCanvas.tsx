@@ -256,7 +256,7 @@ export default function InfiniteCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden bg-[#ececec] select-none"
+      className="relative h-full w-full overflow-hidden bg-[#f9fafb] select-none"
       style={{
         cursor: isPanning || spaceDown ? "grabbing" : "default",
         backgroundImage: "radial-gradient(circle, #b0b0b0 1px, transparent 1px)",
