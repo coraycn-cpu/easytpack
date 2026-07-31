@@ -542,9 +542,11 @@ export default function AnnotationCanvas({
   const stickyStageRef = useRef<StageBounds | null>(null);
   const stickyResetKey =
     multiArtboards?.map((a) => a.id).join("|") || imageUrl || "";
-  useEffect(() => {
+  const stickyResetKeyRef = useRef(stickyResetKey);
+  if (stickyResetKeyRef.current !== stickyResetKey) {
+    stickyResetKeyRef.current = stickyResetKey;
     stickyStageRef.current = null;
-  }, [stickyResetKey]);
+  }
   const studioBounds = fixedChrome
     ? multiMode && artboardSlots && multiArtboards
       ? computeMultiStudioStageBounds({
