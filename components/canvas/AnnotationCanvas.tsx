@@ -510,6 +510,38 @@ export default function AnnotationCanvas({
       : CANVAS_H;
   const contentOffsetX = fixedChrome ? studioBounds!.offsetX : 0;
   const contentOffsetY = fixedChrome ? studioBounds!.offsetY : 0;
+
+  /** 舞台 offset 随内容左/上扩展时，补偿视口 pan，避免拖图「弹回」 */
+  const contentOffsetPrevRef = useRef({ x: contentOffsetX, y: contentOffsetY });
+  const viewportRefForOffset = useRef(viewport);
+  const onViewportChangeRefForOffset = useRef(onViewportChange);
+  useEffect(() => {
+    viewportRefForOffset.current = viewport;
+  }, [viewport]);
+  useEffect(() => {
+    onViewportChangeRefForOffset.current = onViewportChange;
+  }, [onViewportChange]);
+  useEffect(() => {
+    if (!fixedChrome) {
+      contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+      return;
+    }
+    const prev = contentOffsetPrevRef.current;
+    const dOx = contentOffsetX - prev.x;
+    const dOy = contentOffsetY - prev.y;
+    contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+    if (dOx === 0 && dOy === 0) return;
+    const vp = viewportRefForOffset.current;
+    const change = onViewportChangeRefForOffset.current;
+    if (!vp || !change) return;
+    const s = vp.scale || 1;
+    change({
+      panX: vp.panX - dOx * s,
+      panY: vp.panY - dOy * s,
+      scale: vp.scale,
+    });
+  }, [contentOffsetX, contentOffsetY, fixedChrome]);
+
   const transparentStage = fixedChrome || splitOnCanvas;
   const baseFit = fixedChrome
     ? 1

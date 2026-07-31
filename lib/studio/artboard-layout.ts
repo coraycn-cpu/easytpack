@@ -35,6 +35,7 @@ export async function computeArtboardSlots(
     const imageFit = await loadImagePlacement(ab.imageDataUrl!);
     const imageOffset = ab.imageOffset ?? { x: 0, y: 0 };
     const origin = ab.canvasOrigin ?? { x: cursorX, y: ARTBOARD_LABEL_HEIGHT };
+    const scaleX = Math.abs(ab.imageScale?.x ?? 1) || 1;
 
     slots.push({
       id: ab.id,
@@ -45,7 +46,7 @@ export async function computeArtboardSlots(
       hasImage: true,
     });
 
-    cursorX = origin.x + imageFit.width + ARTBOARD_GAP;
+    cursorX = origin.x + imageFit.width * scaleX + ARTBOARD_GAP;
     done += 1;
     options?.onProgress?.(done, total);
   }
@@ -63,9 +64,11 @@ export function artboardImageLayoutKey(artboards: Artboard[]): string {
         : "0";
       const ox = a.imageOffset?.x ?? 0;
       const oy = a.imageOffset?.y ?? 0;
+      const sx = a.imageScale?.x ?? 1;
+      const sy = a.imageScale?.y ?? 1;
       const cx = a.canvasOrigin?.x ?? "";
       const cy = a.canvasOrigin?.y ?? "";
-      return `${a.id}:${tip}:${ox}:${oy}:${cx}:${cy}`;
+      return `${a.id}:${tip}:${ox}:${oy}:${sx}:${sy}:${cx}:${cy}`;
     })
     .join("|");
 }
@@ -90,14 +93,19 @@ export function stageToArtboardLocal(
   };
 }
 
-/** 下一画板默认锚点（横向排列） */
-export function nextArtboardOrigin(slots: ArtboardSlot[]) {
+/** 下一画板默认锚点（横向排列；考虑上一张的拉伸宽度） */
+export function nextArtboardOrigin(
+  slots: ArtboardSlot[],
+  artboards?: Pick<Artboard, "id" | "imageScale">[],
+) {
   if (slots.length === 0) {
     return { x: 0, y: ARTBOARD_LABEL_HEIGHT };
   }
   const last = slots[slots.length - 1];
+  const ab = artboards?.find((a) => a.id === last.id);
+  const scaleX = Math.abs(ab?.imageScale?.x ?? 1) || 1;
   return {
-    x: last.origin.x + last.imageFit.width + ARTBOARD_GAP,
+    x: last.origin.x + last.imageFit.width * scaleX + ARTBOARD_GAP,
     y: ARTBOARD_LABEL_HEIGHT,
   };
 }
