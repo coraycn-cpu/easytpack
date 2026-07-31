@@ -7,7 +7,7 @@ import NewStyleEntryCard, {
 } from "@/components/studio/NewStyleEntryCard";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import BrandFooter from "@/components/brand/BrandFooter";
-import { BRAND_NAME } from "@/lib/brand";
+import BrandMark from "@/components/brand/BrandMark";
 import Link from "next/link";
 import {
   createClient,
@@ -107,8 +107,8 @@ export default function CanvasHomePage() {
 
   if (booting) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#ececec] text-sm text-slate-500">
-        正在进入画布…
+      <div className="flex h-screen items-center justify-center bg-background text-sm text-muted">
+        正在进入…
       </div>
     );
   }
@@ -121,18 +121,18 @@ export default function CanvasHomePage() {
       <CanvasGridBackground />
 
       <div className="relative z-10 flex h-full flex-col items-center justify-center gap-4 overflow-y-auto p-4 pb-20">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-7 text-center shadow-sm backdrop-blur">
-          <p className="text-lg font-semibold tracking-tight text-slate-800">
-            {BRAND_NAME}
-          </p>
-          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+        <div className="pf-card w-full max-w-md bg-white/95 px-6 py-7 text-center backdrop-blur">
+          <div className="flex justify-center">
+            <BrandMark href={false} nameClassName="text-xl leading-none" />
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted">
             上传款式图后可先手动标注工艺与尺寸，再导出给版师。
             要用 AI（一键标注、生图）或把稿存到云端，注册即可——免费送每月{" "}
             {FREE_MONTHLY_AI_GIFT} 点 AI。
           </p>
 
-          <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-left text-[11px] leading-relaxed text-slate-600">
-            <p className="font-medium text-slate-700">怎么开始</p>
+          <div className="mt-4 rounded-[var(--radius-sm)] bg-background px-3 py-3 text-left text-[11px] leading-relaxed text-muted">
+            <p className="font-medium text-foreground">怎么开始</p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4">
               <li>点「新建款式」上传正面图</li>
               <li>在画布里用方框/尺寸线/表格手动标注</li>
@@ -145,9 +145,9 @@ export default function CanvasHomePage() {
           <button
             type="button"
             onClick={() => setNewOpen(true)}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700"
+            className="pf-btn-primary mt-5 w-full py-3 text-[15px]"
           >
-            新建款式
+            + 新建款式
           </button>
 
           {configured && !loggedIn ? (
@@ -155,13 +155,13 @@ export default function CanvasHomePage() {
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Link
                   href={buildLoginHref({ mode: "register", next: "/" })}
-                  className="flex min-h-11 items-center justify-center rounded-xl bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700"
+                  className="pf-btn-primary min-h-11 px-3 py-2.5 text-sm"
                 >
                   {REGISTER_CTA_LABEL}
                 </Link>
                 <Link
                   href={buildLoginHref({ mode: "login", next: "/" })}
-                  className="flex min-h-11 items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-3 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                  className="pf-btn-secondary min-h-11 px-3 py-2.5 text-sm"
                 >
                   {LOGIN_CTA_LABEL}
                 </Link>
@@ -171,14 +171,14 @@ export default function CanvasHomePage() {
           ) : null}
 
           {loggedIn ? (
-            <div className="mt-5 border-t border-slate-100 pt-4 text-left">
+            <div className="mt-5 border-t border-border pt-4 text-left">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-medium text-slate-500">
+                <p className="text-[11px] font-medium text-muted">
                   最近更新（{RECENT_PROJECTS_LIMIT} 个）
                 </p>
                 <Link
                   href="/projects"
-                  className="text-[11px] font-medium text-blue-600 hover:underline"
+                  className="pf-btn-text text-[11px] font-medium"
                 >
                   查看全部项目 →
                 </Link>
@@ -189,7 +189,7 @@ export default function CanvasHomePage() {
                     <li key={p.id}>
                       <Link
                         href={studioHrefForProject(p)}
-                        className="block truncate rounded-lg px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                        className="block truncate rounded-[var(--radius-sm)] px-2.5 py-2 text-xs text-foreground hover:bg-brand-soft hover:text-brand"
                         title={p.title}
                       >
                         {shortProjectTitle(p.title, 20)}
@@ -198,7 +198,7 @@ export default function CanvasHomePage() {
                   ))}
                 </ul>
               ) : (
-                <p className="rounded-lg bg-slate-50 px-3 py-3 text-[11px] text-slate-500">
+                <p className="rounded-[var(--radius-sm)] bg-background px-3 py-3 text-[11px] text-muted">
                   还没有项目。点上方「新建款式」开始；若已在其它设备做过，打开「查看全部项目」点「从云端拉取」。
                 </p>
               )}

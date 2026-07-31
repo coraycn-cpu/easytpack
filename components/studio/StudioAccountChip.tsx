@@ -176,7 +176,7 @@ export default function StudioAccountChip({
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="flex max-w-[16rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-left hover:bg-slate-50 sm:max-w-[20rem]"
+        className="flex max-w-[16rem] items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-1 text-left hover:bg-brand-soft sm:max-w-[20rem]"
         title={
           summary && !summary.paused
             ? `本月 AI 已用 ${summary.used} / 上限 ${summary.limit} 点`

@@ -358,14 +358,14 @@ export default function StudioAiDock({
   return (
     <div className="pointer-events-none absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center">
       <div
-        className={`pointer-events-auto mb-2 flex h-[min(460px,calc(100vh-12rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-[#2563eb] bg-white shadow-lg transition-all duration-200 ease-out ${
+        className={`pointer-events-auto mb-2 flex h-[min(460px,calc(100vh-12rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-[var(--brand)] bg-white shadow-lg transition-all duration-200 ease-out ${
           open
             ? "translate-y-0 opacity-100"
             : "pointer-events-none translate-y-2 opacity-0"
         }`}
         aria-hidden={!open}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#2563eb] bg-[#2563eb] px-3 py-2 text-white">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--brand)] bg-[var(--brand)] px-3 py-2 text-white">
           <div>
             <p className="text-xs font-semibold">版房 AI 助手</p>
             <p className="text-[10px] opacity-80">本款答疑 · 改工艺包</p>
@@ -390,7 +390,7 @@ export default function StudioAiDock({
               <div
                 className={`max-w-[90%] rounded-md px-2 py-1.5 text-[11px] leading-relaxed ${
                   m.role === "user"
-                    ? "bg-[#2563eb] text-white"
+                    ? "bg-[var(--brand)] text-white"
                     : "border border-[#e2e8f0] bg-[#f8fafc] text-[#334155]"
                 }`}
               >
@@ -485,13 +485,13 @@ export default function StudioAiDock({
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
               placeholder="说说你想怎么改…"
               disabled={loading || disabled}
-              className="min-w-0 flex-1 rounded border border-[#cbd5e1] px-2 py-1.5 text-xs outline-none focus:border-[#2563eb] disabled:bg-slate-50"
+              className="min-w-0 flex-1 rounded border border-[#cbd5e1] px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)] disabled:bg-slate-50"
             />
             <button
               type="button"
               disabled={loading || disabled || !input.trim()}
               onClick={send}
-              className="shrink-0 rounded border border-[#2563eb] bg-[#2563eb] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              className="pf-btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-40"
             >
               {loading ? "…" : "发送"}
             </button>

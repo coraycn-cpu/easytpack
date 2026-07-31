@@ -321,7 +321,7 @@ export default function ExportPage() {
 
   if (!project || !displayProject) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
         加载中…
       </div>
     );
@@ -334,19 +334,19 @@ export default function ExportPage() {
   return (
     <>
       <div className="print:hidden">
-        <header className="border-b border-zinc-200 bg-white px-4 py-3">
+        <header className="border-b border-border bg-surface px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
             <div>
               <Link
                 href={`/project/${id}/studio`}
-                className="text-xs text-zinc-400 hover:text-zinc-600"
+                className="pf-btn-text text-xs"
               >
                 ← 返回画板
               </Link>
-              <h1 className="text-lg font-semibold text-zinc-900">
+              <h1 className="text-lg font-bold text-foreground">
                 导出工艺包
               </h1>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted">
                 {styleExportBasename(project)} · 完成度 {progress}%
                 {rendering ? " · 正在生成图…" : ""}
                 {pageCount ? ` · ${pageCount} 页` : ""}
@@ -358,7 +358,7 @@ export default function ExportPage() {
                 type="button"
                 disabled={rendering || busy !== null}
                 onClick={handleExportPdf}
-                className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                className="pf-btn-primary px-3 py-2 text-xs disabled:opacity-40"
               >
                 {busy === "pdf"
                   ? "…"
@@ -370,7 +370,7 @@ export default function ExportPage() {
                 type="button"
                 disabled={busy !== null}
                 onClick={handleExportXlsx}
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50 disabled:opacity-40"
+                className="pf-btn-secondary px-3 py-2 text-xs disabled:opacity-40"
               >
                 {busy === "xlsx"
                   ? "…"
@@ -382,7 +382,7 @@ export default function ExportPage() {
                 type="button"
                 disabled={!stageCompositeUrl || rendering || busy !== null}
                 onClick={handleDownloadComposite}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+                className="rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-3 py-2 text-xs font-medium text-brand-dark hover:bg-brand-light/40 disabled:opacity-40"
               >
                 {busy === "composite" ? "…" : "下载合拼大图"}
               </button>
