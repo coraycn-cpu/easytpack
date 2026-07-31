@@ -132,13 +132,13 @@ export default function AuthHeaderControls() {
     <div className="flex items-center gap-1.5">
       <Link
         href={buildLoginHref({ mode: "login", next: "/" })}
-        className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+        className="pf-btn-secondary px-2.5 py-1 text-xs"
       >
         登录
       </Link>
       <Link
         href={buildLoginHref({ mode: "register", next: "/" })}
-        className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700"
+        className="pf-btn-primary px-2.5 py-1 text-xs"
         title={`注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
       >
         {REGISTER_CTA_LABEL}

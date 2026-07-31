@@ -27,27 +27,27 @@ export default function BusyOverlay({
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white px-6 py-6 shadow-xl">
+      <div className="pf-card mx-4 w-full max-w-sm px-6 py-6">
         <div className="mb-4 flex items-center gap-3">
           <span
-            className="inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
+            className="inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
             aria-hidden
           />
           <div>
-            <p className="text-sm font-medium text-slate-900">{title}</p>
+            <p className="text-sm font-medium text-foreground">{title}</p>
             {subtitle ? (
-              <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
                 {subtitle}
               </p>
             ) : null}
           </div>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-1.5 overflow-hidden rounded-full bg-background">
           {indeterminate ? (
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-brand" />
           ) : (
             <div
-              className="h-full rounded-full bg-blue-600 transition-[width] duration-300 ease-out"
+              className="h-full rounded-full bg-brand transition-[width] duration-300 ease-out"
               style={{ width }}
             />
           )}

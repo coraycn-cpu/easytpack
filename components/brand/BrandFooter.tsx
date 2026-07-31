@@ -15,11 +15,11 @@ export default function BrandFooter({ className = "" }: BrandFooterProps) {
         href={BRAND_SITE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs font-medium tracking-wide text-slate-600 hover:text-slate-900"
+        className="text-xs font-medium tracking-wide text-muted hover:text-brand"
       >
         {BRAND_SITE}
       </a>
-      <p className="mt-1 text-[10px] leading-snug text-slate-400">
+      <p className="mt-1 text-[10px] leading-snug text-muted/80">
         {BRAND_SLOGAN}
       </p>
     </footer>

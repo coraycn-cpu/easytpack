@@ -152,14 +152,14 @@ export default function StudioTopChrome({
   const others = projects
     .filter((p) => p.id !== currentProjectId)
     .slice(0, RECENT_PROJECTS_LIMIT);
-  const loginHref = `/login?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
+  const loginHref = `/?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
 
   const overlayOpen = menuOpen || accountMenuOpen;
 
   return (
     <div
-      className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-[#cbd5e1] bg-white px-3 py-1.5 ${
+      className={`relative flex shrink-0 items-center gap-2 overflow-visible border-b border-border bg-surface px-3 py-1.5 ${
         overlayOpen ? "z-[80]" : "z-40"
       }`}
     >
@@ -167,25 +167,25 @@ export default function StudioTopChrome({
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex max-w-[10rem] items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-slate-50 sm:max-w-[14rem]"
+          className="flex max-w-[10rem] items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left hover:bg-brand-soft sm:max-w-[14rem]"
           title="切换项目"
           aria-expanded={menuOpen}
         >
-          <span className="truncate text-sm font-semibold text-slate-800">
+          <span className="truncate text-sm font-semibold text-foreground">
             {projectTitle?.trim() || "未命名款式"}
           </span>
-          <span className="shrink-0 text-[10px] text-slate-400">
+          <span className="shrink-0 text-[10px] text-muted">
             {menuOpen ? "▴" : "▾"}
           </span>
         </button>
         {menuOpen && (
-          <div className="absolute left-0 top-full z-[60] mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-            <p className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500">
+          <div className="absolute left-0 top-full z-[60] mt-1 w-64 overflow-hidden rounded-[var(--radius-sm)] border border-border bg-surface shadow-lg">
+            <p className="border-b border-border bg-background px-3 py-1.5 text-[10px] font-medium text-muted">
               最近更新（最多 {RECENT_PROJECTS_LIMIT} 个）
             </p>
             <ul className="max-h-56 overflow-y-auto py-1">
               <li>
-                <span className="block truncate bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800">
+                <span className="block truncate bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-dark">
                   当前 · {projectTitle?.trim() || "本款"}
                 </span>
               </li>
@@ -197,7 +197,7 @@ export default function StudioTopChrome({
                         ? `/project/${p.id}/studio?fullCollect=1`
                         : `/project/${p.id}/studio`
                     }
-                    className="block truncate px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                    className="block truncate px-3 py-1.5 text-xs text-foreground hover:bg-brand-soft hover:text-brand"
                     onClick={() => setMenuOpen(false)}
                     title={p.title}
                   >
@@ -206,14 +206,14 @@ export default function StudioTopChrome({
                 </li>
               ))}
               {others.length === 0 && (
-                <li className="px-3 py-1.5 text-[11px] text-slate-400">
+                <li className="px-3 py-1.5 text-[11px] text-muted">
                   暂无其它最近项目
                 </li>
               )}
             </ul>
             <Link
               href="/projects"
-              className="block border-t border-slate-100 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50"
+              className="block border-t border-border px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft"
               onClick={() => setMenuOpen(false)}
             >
               查看全部项目（项目库）→
@@ -237,10 +237,10 @@ export default function StudioTopChrome({
       <div className="flex shrink-0 items-center gap-1.5">
         {/* 同步 + 自动：合并成一个控件，少占宽度 */}
         <div
-          className={`inline-flex items-center overflow-hidden rounded-md border ${
+          className={`inline-flex items-center overflow-hidden rounded-[var(--radius-sm)] border ${
             syncMode === "auto"
-              ? "border-blue-200 bg-blue-50"
-              : "border-slate-200 bg-white"
+              ? "border-brand-light bg-brand-soft"
+              : "border-border bg-surface"
           }`}
           title={
             syncMode === "auto"
@@ -254,15 +254,15 @@ export default function StudioTopChrome({
             onClick={() => void handleSync()}
             className={`px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${
               syncMode === "auto"
-                ? "text-blue-800 hover:bg-blue-100"
-                : "text-slate-700 hover:bg-slate-50"
+                ? "text-brand-dark hover:bg-brand-light/40"
+                : "text-foreground hover:bg-background"
             }`}
           >
             {syncBusy ? "同步中…" : "同步"}
           </button>
           <span
             className={`h-4 w-px shrink-0 ${
-              syncMode === "auto" ? "bg-blue-200" : "bg-slate-200"
+              syncMode === "auto" ? "bg-brand-light" : "bg-border"
             }`}
             aria-hidden
           />
@@ -283,13 +283,13 @@ export default function StudioTopChrome({
             }}
             className={`flex items-center gap-1.5 px-2 py-1 text-[11px] disabled:opacity-50 ${
               syncMode === "auto"
-                ? "text-blue-800 hover:bg-blue-100"
-                : "text-slate-600 hover:bg-slate-50"
+                ? "text-brand-dark hover:bg-brand-light/40"
+                : "text-muted hover:bg-background"
             }`}
           >
             <span
               className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition ${
-                syncMode === "auto" ? "bg-blue-600" : "bg-slate-300"
+                syncMode === "auto" ? "bg-brand" : "bg-zinc-300"
               }`}
               aria-hidden
             >
@@ -304,9 +304,9 @@ export default function StudioTopChrome({
         </div>
 
         {!ready ? (
-          <span className="px-1 text-[11px] text-slate-300">…</span>
+          <span className="px-1 text-[11px] text-muted">…</span>
         ) : !configured ? (
-          <span className="hidden text-[11px] text-slate-400 sm:inline">
+          <span className="hidden text-[11px] text-muted sm:inline">
             本机模式
           </span>
         ) : email ? (
@@ -320,7 +320,7 @@ export default function StudioTopChrome({
         ) : (
           <Link
             href={loginHref}
-            className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-zinc-700"
+            className="pf-btn-primary px-2.5 py-1 text-[11px]"
             title={STUDIO_GUEST_BAR_TEXT}
           >
             {REGISTER_CTA_LABEL}

@@ -266,13 +266,13 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-900">项目库</h1>
-            <p className="mt-1 text-sm text-zinc-500">
+            <h1 className="text-2xl font-bold text-foreground">项目库</h1>
+            <p className="mt-1 text-sm text-muted">
               {cloudLoggedIn
                 ? `云端 + 本机 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`
                 : `本机保存 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
@@ -282,14 +282,14 @@ export default function ProjectsPage() {
           </div>
           <Link
             href="/"
-            className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="pf-btn-primary shrink-0 px-4 py-2 text-sm"
           >
             + 新建款式
           </Link>
         </div>
 
-        <details className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-600">
-          <summary className="cursor-pointer font-medium text-zinc-800">
+        <details className="pf-card mb-4 px-4 py-3 text-xs text-muted">
+          <summary className="cursor-pointer font-medium text-foreground">
             本机存储与备份（点击展开）
           </summary>
           <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
@@ -340,9 +340,9 @@ export default function ProjectsPage() {
           </div>
         </details>
 
-        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-950">
-          <p className="font-medium">云端同步</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
+        <div className="mb-4 rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-4 py-3 text-xs text-foreground">
+          <p className="font-medium text-brand-dark">云端同步</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted">
             {cloudLoggedIn
               ? syncMode === "auto"
                 ? "当前：自动同步。登录与保存时会尽量传到云端。"
@@ -390,7 +390,7 @@ export default function ProjectsPage() {
               </>
             ) : (
               <Link
-                href="/login?next=/projects"
+                href="/?mode=login&next=/projects"
                 className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
               >
                 已有账号？去登录
@@ -408,20 +408,20 @@ export default function ProjectsPage() {
           <p className="mb-3 text-xs text-emerald-700">{cacheNote}</p>
         ) : null}
 
-        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="pf-card mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索标题 / 分类 / 款号"
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 outline-none ring-blue-200 focus:ring-2 sm:max-w-xs"
+            className="pf-input px-3 py-2 text-sm sm:max-w-xs"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[11px] text-zinc-500">分类</label>
+            <label className="text-[11px] text-muted">分类</label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700"
+              className="pf-input w-auto px-2 py-1.5 text-xs"
             >
               <option value="all">全部分类</option>
               <option value={LIBRARY_UNCATEGORIZED}>
@@ -449,10 +449,10 @@ export default function ProjectsPage() {
               key={key}
               type="button"
               onClick={() => setWorkflowFilter(key)}
-              className={`rounded-full px-3 py-1 text-xs ${
+              className={`rounded-[var(--radius-sm)] px-3 py-1 text-xs font-medium ${
                 workflowFilter === key
-                  ? "bg-zinc-900 text-white"
-                  : "border border-zinc-200 bg-white text-zinc-600"
+                  ? "bg-brand text-white"
+                  : "border border-border bg-surface text-muted hover:bg-brand-soft hover:text-brand"
               }`}
             >
               {label}
@@ -461,9 +461,9 @@ export default function ProjectsPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-white py-16 text-center text-sm text-zinc-400">
+          <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
             没有符合条件的项目。{" "}
-            <Link href="/" className="text-blue-600 hover:underline">
+            <Link href="/" className="pf-btn-text">
               去新建款式
             </Link>
           </div>
@@ -476,10 +476,10 @@ export default function ProjectsPage() {
                 return (
                   <article
                     key={p.id}
-                    className="group overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:border-zinc-300 hover:shadow"
+                    className="pf-card group overflow-hidden transition hover:border-brand-light hover:shadow-md"
                   >
                     <Link href={href} className="block">
-                      <div className="aspect-[4/5] overflow-hidden bg-slate-50">
+                      <div className="aspect-[4/5] overflow-hidden bg-background">
                         <ProjectThumb
                           imageRef={getProjectThumbRef(p)}
                           title={p.title}
@@ -488,12 +488,12 @@ export default function ProjectsPage() {
                       </div>
                       <div className="space-y-1 px-3 pb-2 pt-2.5">
                         <p
-                          className="truncate text-sm font-semibold text-zinc-900"
+                          className="truncate text-sm font-semibold text-foreground"
                           title={p.title}
                         >
                           {shortProjectTitle(p.title, 18)}
                         </p>
-                        <p className="text-[11px] text-zinc-500">
+                        <p className="text-[11px] text-muted">
                           {cat} · {WORKFLOW_LABELS[p.workflowStatus] ?? p.workflowStatus}{" "}
                           · {calcProgress(p)}%
                         </p>

@@ -32,9 +32,9 @@ const VARIANT_STYLES: Record<
     body: "bg-white",
   },
   ai: {
-    border: "border-[#2563eb]",
-    header: "bg-[#2563eb] text-white",
-    accent: "border-l-4 border-l-[#2563eb]",
+    border: "border-[var(--brand)]",
+    header: "bg-[var(--brand)] text-white",
+    accent: "border-l-4 border-l-[var(--brand)]",
   },
   data: {
     border: "border-[#64748b]",

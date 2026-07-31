@@ -64,8 +64,8 @@ export default function TechPackPreview({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
-        <p className="text-xs text-zinc-500">
+      <div className="pf-card mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <p className="text-xs text-muted">
           A4 {locale === "en" ? "landscape" : "横向"} · {pages.length}{" "}
           {locale === "en" ? "pages" : "页"} · {meta.targetLabel}
           {locale === "en" ? " · EN" : ""}
@@ -75,11 +75,11 @@ export default function TechPackPreview({
             type="button"
             disabled={safeIndex <= 0}
             onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
-            className="rounded border border-zinc-200 px-2 py-1 text-xs disabled:opacity-40"
+            className="pf-btn-secondary px-2 py-1 text-xs disabled:opacity-40"
           >
             {locale === "en" ? "Prev" : "上一页"}
           </button>
-          <span className="min-w-[4.5rem] text-center text-xs font-medium text-zinc-700">
+          <span className="min-w-[4.5rem] text-center text-xs font-medium text-foreground">
             {pages.length ? safeIndex + 1 : 0} / {pages.length}
           </span>
           <button
@@ -88,14 +88,14 @@ export default function TechPackPreview({
             onClick={() =>
               setPageIndex((i) => Math.min(pages.length - 1, i + 1))
             }
-            className="rounded border border-zinc-200 px-2 py-1 text-xs disabled:opacity-40"
+            className="pf-btn-secondary px-2 py-1 text-xs disabled:opacity-40"
           >
             {locale === "en" ? "Next" : "下一页"}
           </button>
         </div>
       </div>
 
-      <div className="w-full overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 p-3 sm:p-4">
+      <div className="w-full overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background p-3 sm:p-4">
         {current ? (
           <TechPackDocPages
             meta={meta}
@@ -104,7 +104,7 @@ export default function TechPackPreview({
             locale={locale}
           />
         ) : (
-          <p className="py-16 text-center text-sm text-zinc-400">
+          <p className="py-16 text-center text-sm text-muted">
             {locale === "en" ? "No pages" : "暂无页面"}
           </p>
         )}

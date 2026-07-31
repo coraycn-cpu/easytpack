@@ -78,18 +78,18 @@ export default function FixedViewSidebar({
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-44 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full min-h-0 w-44 shrink-0 flex-col border-r border-border bg-surface">
       <div
         className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
           locked ? "pointer-events-none opacity-60" : ""
         }`}
       >
         {onNewStyle && (
-          <div className="border-b border-slate-100 p-2.5">
+          <div className="border-b border-border p-2.5">
             <button
               type="button"
               onClick={onNewStyle}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+              className="pf-btn-primary w-full gap-1.5 px-2.5 py-2 text-xs"
             >
               <span className="text-sm leading-none">+</span>
               新建款式
@@ -97,15 +97,15 @@ export default function FixedViewSidebar({
           </div>
         )}
 
-        <div className="border-b border-violet-50 bg-violet-50/40 px-3 py-2">
-          <p className="text-xs font-semibold text-slate-700">AI 生成款式图</p>
-          <p className="mt-0.5 text-[9px] leading-snug text-violet-700/80">
+        <div className="border-b border-brand-light bg-brand-soft/60 px-3 py-2">
+          <p className="text-xs font-semibold text-foreground">AI 生成款式图</p>
+          <p className="mt-0.5 text-[9px] leading-snug text-brand-dark/80">
             {VIEW_IMAGE_AI_GUIDE}
           </p>
-          <p className="mt-0.5 text-[9px] font-medium text-violet-800/90">
+          <p className="mt-0.5 text-[9px] font-medium text-brand-dark/90">
             成功生成一张约消耗 5 点 AI
           </p>
-          <p className="mt-1 text-[9px] leading-snug text-slate-500">
+          <p className="mt-1 text-[9px] leading-snug text-muted">
             {SIDEBAR_AI_SOURCE_HINT}
           </p>
         </div>
@@ -117,16 +117,16 @@ export default function FixedViewSidebar({
               type="button"
               disabled={viewGenerating}
               onClick={() => onGenerateView(preset.kind)}
-              className="flex w-full items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-left text-xs font-medium text-violet-800 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-2.5 py-2 text-left text-xs font-medium text-brand-dark transition hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="text-sm">{preset.icon}</span>
               {viewGenerating ? "生成中…" : preset.label}
             </button>
           ))}
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-            <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-slate-600">
-              <span className="text-sm leading-none text-violet-600">✦</span>
+          <div className="rounded-[var(--radius-sm)] border border-border bg-background p-2">
+            <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-muted">
+              <span className="text-sm leading-none text-brand">✦</span>
               自定义视角（提示词）
             </label>
             <textarea
@@ -135,21 +135,21 @@ export default function FixedViewSidebar({
               placeholder="如：45°斜侧、口袋细节（线稿请用彩图右侧按钮）"
               rows={2}
               disabled={viewGenerating}
-              className="w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-violet-400"
+              className="pf-input resize-none px-2 py-1.5 text-[11px]"
             />
             <button
               type="button"
               disabled={viewGenerating || !customPrompt.trim()}
               onClick={handleCustomGenerate}
-              className="mt-1.5 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[11px] font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="pf-btn-primary mt-1.5 w-full px-2 py-1.5 text-[11px]"
             >
               {viewGenerating ? "生成中…" : "生成自定义视角"}
             </button>
           </div>
         </div>
 
-        <div className="border-t border-slate-100 p-2.5">
-          <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50">
+        <div className="border-t border-border p-2.5">
+          <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-2 text-xs font-medium text-muted transition hover:border-brand-light hover:bg-brand-soft hover:text-brand">
             <span>🖼</span>
             更换主图
             <input
@@ -168,10 +168,10 @@ export default function FixedViewSidebar({
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-slate-200 bg-white">
-        <div className="border-b border-slate-100 bg-slate-50 px-2.5 py-2">
+      <div className="shrink-0 border-t border-border bg-surface">
+        <div className="border-b border-border bg-background px-2.5 py-2">
           <div className="mb-1 flex items-center gap-1">
-            <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
               质量检验
             </p>
             {issueCount > 0 && (
@@ -183,7 +183,7 @@ export default function FixedViewSidebar({
               <button
                 type="button"
                 onClick={() => setComplianceExpanded((v) => !v)}
-                className="shrink-0 text-[9px] text-slate-500 hover:text-slate-700"
+                className="shrink-0 text-[9px] text-muted hover:text-foreground"
               >
                 {complianceExpanded ? "收起" : "展开"}
               </button>
@@ -204,10 +204,10 @@ export default function FixedViewSidebar({
         </div>
 
         <div className="p-2.5">
-          <h1 className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
+          <h1 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
             {projectTitle}
           </h1>
-          <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-slate-500">
+          <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted">
             {category ?? "未分类"}
             {targetGarmentLabel ? ` · 目标款：${targetGarmentLabel}` : ""} · {workflowLabel} ·{" "}
             {progress}%
@@ -217,7 +217,7 @@ export default function FixedViewSidebar({
             <select
               value={workflowStatus}
               onChange={(e) => onWorkflowChange(e.target.value as WorkflowStatus)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-400"
+              className="pf-input px-2 py-1.5 text-xs"
             >
               <option value="draft">草稿</option>
               <option value="in_review">待版师审核</option>
@@ -225,7 +225,7 @@ export default function FixedViewSidebar({
             </select>
             <Link
               href={exportHref}
-              className="flex w-full items-center justify-center rounded-lg bg-blue-600 px-2 py-2 text-xs font-medium text-white transition hover:bg-blue-700"
+              className="pf-btn-primary w-full px-2 py-2 text-xs"
             >
               导出给版师 →
             </Link>

@@ -41,5 +41,5 @@ export function buildInviteRegisterUrl(inviteCode: string, origin?: string): str
   const base =
     origin ||
     (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/login?mode=register&ref=${encodeURIComponent(inviteCode)}`;
+  return `${base}/?mode=register&ref=${encodeURIComponent(inviteCode)}`;
 }
