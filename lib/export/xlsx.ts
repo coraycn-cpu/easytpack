@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { BRAND_NAME } from "@/lib/brand";
 import {
   downloadBlob,
   exportFilename,
@@ -59,7 +60,7 @@ export async function exportTechPackXlsx(
   const en = locale === "en";
   const meta = buildDocMeta(project, locale);
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Packflow";
+  wb.creator = BRAND_NAME;
   wb.created = new Date();
 
   const cover = wb.addWorksheet(en ? "Cover" : "封面信息");

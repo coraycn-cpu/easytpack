@@ -7,7 +7,11 @@ export default function AppHeader() {
   return (
     <header className="border-b border-border bg-surface">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
-        <BrandMark nameClassName="text-lg leading-none" iconClassName="h-7 w-7" />
+        <BrandMark
+          variant="short"
+          nameClassName="text-lg leading-none"
+          iconClassName="h-7 w-7"
+        />
         <nav className="flex shrink-0 items-center gap-1 text-sm sm:gap-2">
           <Link
             href="/projects"

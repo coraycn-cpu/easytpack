@@ -21,7 +21,7 @@ import {
   FREE_MONTHLY_AI_GIFT,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
-import { BRAND_SLOGAN } from "@/lib/brand";
+import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
 import {
   RECENT_PROJECTS_LIMIT,
   shortProjectTitle,
@@ -137,19 +137,19 @@ function HomeEntryInner() {
         <CanvasGridBackground />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col lg:flex-row">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col">
+        <div className="flex flex-1 flex-col lg:flex-row">
         {/* 左侧品牌介绍 */}
-        <section className="relative flex flex-1 flex-col justify-center px-6 py-10 lg:px-12 lg:py-16">
+        <section className="relative flex flex-1 flex-col justify-center px-6 pb-4 pt-10 lg:px-12 lg:pb-6 lg:pt-16">
           <BrandMark
             href={false}
-            nameClassName="text-xl leading-none"
+            nameClassName="max-w-md text-base leading-snug sm:text-lg"
             iconClassName="h-8 w-8"
           />
-          <h1 className="mt-10 max-w-md text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
-            AI 辅助工艺包
-            <span className="text-brand"> 更快生成</span>
+          <h1 className="mt-8 max-w-lg text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
+            {BRAND_NAME}
           </h1>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-muted sm:text-base">
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-muted sm:text-base">
             {BRAND_SLOGAN}
             。从款式图到可沟通的工艺包，注册后还能云端存档、换设备继续。
           </p>
@@ -205,7 +205,7 @@ function HomeEntryInner() {
         </section>
 
         {/* 右侧：登录/注册 或 已登录 + 新建款式 */}
-        <section className="flex flex-1 items-center justify-center px-4 py-8 lg:px-10 lg:py-16">
+        <section className="flex flex-1 items-center justify-center px-4 py-8 lg:px-10 lg:pb-6 lg:pt-16">
           <div className="pf-card w-full max-w-md space-y-5 bg-white/95 p-6 backdrop-blur sm:p-8">
             {loggedIn ? (
               <>
@@ -290,10 +290,11 @@ function HomeEntryInner() {
             )}
           </div>
         </section>
-      </div>
+        </div>
 
-      <div className="relative z-20 px-4 pb-6 pt-2">
-        <BrandFooter />
+        <div className="relative z-20 px-4 pb-8 pt-2 lg:pb-10">
+          <BrandFooter />
+        </div>
       </div>
 
       {newOpen && (

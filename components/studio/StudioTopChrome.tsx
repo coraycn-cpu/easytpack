@@ -166,6 +166,7 @@ export default function StudioTopChrome({
     >
       <BrandMark
         href="/"
+        variant="short"
         nameClassName="hidden text-sm leading-none sm:inline"
         iconClassName="h-6 w-6"
         className="shrink-0"
