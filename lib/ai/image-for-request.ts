@@ -1,6 +1,7 @@
 /**
  * AI 请求用图：体积上限 + 尽量保真压缩。
  * 原则：能发就别压；必须压时先降边长、质量尽量留高，逐步加码。
+ * 支持 data: / idb: / sbstorage: / https（云端签名链）→ 最终得到可发送的 data URL。
  */
 
 /** base64 data URL 字符长度上限（约 1.3MB JPEG），避免 API / JSON 请求体过大 */
@@ -16,6 +17,15 @@ export function pickImageDataUrlForAi(
   }
   return undefined;
 }
+
+export type ResolveAiImageFailureReason =
+  | "missing"
+  | "unreadable"
+  | "too_large";
+
+export type ResolveAiImageResult =
+  | { ok: true; dataUrl: string }
+  | { ok: false; reason: ResolveAiImageFailureReason };
 
 type CompressPass = {
   maxDim: number;
@@ -72,6 +82,29 @@ function encodeJpegFromImage(
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+/** 把 http(s)/blob 拉成 data URL（云端签名图走这条，才能压体积发给 AI） */
+export async function fetchUrlAsDataUrl(
+  url: string,
+): Promise<string | undefined> {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return undefined;
+    const blob = await res.blob();
+    if (!blob || blob.size === 0) return undefined;
+    return await new Promise<string | undefined>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(typeof reader.result === "string" ? reader.result : undefined);
+      };
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 将过大的 data URL 压到 maxLen 以内。
  * 默认走保真优先的多档策略；也可指定单档（兼容旧调用）。
@@ -105,8 +138,6 @@ export async function compressImageDataUrlForAi(
     return result.length <= maxLen ? result : undefined;
   }
 
-  let bestUnderLimit: string | undefined;
-
   for (const pass of AI_COMPRESS_PASSES) {
     let q = pass.quality;
     let result = encodeJpegFromImage(img, pass.maxDim, q);
@@ -122,10 +153,6 @@ export async function compressImageDataUrlForAi(
       // 第一档就成功 → 最保真，直接返回
       return result;
     }
-    // 记录本档最接近的结果，继续更小边长
-    if (result && (!bestUnderLimit || result.length < bestUnderLimit.length)) {
-      // 仍超限时不采用；只作无用占位逻辑清理
-    }
   }
 
   // 兜底：768 + 不低于 0.48，再试一次（极少见的超大图）
@@ -140,34 +167,98 @@ export async function compressImageDataUrlForAi(
   return undefined;
 }
 
+/** 把任意引用尽量解析成 data:（含云端 https 签名链） */
+async function coerceToDataUrl(
+  raw: string,
+): Promise<{ dataUrl?: string; sawCandidate: boolean }> {
+  let url = raw.trim();
+  if (!url) return { sawCandidate: false };
+
+  if (!url.startsWith("data:")) {
+    try {
+      const { resolveImageRef } = await import("@/lib/project/image-idb");
+      const resolved = await resolveImageRef(url);
+      if (resolved) url = resolved;
+    } catch {
+      /* keep url */
+    }
+  }
+
+  if (url.startsWith("data:")) {
+    return { dataUrl: url, sawCandidate: true };
+  }
+
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:")
+  ) {
+    const asData = await fetchUrlAsDataUrl(url);
+    return { dataUrl: asData, sawCandidate: true };
+  }
+
+  // idb:/sbstorage: 解析失败时仍算「有候选但读不出」
+  if (url.startsWith("idb:") || url.startsWith("sbstorage:")) {
+    return { dataUrl: undefined, sawCandidate: true };
+  }
+
+  return { sawCandidate: false };
+}
+
+/**
+ * 选取并在需要时自动压缩，供 AI 请求使用（带失败原因）。
+ */
+export async function resolveImageDataUrlForAiDetailed(
+  ...candidates: (string | null | undefined)[]
+): Promise<ResolveAiImageResult> {
+  let sawCandidate = false;
+  let sawTooLarge = false;
+
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const coerced = await coerceToDataUrl(raw);
+    if (coerced.sawCandidate) sawCandidate = true;
+    const url = coerced.dataUrl;
+    if (!url) continue;
+
+    if (url.length <= MAX_DATA_URL_LEN) {
+      return { ok: true, dataUrl: url };
+    }
+
+    const compressed = await compressImageDataUrlForAi(url);
+    if (compressed) return { ok: true, dataUrl: compressed };
+    sawTooLarge = true;
+  }
+
+  if (!sawCandidate) return { ok: false, reason: "missing" };
+  if (sawTooLarge) return { ok: false, reason: "too_large" };
+  return { ok: false, reason: "unreadable" };
+}
+
+/** 用户可读的准备失败说明 */
+export function resolveAiImageFailureMessage(
+  reason: ResolveAiImageFailureReason,
+): string {
+  switch (reason) {
+    case "too_large":
+      return "参考图过大，已尝试自动压缩仍无法发送。请换一张边长约 2000 以内的图再试";
+    case "unreadable":
+      return "参考图暂时无法读取（可能是云端链接未就绪或已过期）。请稍后重试，或重新打开该项目后再试";
+    case "missing":
+    default:
+      return "缺少可用的参考图，请先确认画板上有图片";
+  }
+}
+
 /**
  * 选取并在需要时自动压缩，供 AI 请求使用。
  * - 已够小：原样发送（不额外压）
  * - 过大：自动多档压缩，优先保边长与清晰度
- * - 支持先把 idb: / sbstorage: 解析成 data:
+ * - 支持先把 idb: / sbstorage: / https 解析成 data:
  */
 export async function resolveImageDataUrlForAi(
   ...candidates: (string | null | undefined)[]
 ): Promise<string | undefined> {
-  for (const raw of candidates) {
-    if (!raw) continue;
-
-    let url = raw;
-    if (!url.startsWith("data:")) {
-      try {
-        const { resolveImageRef } = await import("@/lib/project/image-idb");
-        const resolved = await resolveImageRef(url);
-        if (!resolved?.startsWith("data:")) continue;
-        url = resolved;
-      } catch {
-        continue;
-      }
-    }
-
-    if (url.length <= MAX_DATA_URL_LEN) return url;
-
-    const compressed = await compressImageDataUrlForAi(url);
-    if (compressed) return compressed;
-  }
-  return undefined;
+  const result = await resolveImageDataUrlForAiDetailed(...candidates);
+  return result.ok ? result.dataUrl : undefined;
 }

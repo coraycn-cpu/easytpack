@@ -35,7 +35,11 @@ import {
 } from "@/lib/canvas/region-edit";
 import RegionEditDialog from "@/components/canvas/RegionEditDialog";
 import { isModelPhoto } from "@/lib/ai/garment-scope";
-import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import {
+  resolveImageDataUrlForAi,
+  resolveImageDataUrlForAiDetailed,
+  resolveAiImageFailureMessage,
+} from "@/lib/ai/image-for-request";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
@@ -1355,11 +1359,16 @@ export default function StudioPage() {
           displayCrop: crop,
           displaySize,
         });
-        const imageForAi = await resolveImageDataUrlForAi(patchDataUrl);
-        if (!imageForAi) {
-          setAiMessage("选区图过大，请缩小选区后重试");
+        const prepared = await resolveImageDataUrlForAiDetailed(patchDataUrl);
+        if (!prepared.ok) {
+          setAiMessage(
+            prepared.reason === "too_large"
+              ? "选区图过大，请缩小选区后重试"
+              : resolveAiImageFailureMessage(prepared.reason),
+          );
           return;
         }
+        const imageForAi = prepared.dataUrl;
 
         const res = await fetch("/api/ai/view-image", {
           method: "POST",
@@ -1503,13 +1512,12 @@ export default function StudioPage() {
     }
     setAiMessage(null);
     try {
-      const imageForAi = await resolveImageDataUrlForAi(effectiveSourceUrl);
-      if (!imageForAi) {
-        setAiMessage(
-          "参考图过大，已尝试自动压缩仍无法发送。请换一张边长约 2000 以内的图再试",
-        );
+      const prepared = await resolveImageDataUrlForAiDetailed(effectiveSourceUrl);
+      if (!prepared.ok) {
+        setAiMessage(resolveAiImageFailureMessage(prepared.reason));
         return;
       }
+      const imageForAi = prepared.dataUrl;
       const { width: sourceWidth, height: sourceHeight } =
         await getImageDimensions(effectiveSourceUrl);
 
