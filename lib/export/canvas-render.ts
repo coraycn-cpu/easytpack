@@ -280,8 +280,9 @@ function computeStageExportBounds(
     const scaleY = Math.abs(ab.imageScale?.y ?? 1) || 1;
     const drawW = slot.imageFit.width * scaleX;
     const drawH = slot.imageFit.height * scaleY;
-    const ox = slot.origin.x + slot.imageOffset.x;
-    const oy = slot.origin.y + slot.imageOffset.y;
+    const offset = ab.imageOffset ?? slot.imageOffset;
+    const ox = slot.origin.x + offset.x;
+    const oy = slot.origin.y + offset.y;
     const imageRect: RectBounds = {
       minX: ox + slot.imageFit.x,
       minY: oy + slot.imageFit.y,
@@ -415,8 +416,9 @@ async function renderStudioStageToCanvas(
     const scaleY = Math.abs(ab.imageScale?.y ?? 1) || 1;
     const drawW = slot.imageFit.width * scaleX;
     const drawH = slot.imageFit.height * scaleY;
-    const drawX = offsetX + slot.origin.x + slot.imageOffset.x + slot.imageFit.x;
-    const drawY = offsetY + slot.origin.y + slot.imageOffset.y + slot.imageFit.y;
+    const imgOffset = ab.imageOffset ?? slot.imageOffset;
+    const drawX = offsetX + slot.origin.x + imgOffset.x + slot.imageFit.x;
+    const drawY = offsetY + slot.origin.y + imgOffset.y + slot.imageFit.y;
     ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
     ctx.fillStyle = "#64748b";

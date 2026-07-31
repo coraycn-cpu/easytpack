@@ -54,7 +54,7 @@ export async function computeArtboardSlots(
   return slots;
 }
 
-/** 仅随图片增删/替换变化，标注改动不触发重算 */
+/** 仅随图片增删/替换、画板锚点变化而变；拖动/拉伸不触发重算（offset/scale 以 artboard 为准） */
 export function artboardImageLayoutKey(artboards: Artboard[]): string {
   return artboards
     .map((a) => {
@@ -62,13 +62,9 @@ export function artboardImageLayoutKey(artboards: Artboard[]): string {
       const tip = url
         ? `${url.length}:${url.slice(0, 32)}:${url.slice(-24)}`
         : "0";
-      const ox = a.imageOffset?.x ?? 0;
-      const oy = a.imageOffset?.y ?? 0;
-      const sx = a.imageScale?.x ?? 1;
-      const sy = a.imageScale?.y ?? 1;
       const cx = a.canvasOrigin?.x ?? "";
       const cy = a.canvasOrigin?.y ?? "";
-      return `${a.id}:${tip}:${ox}:${oy}:${sx}:${sy}:${cx}:${cy}`;
+      return `${a.id}:${tip}:${cx}:${cy}`;
     })
     .join("|");
 }

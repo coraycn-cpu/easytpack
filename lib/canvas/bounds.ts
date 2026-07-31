@@ -135,8 +135,9 @@ export function computeMultiStudioStageBounds(input: {
     const ab = input.artboards.find((a) => a.id === slot.id);
     if (!ab) continue;
     const display = artboardDisplaySize(slot.imageFit, ab.imageScale);
-    const ox = slot.origin.x + slot.imageOffset.x;
-    const oy = slot.origin.y + slot.imageOffset.y;
+    const offset = ab.imageOffset ?? slot.imageOffset;
+    const ox = slot.origin.x + offset.x;
+    const oy = slot.origin.y + offset.y;
     content = mergeBounds(content, {
       minX: ox + slot.imageFit.x,
       minY: oy + slot.imageFit.y,
