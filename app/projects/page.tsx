@@ -57,6 +57,8 @@ type WorkflowFilter = "all" | "draft" | "in_review" | "finalized";
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
+  const [listReady, setListReady] = useState(false);
+  const [cloudRefreshing, setCloudRefreshing] = useState(false);
   const [workflowFilter, setWorkflowFilter] = useState<WorkflowFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
@@ -79,11 +81,24 @@ export default function ProjectsPage() {
 
   const refresh = () => {
     void (async () => {
-      const repo = await resolveProjectRepository();
-      setProjects(await repo.list());
+      const { listLocalProjectsOnly } = await import("@/lib/project/storage");
+      const local = await listLocalProjectsOnly();
+      setProjects(local);
+      setListReady(true);
+
+      const loggedIn = await isLoggedInForCloud();
+      setCloudLoggedIn(loggedIn);
+      if (!loggedIn) return;
+
+      setCloudRefreshing(true);
+      try {
+        const { mergeLocalWithCloud } = await import("@/lib/project/cloud-sync");
+        setProjects(await mergeLocalWithCloud(local));
+      } finally {
+        setCloudRefreshing(false);
+      }
     })();
     setStats(getEasytpackStorageStats());
-    void isLoggedInForCloud().then(setCloudLoggedIn);
     setSyncStatus(getCloudSyncStatus());
   };
 
@@ -276,6 +291,7 @@ export default function ProjectsPage() {
                 : `本机保存 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
               {" · "}
               相册式浏览，可分类、删除、分页
+              {cloudRefreshing ? " · 正在同步云端…" : ""}
             </p>
           </div>
           <Link
@@ -458,7 +474,11 @@ export default function ProjectsPage() {
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        {!listReady ? (
+          <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
+            正在加载项目…
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
             没有符合条件的项目。{" "}
             <Link href="/" className="pf-btn-text">
