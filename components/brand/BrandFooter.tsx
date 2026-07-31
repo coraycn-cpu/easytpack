@@ -1,20 +1,27 @@
+import Link from "next/link";
 import {
   BRAND_CONTACT_EMAIL,
   BRAND_SITE,
   BRAND_SITE_URL,
   BRAND_SLOGAN,
 } from "@/lib/brand";
+import { GUIDE_PAGE_PATH } from "@/lib/content/guide-faq";
 
 type BrandFooterProps = {
   className?: string;
+  /** 说明页本身可关掉「功能介绍」自链 */
+  showGuideLink?: boolean;
 };
 
-/** 首页底部：官网 + slogan + 业务联系（全站宣传语只在这里出现一次） */
-export default function BrandFooter({ className = "" }: BrandFooterProps) {
+/** 首页/说明页底部：官网 + slogan + 说明入口 + 业务联系 */
+export default function BrandFooter({
+  className = "",
+  showGuideLink = true,
+}: BrandFooterProps) {
   return (
     <footer
       className={`pointer-events-auto text-center ${className}`}
-      aria-label="品牌信息"
+      aria-label="站点页脚"
     >
       <a
         href={BRAND_SITE_URL}
@@ -27,6 +34,16 @@ export default function BrandFooter({ className = "" }: BrandFooterProps) {
       <p className="mt-1 text-[10px] leading-snug text-muted/80">
         {BRAND_SLOGAN}
       </p>
+      {showGuideLink ? (
+        <p className="mt-2 text-[11px]">
+          <Link
+            href={GUIDE_PAGE_PATH}
+            className="font-medium text-brand hover:text-brand-dark"
+          >
+            功能介绍与使用说明 / FAQ
+          </Link>
+        </p>
+      ) : null}
       <p className="mt-2 text-[11px] leading-relaxed text-muted">
         业务联系：
         <a

@@ -137,9 +137,10 @@ function HomeEntryInner() {
         <CanvasGridBackground />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col lg:flex-row">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col">
+        <div className="flex flex-1 flex-col lg:flex-row">
         {/* 左侧品牌介绍 */}
-        <section className="relative flex flex-1 flex-col justify-center px-6 py-10 lg:px-12 lg:py-16">
+        <section className="relative flex flex-1 flex-col justify-center px-6 pb-4 pt-10 lg:px-12 lg:pb-6 lg:pt-16">
           <BrandMark
             href={false}
             nameClassName="text-xl leading-none"
@@ -205,7 +206,7 @@ function HomeEntryInner() {
         </section>
 
         {/* 右侧：登录/注册 或 已登录 + 新建款式 */}
-        <section className="flex flex-1 items-center justify-center px-4 py-8 lg:px-10 lg:py-16">
+        <section className="flex flex-1 items-center justify-center px-4 py-8 lg:px-10 lg:pb-6 lg:pt-16">
           <div className="pf-card w-full max-w-md space-y-5 bg-white/95 p-6 backdrop-blur sm:p-8">
             {loggedIn ? (
               <>
@@ -290,10 +291,11 @@ function HomeEntryInner() {
             )}
           </div>
         </section>
-      </div>
+        </div>
 
-      <div className="relative z-20 px-4 pb-6 pt-2">
-        <BrandFooter />
+        <div className="relative z-20 px-4 pb-8 pt-2 lg:pb-10">
+          <BrandFooter />
+        </div>
       </div>
 
       {newOpen && (

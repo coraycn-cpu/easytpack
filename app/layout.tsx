@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
+import {
+  BRAND_CONTACT_EMAIL,
+  BRAND_NAME,
+  BRAND_SITE_URL,
+  BRAND_SLOGAN,
+} from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +19,31 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
-  description: BRAND_SLOGAN,
+  metadataBase: new URL(BRAND_SITE_URL),
+  title: {
+    default: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
+    template: `%s · ${BRAND_NAME}`,
+  },
+  description: `${BRAND_SLOGAN}。面向服装从业者，支持手动标注与 AI 辅助生成工艺包；注册可免费试用。业务联系：${BRAND_CONTACT_EMAIL}。`,
+  applicationName: BRAND_NAME,
+  authors: [{ name: BRAND_NAME }],
+  openGraph: {
+    type: "website",
+    locale: "zh_CN",
+    url: "/",
+    siteName: BRAND_NAME,
+    title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
+    description: `${BRAND_SLOGAN}。注册可免费试用。`,
+  },
+  twitter: {
+    card: "summary",
+    title: `${BRAND_NAME} — ${BRAND_SLOGAN}`,
+    description: `${BRAND_SLOGAN}。注册可免费试用。`,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
