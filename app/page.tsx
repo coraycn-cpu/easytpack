@@ -26,6 +26,7 @@ import {
   RECENT_PROJECTS_LIMIT,
   shortProjectTitle,
   studioHrefForProject,
+  takeRecentProjects,
 } from "@/lib/project/library-display";
 
 /**
@@ -129,7 +130,9 @@ function HomeEntryInner() {
   }
 
   const loggedIn = Boolean(email);
-  const recent = loggedIn ? projects.slice(0, RECENT_PROJECTS_LIMIT) : [];
+  const recent = loggedIn
+    ? takeRecentProjects(projects, RECENT_PROJECTS_LIMIT)
+    : [];
 
   return (
     <div className="relative min-h-screen bg-background">

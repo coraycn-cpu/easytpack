@@ -19,6 +19,35 @@ export const LIBRARY_PAGE_SIZE = 12;
 /** 首页 / 顶栏切换：只展示最近更新的条数 */
 export const RECENT_PROJECTS_LIMIT = 5;
 
+/** 按「最近更新」倒序；时间无效时排后，同时间再按创建At、id 稳定排序 */
+export function sortProjectsByUpdatedAtDesc<
+  T extends { id: string; updatedAt: string; createdAt?: string },
+>(projects: T[]): T[] {
+  return [...projects].sort((a, b) => {
+    const tb = Date.parse(b.updatedAt);
+    const ta = Date.parse(a.updatedAt);
+    const nb = Number.isFinite(tb) ? tb : 0;
+    const na = Number.isFinite(ta) ? ta : 0;
+    if (nb !== na) return nb - na;
+    const cb = Date.parse(b.createdAt ?? "");
+    const ca = Date.parse(a.createdAt ?? "");
+    const ncb = Number.isFinite(cb) ? cb : 0;
+    const nca = Number.isFinite(ca) ? ca : 0;
+    if (ncb !== nca) return ncb - nca;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/** 取最近更新的前 N 条（已排除可选 id） */
+export function takeRecentProjects<
+  T extends { id: string; updatedAt: string; createdAt?: string },
+>(projects: T[], limit = RECENT_PROJECTS_LIMIT, excludeId?: string): T[] {
+  const source = excludeId
+    ? projects.filter((p) => p.id !== excludeId)
+    : projects;
+  return sortProjectsByUpdatedAtDesc(source).slice(0, limit);
+}
+
 export function getProjectLibraryCategory(
   project: TechPackProject,
 ): string {

@@ -1,5 +1,6 @@
 import type { Artboard, TechPackProject } from "@/types/project";
 import { toDurableImageRef } from "@/lib/project/cloud-images";
+import { sortProjectsByUpdatedAtDesc } from "@/lib/project/library-display";
 
 /** 云端表一行（字段名与 supabase/schema.sql 对齐） */
 export type TechPackRow = {
@@ -193,7 +194,5 @@ export function mergeProjectsPreferNewer(
   localList.forEach(put);
   cloudList.forEach(put);
 
-  return Array.from(map.values()).sort(
-    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-  );
+  return sortProjectsByUpdatedAtDesc(Array.from(map.values()));
 }
