@@ -60,6 +60,9 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 **自检：** 左侧 **Storage → Buckets** 应能看到 `style-images`。若没有：再跑一遍脚本；或在 Storage 界面新建同名私有桶后，只重跑脚本里 `storage.objects` 的几条 policy。
 
+**已建过库、项目列表「更新」时间全一样？**  
+说明旧触发器在登录同步时把所有工艺包刷成了同一时刻。请再跑一次仓库里的 `supabase/fix-updated-at-trigger.sql`（SQL Editor → 粘贴 → Run）。需要把旧时间清掉时，按该文件末尾注释再执行一行 `update … set updated_at = created_at`。只 Redeploy Vercel **不够**，必须在云端数据库里跑这段 SQL。
+
 ---
 
 ## 第 4 步：打开邮箱注册（方便测试登录）
@@ -150,6 +153,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 | 同步失败黄字提示 | 本机稿还在；检查网络 / RLS / 桶是否存在后重试 |
 | 想改自动/手动 | 「我的项目」→ 云端同步 → 同步方式 |
 | 邀请不加分 / 读档案失败 | 在 Supabase SQL 编辑器重新执行最新 `schema.sql`（含 profiles 段） |
+| 所有项目「更新」时间一模一样 | 在 SQL Editor 执行 `supabase/fix-updated-at-trigger.sql`；可选按文件注释把 `updated_at` 重置为 `created_at` |
 
 ---
 

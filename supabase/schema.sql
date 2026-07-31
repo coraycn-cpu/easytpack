@@ -27,9 +27,14 @@ create table if not exists tech_packs (
 
 create index if not exists tech_packs_user_idx on tech_packs (user_id, updated_at desc);
 
+-- 更新时间：信任应用传入的 updated_at（真实编辑时间）。
+-- 旧版触发器一律 now()，双向同步时会把所有项目改成同一时刻，列表「更新」全挤在一起。
 create or replace function update_updated_at()
 returns trigger as $$
 begin
+  if new.updated_at is not null then
+    return new;
+  end if;
   new.updated_at = now();
   return new;
 end;
