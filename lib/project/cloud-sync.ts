@@ -36,6 +36,10 @@ export type CloudProjectMeta = {
 const LIST_META_SELECT =
   "id, title, status, workflow_status, updated_at, created_at, style_no";
 
+/** 列表合并用：仍含画板/工艺等卡片所需字段，但去掉问卷与导出史以减小体积 */
+const LIST_BODY_SELECT =
+  "id, user_id, style_no, title, category, status, workflow_status, canvas_data, process_items, bom_items, size_chart, intake, consent_quality_pool, finalized_at, created_at, updated_at";
+
 export async function fetchCloudProjectMetas(): Promise<CloudProjectMeta[]> {
   const userId = await currentUserId();
   if (!userId) return [];
@@ -55,7 +59,7 @@ export async function fetchCloudProjects(): Promise<TechPackProject[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("tech_packs")
-    .select("*")
+    .select(LIST_BODY_SELECT)
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -81,24 +85,29 @@ export async function fetchCloudProject(
   return migrateProject(rowToProject(data as TechPackRow));
 }
 
-/** 并行拉取若干完整项目（限制并发，避免打爆网络） */
+/** 按 id 批量拉取列表体（一次 .in，避免 N 次单条请求） */
 async function fetchCloudProjectsByIds(
   ids: string[],
-  concurrency = 4,
 ): Promise<TechPackProject[]> {
   const unique = Array.from(new Set(ids.filter(Boolean)));
   if (unique.length === 0) return [];
+  const userId = await currentUserId();
+  if (!userId) return [];
+  const supabase = createClient();
   const out: TechPackProject[] = [];
-  let i = 0;
-  async function worker() {
-    while (i < unique.length) {
-      const id = unique[i++];
-      const p = await fetchCloudProject(id);
-      if (p) out.push(p);
+  const CHUNK = 40;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("tech_packs")
+      .select(LIST_BODY_SELECT)
+      .eq("user_id", userId)
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      out.push(migrateProject(rowToProject(row as TechPackRow)));
     }
   }
-  const n = Math.min(concurrency, unique.length);
-  await Promise.all(Array.from({ length: n }, () => worker()));
   return out;
 }
 
@@ -199,8 +208,11 @@ export async function mergeLocalWithCloud(
       if (cloudT > localT) needFull.push(m.id);
     }
 
-    // 几乎都要整包时，退回一次 select *
-    if (needFull.length >= Math.max(3, metas.length)) {
+    // 大半都要整包时，一次查询更省
+    if (
+      needFull.length >= metas.length ||
+      needFull.length >= Math.max(8, Math.ceil(metas.length * 0.6))
+    ) {
       const cloud = await fetchCloudProjects();
       return mergeProjectsPreferNewer(localList, cloud);
     }
