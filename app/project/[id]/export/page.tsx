@@ -364,6 +364,7 @@ export default function ExportPage() {
               <div className="mb-1 flex items-center gap-2">
                 <BrandMark
                   href="/"
+                  variant="short"
                   nameClassName="text-sm leading-none"
                   iconClassName="h-6 w-6"
                 />

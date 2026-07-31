@@ -369,7 +369,7 @@ export function CanvasHubChrome({
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4">
       <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur">
-        <BrandMark nameClassName="text-sm text-slate-800" />
+        <BrandMark variant="short" nameClassName="text-sm text-slate-800" />
       </div>
       <div className="pointer-events-auto flex flex-col items-end gap-2">
         <Link

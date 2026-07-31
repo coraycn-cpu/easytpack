@@ -109,7 +109,12 @@ export default function GuidePage() {
 
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-4">
-          <BrandMark href="/" nameClassName="text-base" iconClassName="h-7 w-7" />
+          <BrandMark
+            href="/"
+            variant="short"
+            nameClassName="text-base"
+            iconClassName="h-7 w-7"
+          />
           <nav aria-label="页面导航" className="flex flex-wrap items-center gap-3 text-xs">
             <Link href="/" className="pf-btn-text">
               回首页

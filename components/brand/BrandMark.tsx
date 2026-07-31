@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
+import { BRAND_NAME, BRAND_SHORT_NAME, BRAND_SLOGAN } from "@/lib/brand";
 
 type BrandMarkProps = {
   /**
@@ -10,6 +10,11 @@ type BrandMarkProps = {
   href?: string | false;
   /** 是否显示蓝色 P 图标（默认开） */
   showIcon?: boolean;
+  /**
+   * short：只显示 PackFlow（画布/顶栏）
+   * full：显示产品全称（首页等）
+   */
+  variant?: "full" | "short";
   className?: string;
   nameClassName?: string;
   sloganClassName?: string;
@@ -33,25 +38,31 @@ function BrandIcon({ className = "" }: { className?: string }) {
   );
 }
 
-/** 前端主 logo：PackFlow 全称（slogan 默认不显示） */
+/** 前端主 logo */
 export default function BrandMark({
   showSlogan = false,
   href = "/",
   showIcon = true,
+  variant = "full",
   className = "",
   nameClassName = "",
   sloganClassName = "",
   iconClassName = "h-7 w-7",
 }: BrandMarkProps) {
+  const label = variant === "short" ? BRAND_SHORT_NAME : BRAND_NAME;
   const inner = (
     <span className={`inline-flex min-w-0 items-center gap-2 ${className}`}>
       {showIcon ? <BrandIcon className={iconClassName} /> : null}
       <span className="inline-flex min-w-0 flex-col">
         <span
-          className={`max-w-[14rem] text-left text-[13px] font-semibold leading-snug tracking-tight text-zinc-900 sm:max-w-[18rem] sm:text-sm ${nameClassName}`}
+          className={`font-semibold tracking-tight text-zinc-900 ${
+            variant === "full"
+              ? "max-w-[14rem] text-left text-[13px] leading-snug sm:max-w-[18rem] sm:text-sm"
+              : "text-sm leading-none"
+          } ${nameClassName}`}
           title={BRAND_NAME}
         >
-          {BRAND_NAME}
+          {label}
         </span>
         {showSlogan ? (
           <span
