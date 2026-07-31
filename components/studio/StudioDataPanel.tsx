@@ -12,6 +12,7 @@ import { COMM_PACK_COPY } from "@/lib/studio/region-edit-ux";
 import {
   clearProcessIdFromAnnotations,
   countShapesLinkedToProcess,
+  formatAnnotationLayerLabel,
   getMarkerLabel,
   isLinkableShape,
 } from "@/lib/canvas/part-annotations";
@@ -279,9 +280,11 @@ export default function StudioDataPanel({
                 <ul className="max-h-28 space-y-0.5 overflow-y-auto">
                   {layers.map((ann, idx) => {
                     const selected = selectedAnnIds?.includes(ann.id);
-                    const label =
-                      (ann.text || "").trim() ||
-                      `${getMarkerLabel(idx + 1)} · ${ann.type}`;
+                    const label = formatAnnotationLayerLabel(
+                      ann,
+                      project.process_items,
+                      idx + 1,
+                    );
                     return (
                       <li
                         key={ann.id}
