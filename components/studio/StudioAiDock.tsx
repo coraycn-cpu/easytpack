@@ -21,6 +21,8 @@ import {
   gateAiLogin,
   messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
+import { useLocale } from "@/components/i18n/LocaleProvider";
+import type { Locale } from "@/lib/i18n/locale";
 import { useRouter } from "next/navigation";
 
 type ChatMessage = {
@@ -43,14 +45,17 @@ const ACTION_LABELS: Record<AiChatSuggestedAction, string> = {
   "view-line-art": "生成线稿",
 };
 
-function historyStorageKey(projectId: string) {
-  return `easytpack:chat:${projectId}`;
+function historyStorageKey(locale: Locale, projectId: string) {
+  return `easytpack:chat:${locale}:${projectId}`;
 }
 
-function loadPersistedMessages(projectId: string): ChatMessage[] | null {
+function loadPersistedMessages(
+  locale: Locale,
+  projectId: string,
+): ChatMessage[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(historyStorageKey(projectId));
+    const raw = localStorage.getItem(historyStorageKey(locale, projectId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ChatMessage[];
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
@@ -60,7 +65,11 @@ function loadPersistedMessages(projectId: string): ChatMessage[] | null {
   }
 }
 
-function persistMessages(projectId: string, messages: ChatMessage[]) {
+function persistMessages(
+  locale: Locale,
+  projectId: string,
+  messages: ChatMessage[],
+) {
   if (typeof window === "undefined") return;
   try {
     const slim = messages
@@ -72,7 +81,10 @@ function persistMessages(projectId: string, messages: ChatMessage[]) {
         content,
         changeSummary,
       }));
-    localStorage.setItem(historyStorageKey(projectId), JSON.stringify(slim));
+    localStorage.setItem(
+      historyStorageKey(locale, projectId),
+      JSON.stringify(slim),
+    );
   } catch {
     /* quota */
   }
@@ -96,6 +108,7 @@ export default function StudioAiDock({
   onRunSuggestedAction,
 }: StudioAiDockProps) {
   const router = useRouter();
+  const { locale, t } = useLocale();
   const welcomeText = useMemo(
     () => buildChatWelcomeMessage(project),
     [
@@ -111,16 +124,13 @@ export default function StudioAiDock({
   );
 
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = loadPersistedMessages(project.id);
-    const welcome = {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
       id: "welcome",
       role: "assistant" as const,
       content: buildChatWelcomeMessage(project),
-    };
-    if (saved?.length) return [welcome, ...saved];
-    return [welcome];
-  });
+    },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingHint, setLoadingHint] = useState("AI 正在思考…");
@@ -128,7 +138,9 @@ export default function StudioAiDock({
     Array<{ action: AiChatSuggestedAction; reason: string }>
   >([]);
   const listRef = useRef<HTMLDivElement>(null);
-  const projectIdRef = useRef(project.id);
+  const loadedHistoryKeyRef = useRef<string | null>(null);
+  const skipPersistRef = useRef(false);
+  const historyKey = historyStorageKey(locale, project.id);
 
   const displayStatus = statusText?.trim() || DEFAULT_STATUS;
 
@@ -154,9 +166,10 @@ export default function StudioAiDock({
   );
 
   useEffect(() => {
-    if (projectIdRef.current === project.id) return;
-    projectIdRef.current = project.id;
-    const saved = loadPersistedMessages(project.id);
+    if (loadedHistoryKeyRef.current === historyKey) return;
+    loadedHistoryKeyRef.current = historyKey;
+    skipPersistRef.current = true;
+    const saved = loadPersistedMessages(locale, project.id);
     const welcome = {
       id: "welcome",
       role: "assistant" as const,
@@ -164,7 +177,7 @@ export default function StudioAiDock({
     };
     setMessages(saved?.length ? [welcome, ...saved] : [welcome]);
     setPendingActions([]);
-  }, [project.id, project]);
+  }, [historyKey, locale, project]);
 
   /** 建款分析到达后刷新开场白（不覆盖后续对话） */
   useEffect(() => {
@@ -179,8 +192,12 @@ export default function StudioAiDock({
   }, [welcomeText]);
 
   useEffect(() => {
-    persistMessages(project.id, messages);
-  }, [messages, project.id]);
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false;
+      return;
+    }
+    persistMessages(locale, project.id, messages);
+  }, [locale, messages, project.id]);
 
   useEffect(() => {
     if (open) {
@@ -284,6 +301,7 @@ export default function StudioAiDock({
             history,
             context,
             images,
+            locale,
           }),
         });
         const data = (await res.json()) as AiChatResponse & { error?: string; code?: string };
@@ -338,6 +356,7 @@ export default function StudioAiDock({
       resolvedActiveId,
       activeArtboardName,
       onProjectUpdate,
+      locale,
       router,
     ],
   );
@@ -367,7 +386,7 @@ export default function StudioAiDock({
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--brand)] bg-[var(--brand)] px-3 py-2 text-white">
           <div>
-            <p className="text-xs font-semibold">版房 AI 助手</p>
+            <p className="text-xs font-semibold">{t("ai.chatTitle")}</p>
             <p className="text-[10px] opacity-80">本款答疑 · 改工艺包</p>
           </div>
           <button
@@ -483,7 +502,7 @@ export default function StudioAiDock({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-              placeholder="说说你想怎么改…"
+              placeholder={t("ai.chatPlaceholder")}
               disabled={loading || disabled}
               className="min-w-0 flex-1 rounded border border-[#cbd5e1] px-2 py-1.5 text-xs outline-none focus:border-[var(--brand)] disabled:bg-slate-50"
             />
@@ -493,7 +512,7 @@ export default function StudioAiDock({
               onClick={send}
               className="pf-btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-40"
             >
-              {loading ? "…" : "发送"}
+              {loading ? "…" : t("ai.chatSend")}
             </button>
           </div>
         </div>

@@ -7,6 +7,8 @@ import {
   QuestionnaireSchema,
   type AiProvider,
 } from "@/types/process";
+import { aiOutputLanguageBlock } from "@/lib/i18n/ai-locale";
+import { normalizeLocale, type Locale } from "@/lib/i18n/locale";
 
 function resolveProvider(): AiProvider {
   return (process.env.AI_PROVIDER as AiProvider) || "gateway";
@@ -64,7 +66,9 @@ async function callStructured<S extends z.ZodType>({
 export async function analyzeIntent(input: {
   description: string;
   imageDataUrl?: string;
+  locale?: Locale | string | null;
 }) {
+  const locale = normalizeLocale(input.locale);
   const hasImage = Boolean(input.imageDataUrl);
   const hasText = Boolean(input.description.trim());
 
@@ -88,7 +92,9 @@ export async function analyzeIntent(input: {
 - 模特图、拼贴或多于 1 件可见服装时 requiresGarmentPick=true；单款平铺且高置信时 requiresGarmentPick=false
 - detectedCategory、suggestedTitle、recommendedGarmentId 须对齐 AI 推荐的主款（单件或 g_set 均可）；推荐可偏向最显眼主件，但 visibleGarments 仍须列全
 - summary 必须是可直接写入 Tech Pack「款式说明」的专业一句话：写清品类、廓形、关键设计点（如「蓝色牛仔阔腿长裤，高腰，阔腿直筒」）；禁止写「用户上传了…」「需要对其进行款式分析」等过程说明
-- detectedFeatures 为结构/工艺特征`,
+- detectedFeatures 为结构/工艺特征
+
+${aiOutputLanguageBlock(locale)}`,
     userText,
     imageDataUrl: input.imageDataUrl,
     schema: IntentAnalysisSchema,
@@ -103,7 +109,9 @@ export async function generateQuestionnaire(input: {
   detectedCategory: string;
   detectedFeatures: string[];
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
+  const locale = normalizeLocale(input.locale);
   const scope = input.intake
     ? buildGarmentScopeContext(input.intake)
     : buildGarmentScopeContext({
@@ -129,7 +137,9 @@ ${locked ? "目标单款已锁定，不要再问品类，改为确认面料、�
 - 最多生成 5 个问题（建议 3–5 个），宁少勿多
 - 优先用选择题（面料感觉、穿着季节、预算档次、要不要印花绣花等）
 - 每个问题必须有唯一 id
-- intro 告诉用户「问这些是为了让版师看懂你的创意」`,
+- intro 告诉用户「问这些是为了让版师看懂你的创意」
+
+${aiOutputLanguageBlock(locale)}`,
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: QuestionnaireSchema,

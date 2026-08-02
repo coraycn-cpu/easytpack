@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import {
   createClient,
@@ -106,6 +107,7 @@ export default function AccountPage() {
 function AccountPageInner() {
   const router = useRouter();
   const search = useSearchParams();
+  const { t } = useLocale();
   const configured = useMemo(() => isSupabaseConfigured(), []);
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -286,7 +288,9 @@ function AccountPageInner() {
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="mx-auto max-w-lg px-4 py-10">
-          <h1 className="text-2xl font-bold text-foreground">用户中心</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {t("account.title")}
+          </h1>
           <p className="mt-3 text-sm text-muted">
             当前是本机模式（未配置云端）。配置后可登录、同步项目与查看 AI 额度。
           </p>
@@ -312,7 +316,9 @@ function AccountPageInner() {
         {/* 顶栏：身份 + 快捷入口 */}
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground">用户中心</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t("account.title")}
+            </h1>
             <p className="mt-1 text-sm text-muted">
               {email ?? "已登录"} ·{" "}
               {cloudUsage?.plan === "paused"
@@ -367,7 +373,7 @@ function AccountPageInner() {
 
         <section className="pf-card mb-5 px-4 py-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted">
-            修改密码
+            {t("account.password")}
           </p>
           <p className="mt-1 text-[11px] text-muted">
             忘记密码时：首页点「忘记密码」收邮件 → 点链接回到这里设置新密码。
@@ -395,7 +401,9 @@ function AccountPageInner() {
         {/* 简易数据看板 */}
         <section className="mb-5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted">本月概览</p>
+            <p className="text-xs font-medium text-muted">
+              {t("account.overview")}
+            </p>
             <button
               type="button"
               disabled={usageLoading || inviteLoading}
@@ -480,7 +488,7 @@ function AccountPageInner() {
           <div className="flex flex-col gap-4 lg:col-span-2">
             <section className="pf-card px-4 py-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                云端同步
+                {t("account.sync")}
               </p>
               <p className="mt-2 text-[11px] leading-relaxed text-muted">
                 自动：登录/保存时上传。手动：只写本机，需要时再同步。
@@ -504,7 +512,7 @@ function AccountPageInner() {
             <section className="pf-card px-4 py-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                  邀请好友
+                  {t("account.invite")}
                 </p>
                 <button
                   type="button"
@@ -548,7 +556,9 @@ function AccountPageInner() {
             </section>
 
             <section className="rounded-xl border border-dashed border-border bg-white px-4 py-4">
-              <p className="text-xs font-medium text-foreground">升级为团队</p>
+              <p className="text-xs font-medium text-foreground">
+                {t("account.team")}
+              </p>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
                 多人共享款式库、成员权限、团队额度即将开放。
               </p>
@@ -565,7 +575,7 @@ function AccountPageInner() {
           <section className="pf-card px-4 py-4 lg:col-span-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                AI 用量明细
+                {t("account.usage")}
               </p>
               <button
                 type="button"

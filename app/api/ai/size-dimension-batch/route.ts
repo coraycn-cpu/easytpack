@@ -4,6 +4,7 @@ import {
   isGatewayConfigured,
 } from "@/lib/ai/assist";
 import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import { normalizeLocale } from "@/lib/i18n/locale";
 
 export async function POST(req: NextRequest) {
   return runMeteredAiJsonRoute(req, {
@@ -14,7 +15,10 @@ export async function POST(req: NextRequest) {
           "AI 未配置，请设置 AI_GATEWAY_API_KEY 或 VERCEL_OIDC_TOKEN",
         );
       }
-      return generateBatchSizeDimensions(body as never);
+      return generateBatchSizeDimensions({
+        ...body,
+        locale: normalizeLocale(body.locale),
+      } as never);
     },
   });
 }

@@ -1,13 +1,17 @@
 import { NextRequest } from "next/server";
 import { generateStyleReview } from "@/lib/ai/assist";
 import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import { normalizeLocale } from "@/lib/i18n/locale";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 
 export async function POST(req: NextRequest) {
   return runMeteredAiJsonRoute(req, {
     action: "style-review",
     run: async (body) => {
-      const result = await generateStyleReview(body as never);
+      const result = await generateStyleReview({
+        ...body,
+        locale: normalizeLocale(body.locale),
+      } as never);
       const review =
         typeof result.review === "string" ? result.review.trim() : "";
       if (review.length < 20) {

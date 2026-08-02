@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import TechPackPreview from "@/components/techpack/TechPackPreview";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   gateAiLogin,
   messageFromAiResponse,
@@ -40,6 +41,8 @@ const IMAGE_MODE = "merged" as const;
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { locale, t } = useLocale();
+  const exportLocaleInitialized = useRef(false);
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [annotatedImages, setAnnotatedImages] = useState<
     Array<{ name: string; dataUrl: string }>
@@ -58,6 +61,14 @@ export default function ExportPage() {
   const [translateError, setTranslateError] = useState<string | null>(null);
   const [correctionHints, setCorrectionHints] = useState("");
   const [showCorrection, setShowCorrection] = useState(false);
+
+  useEffect(() => {
+    if (locale === "en" && !exportLocaleInitialized.current) {
+      exportLocaleInitialized.current = true;
+      // UI locale is restored after mount; initialize the document locale once it is available.
+      setExportLocale((current) => (current === "zh" ? "en" : current));
+    }
+  }, [locale]);
 
   useEffect(() => {
     let cancelled = false;
@@ -373,11 +384,11 @@ export default function ExportPage() {
                   href={`/project/${id}/studio`}
                   className="pf-btn-text text-xs"
                 >
-                  返回画板
+                  {t("export.backStudio")}
                 </Link>
               </div>
               <h1 className="text-lg font-bold text-foreground">
-                导出工艺包
+                {t("export.title")}
               </h1>
               <p className="text-xs text-muted">
                 {styleExportBasename(project)} · 完成度 {progress}%

@@ -26,6 +26,7 @@ import { generateProcessId } from "@/lib/process/ids";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, SizeChart, TechPackProject } from "@/types/project";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type Tab = "process" | "bom" | "size" | "review";
 
@@ -108,6 +109,7 @@ export default function StudioDataPanel({
   highlightTab,
   interactionLocked,
 }: StudioDataPanelProps) {
+  const { t } = useLocale();
   const [collapsed, setCollapsed] = useState(false);
   const [processExpandOpen, setProcessExpandOpen] = useState(false);
   const [bomExpandOpen, setBomExpandOpen] = useState(false);
@@ -242,12 +244,12 @@ export default function StudioDataPanel({
             }`}
           >
             {tab === "process"
-              ? "工艺"
+              ? t("studio.process")
               : tab === "bom"
-                ? "物料"
+                ? t("studio.bom")
                 : tab === "size"
-                  ? "尺寸"
-                  : "评语"}
+                  ? t("studio.size")
+                  : t("studio.review")}
           </button>
         ))}
         <button

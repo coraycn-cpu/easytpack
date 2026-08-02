@@ -9,6 +9,8 @@ import NewStyleEntryCard, {
 import AuthEntryPanel from "@/components/auth/AuthEntryPanel";
 import BrandFooter from "@/components/brand/BrandFooter";
 import BrandMark from "@/components/brand/BrandMark";
+import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import BusyOverlay from "@/components/ui/BusyOverlay";
 import {
   createClient,
@@ -19,10 +21,8 @@ import { resolveProjectRepository } from "@/lib/project/repository";
 import type { TechPackProject } from "@/types/project";
 import {
   FREE_MONTHLY_AI_GIFT,
-  HOME_AI_QUOTA_HINT,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
-import { BRAND_NAME, BRAND_SLOGAN } from "@/lib/brand";
 import HomeTechpackCarousel from "@/components/home/HomeTechpackCarousel";
 import {
   RECENT_PROJECTS_LIMIT,
@@ -36,11 +36,13 @@ import {
  * 登录/注册业务逻辑不变；原独立登录页会跳转到这里。
  */
 export default function HomeEntryPage() {
+  const { t } = useLocale();
+
   return (
     <Suspense
       fallback={
         <div className="relative min-h-screen bg-background">
-          <BusyOverlay title="正在进入…" subtitle="请稍候" />
+          <BusyOverlay title={t("home.entering")} subtitle={t("common.busy")} />
         </div>
       }
     >
@@ -50,6 +52,7 @@ export default function HomeEntryPage() {
 }
 
 function HomeEntryInner() {
+  const { locale, t } = useLocale();
   const router = useRouter();
   const [booting, setBooting] = useState(true);
   const [configured, setConfigured] = useState(false);
@@ -126,7 +129,7 @@ function HomeEntryInner() {
   if (booting) {
     return (
       <div className="flex h-screen items-center justify-center bg-background text-sm text-muted">
-        正在进入…
+        {t("home.entering")}
       </div>
     );
   }
@@ -146,19 +149,25 @@ function HomeEntryInner() {
         <div className="flex flex-1 flex-col lg:flex-row">
         {/* 左侧：品牌 + 精简说明 + 工艺包示例轮播 */}
         <section className="relative flex flex-1 flex-col justify-center px-6 pb-4 pt-10 lg:px-12 lg:pb-6 lg:pt-14">
-          <BrandMark
-            href={false}
-            nameClassName="max-w-md text-base leading-snug sm:text-lg"
-            iconClassName="h-8 w-8"
-          />
+          <div className="flex max-w-md items-center justify-between gap-4">
+            <BrandMark
+              href={false}
+              variant="short"
+              nameClassName="max-w-md text-base leading-snug sm:text-lg"
+              iconClassName="h-8 w-8"
+            />
+            <LocaleSwitcher size="md" />
+          </div>
           <h1 className="mt-6 max-w-lg text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
-            {BRAND_NAME}
+            {t("common.brandName")}
           </h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
-            {BRAND_SLOGAN}。右侧新建款式即可开始；注册后可用 AI 与云端存档。
+            {t("home.brandSlogan")}
+            {locale === "zh" ? "。" : ". "}
+            {t("home.sloganExtra")}
           </p>
           <p className="mt-3 max-w-md text-[12px] leading-relaxed text-muted">
-            {HOME_AI_QUOTA_HINT}
+            {t("home.quotaHint", { n: FREE_MONTHLY_AI_GIFT })}
           </p>
 
           <div className="mt-5">
@@ -166,8 +175,7 @@ function HomeEntryInner() {
           </div>
 
           <p className="mt-3 max-w-md text-[11px] leading-relaxed text-muted">
-            上图为导出工艺包示例（自动翻页）。手动标注不限次数；需要 AI
-            时注册领取每月 {FREE_MONTHLY_AI_GIFT} 点。
+            {t("home.demoCaption", { n: FREE_MONTHLY_AI_GIFT })}
           </p>
         </section>
 
@@ -178,7 +186,7 @@ function HomeEntryInner() {
               <>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    欢迎回来
+                    {t("auth.welcomeBack")}
                   </h2>
                   <p className="mt-1 truncate text-sm text-muted" title={email ?? undefined}>
                     {email}
@@ -189,18 +197,18 @@ function HomeEntryInner() {
                   onClick={() => setNewOpen(true)}
                   className="pf-btn-primary w-full py-3 text-[15px]"
                 >
-                  + 新建款式
+                  {t("auth.newStyle")}
                 </button>
                 <div className="border-t border-border pt-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="text-[11px] font-medium text-muted">
-                      最近更新（{RECENT_PROJECTS_LIMIT} 个）
+                      {t("auth.recent", { n: RECENT_PROJECTS_LIMIT })}
                     </p>
                     <Link
                       href="/projects"
                       className="pf-btn-text text-[11px] font-medium"
                     >
-                      查看全部项目 →
+                      {t("auth.viewAll")}
                     </Link>
                   </div>
                   {recent.length > 0 ? (
@@ -219,16 +227,16 @@ function HomeEntryInner() {
                     </ul>
                   ) : (
                     <p className="rounded-[var(--radius-sm)] bg-background px-3 py-3 text-[11px] text-muted">
-                      还没有项目。点上方「新建款式」开始；若已在其它设备做过，打开「查看全部项目」点「从云端拉取」。
+                      {t("auth.noProjects")}
                     </p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Link href="/projects" className="pf-btn-secondary px-3 py-1.5">
-                    项目库
+                    {t("common.projects")}
                   </Link>
                   <Link href="/account" className="pf-btn-secondary px-3 py-1.5">
-                    用户中心
+                    {t("common.account")}
                   </Link>
                 </div>
               </>
@@ -237,20 +245,19 @@ function HomeEntryInner() {
                 <AuthEntryPanel defaultNext="/" />
                 <div className="border-t border-border pt-5">
                   <p className="mb-2 text-center text-[11px] text-muted">
-                    也可以先不登录，直接手动标注
+                    {t("auth.guestManual")}
                   </p>
                   <button
                     type="button"
                     onClick={() => setNewOpen(true)}
                     className="pf-btn-secondary w-full py-3 text-[15px]"
                   >
-                    + 新建款式
+                    {t("auth.newStyle")}
                   </button>
                 </div>
                 {!configured ? (
                   <p className="text-[11px] leading-relaxed text-amber-700">
-                    当前是本机模式（未配置云端）。可先新建并手动标注；配好云端并注册后才能用
-                    AI 与同步存档。
+                    {t("auth.localMode")}
                   </p>
                 ) : null}
               </>
@@ -271,7 +278,7 @@ function HomeEntryInner() {
               type="button"
               onClick={() => setNewOpen(false)}
               className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow hover:text-slate-800"
-              aria-label="关闭"
+              aria-label={t("common.close")}
             >
               ×
             </button>

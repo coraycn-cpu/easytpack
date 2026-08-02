@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import ProjectThumb from "@/components/projects/ProjectThumb";
@@ -56,6 +57,7 @@ type WorkflowFilter = "all" | "draft" | "in_review" | "finalized";
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [listReady, setListReady] = useState(false);
   const [cloudRefreshing, setCloudRefreshing] = useState(false);
@@ -284,14 +286,16 @@ export default function ProjectsPage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">项目库</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t("projects.title")}
+            </h1>
             <p className="mt-1 text-sm text-muted">
               {cloudLoggedIn
                 ? `云端 + 本机 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`
                 : `本机保存 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
               {" · "}
               相册式浏览，可分类、删除、分页
-              {cloudRefreshing ? " · 正在同步云端…" : ""}
+              {cloudRefreshing ? ` · ${t("projects.syncing")}` : ""}
             </p>
           </div>
           <Link
@@ -476,13 +480,13 @@ export default function ProjectsPage() {
 
         {!listReady ? (
           <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
-            正在加载项目…
+            {t("projects.loading")}
           </div>
         ) : filtered.length === 0 ? (
           <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
-            没有符合条件的项目。{" "}
+            {t("projects.empty")}{" "}
             <Link href="/" className="pf-btn-text">
-              去新建款式
+              {t("projects.goNew")}
             </Link>
           </div>
         ) : (
@@ -516,9 +520,11 @@ export default function ProjectsPage() {
                           · {calcProgress(p)}%
                         </p>
                         <p className="text-[10px] leading-relaxed text-zinc-400">
-                          建于 {formatProjectDateTime(p.createdAt)}
+                          {t("projects.created")}{" "}
+                          {formatProjectDateTime(p.createdAt)}
                           <br />
-                          更新 {formatProjectDateTime(p.updatedAt)}
+                          {t("projects.updated")}{" "}
+                          {formatProjectDateTime(p.updatedAt)}
                         </p>
                       </div>
                     </Link>
@@ -556,15 +562,15 @@ export default function ProjectsPage() {
                       </select>
                       <button
                         type="button"
-                        title="备份"
+                        title={t("projects.backup")}
                         onClick={() => void handleExportBackup(p.id, p.title)}
                         className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
                       >
-                        备份
+                        {t("projects.backup")}
                       </button>
                       <button
                         type="button"
-                        title="复制"
+                        title={t("projects.duplicate")}
                         onClick={() => {
                           void (async () => {
                             try {
@@ -585,11 +591,11 @@ export default function ProjectsPage() {
                         }}
                         className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
                       >
-                        复制
+                        {t("projects.duplicate")}
                       </button>
                       <button
                         type="button"
-                        title="删除"
+                        title={t("common.delete")}
                         onClick={() => {
                           if (
                             window.confirm(
@@ -605,7 +611,7 @@ export default function ProjectsPage() {
                         }}
                         className="rounded px-1.5 py-1 text-[10px] text-rose-500 hover:bg-rose-50"
                       >
-                        删除
+                        {t("common.delete")}
                       </button>
                     </div>
                   </article>

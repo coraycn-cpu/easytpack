@@ -85,11 +85,13 @@ export function projectHasSectionContent(
 export function confirmAiMenuIfNeeded(
   project: TechPackProject,
   section: AiMenuSection,
+  message?: string,
 ): boolean {
   if (typeof window === "undefined") return true;
   if (!projectHasSectionContent(project, section)) return true;
   const label = SECTION_LABEL[section];
   return window.confirm(
-    `「${label}」对应版块已经有内容了。\n\n重新跑 AI 可能改动或合并现有标注，无法自动撤销。\n\n点「确定」继续重新标注；点「取消」中断，保留现有内容。`,
+    message ??
+      `「${label}」对应版块已经有内容了。\n\n重新跑 AI 可能改动或合并现有标注，无法自动撤销。\n\n点「确定」继续重新标注；点「取消」中断，保留现有内容。`,
   );
 }

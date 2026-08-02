@@ -20,11 +20,13 @@ import {
   gateAiLogin,
 } from "@/lib/ai/client-login-gate";
 import { AI_UNITS_FULL_COLLECT_ESTIMATE } from "@/lib/ai/quota-units";
+import type { Locale } from "@/lib/i18n/locale";
 
 type Phase = "preparing" | "asking" | "size" | "drafting";
 
 type FullCollectFlowOverlayProps = {
   project: TechPackProject;
+  locale: Locale;
   onProjectPatch: (project: TechPackProject) => void;
   onComplete: (project: TechPackProject, summary: string) => void;
   onError?: (message: string) => void;
@@ -169,6 +171,7 @@ function LoadingBody({
 
 export default function FullCollectFlowOverlay({
   project,
+  locale,
   onProjectPatch,
   onComplete,
   onError,
@@ -245,6 +248,7 @@ export default function FullCollectFlowOverlay({
           answers: answersWithSize,
           regionStandard,
           sampleSize,
+          locale,
         });
         if (cancelledRef.current) return;
         const updated: TechPackProject = {
@@ -264,7 +268,7 @@ export default function FullCollectFlowOverlay({
         setPhase("asking");
       }
     },
-    [fail, onComplete, onProjectPatch, project, sizeStandard],
+    [fail, locale, onComplete, onProjectPatch, project, sizeStandard],
   );
 
   useEffect(() => {
@@ -296,6 +300,7 @@ export default function FullCollectFlowOverlay({
             body: JSON.stringify({
               description: project.intake.description,
               imageDataUrl: project.intake.imageDataUrl,
+              locale,
             }),
           });
           const intent = await res.json();
@@ -321,7 +326,7 @@ export default function FullCollectFlowOverlay({
           if (!nextProject.intake.aiIntentAnalysis || !nextProject.intake.detectedCategory) {
             throw new Error("缺少款式分析结果，请先完成识图");
           }
-          const data = await fetchFullCollectQuestionnaire(nextProject);
+          const data = await fetchFullCollectQuestionnaire(nextProject, locale);
           qs = data.questions;
           nextIntro = data.intro;
           nextProject = {
@@ -354,7 +359,7 @@ export default function FullCollectFlowOverlay({
         fail(e instanceof Error ? e.message : "准备问题失败");
       }
     })();
-  }, [fail, onProjectPatch, project, router]);
+  }, [fail, locale, onProjectPatch, project, router]);
 
   const current = questions[index];
   const total = questions.length;

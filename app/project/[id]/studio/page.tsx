@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import StudioAiDock from "@/components/studio/StudioAiDock";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
@@ -194,6 +195,7 @@ type Tab = "process" | "bom" | "size" | "review";
 export default function StudioPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [activeArtboardId, setActiveArtboardId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("process");
@@ -531,6 +533,7 @@ export default function StudioPage() {
           body: JSON.stringify({
             description: base.intake.description,
             imageDataUrl: imageForAi,
+            locale,
           }),
           signal: abort.signal,
         });
@@ -629,6 +632,7 @@ export default function StudioPage() {
     project?.id,
     intakeImageDataUrl,
     intakeAlreadyAnalyzed,
+    locale,
     pendingAiAnalysis,
     persist,
   ]);
@@ -767,8 +771,10 @@ export default function StudioPage() {
       const hasExisting = projectHasSectionContent(project, "full-collect");
       const ok = window.confirm(
         hasExisting
-          ? `「AI 一键标注」对应版块已有内容。\n\n重新跑可能改动工艺/物料/尺寸/评语。\n${fullCollectCostHint()}\n\n点「确定」重新标注；点「取消」中断，保留现有内容。`
-          : `开始「AI 一键标注」？\n\n${fullCollectCostHint()}\n不够额度时会中途失败。\n\n确定继续？`,
+          ? t("studio.confirmFullCollectExisting", {
+              hint: fullCollectCostHint(),
+            })
+          : t("studio.confirmFullCollect", { hint: fullCollectCostHint() }),
       );
       if (!ok) return;
       // 额度不够时先拦一层（预估），真正扣费仍以各接口成功为准
@@ -1101,6 +1107,7 @@ export default function StudioPage() {
           regionStandard,
           existingPart: selectedAnn.linkedSizePart,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -1423,6 +1430,7 @@ export default function StudioPage() {
               project.intake.description,
             sourceImageUrl: imageForAi,
             intake: project.intake,
+            locale,
           }),
         });
         const data = await res.json();
@@ -1456,6 +1464,7 @@ export default function StudioPage() {
       project,
       regionEditPending,
       regionEditBusy,
+      locale,
       updateArtboard,
       requireAiLogin,
     ],
@@ -1572,6 +1581,7 @@ export default function StudioPage() {
           sourceWidth,
           sourceHeight,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -1890,7 +1900,14 @@ export default function StudioPage() {
   const handleBatchAnnotate = async () => {
     if (aiBusy || !project || !activeArtboard) return;
     if (!(await requireAiLogin())) return;
-    if (!confirmAiMenuIfNeeded(project, "annotate-process")) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "annotate-process",
+        t("studio.confirmRerun", { label: t("ai.annotateProcess") }),
+      )
+    )
+      return;
     focusTab("process");
     setAiImageContext({
       action: "annotate-process",
@@ -1914,6 +1931,7 @@ export default function StudioPage() {
           imageDataUrl,
           processItems: project.process_items,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2039,7 +2057,14 @@ export default function StudioPage() {
   const handleFillBom = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
-    if (!confirmAiMenuIfNeeded(project, "fill-bom")) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "fill-bom",
+        t("studio.confirmRerun", { label: t("ai.fillBom") }),
+      )
+    )
+      return;
     focusTab("bom");
     setAiImageContext({
       action: "fill-bom",
@@ -2065,6 +2090,7 @@ export default function StudioPage() {
           existingBom: project.bom_items,
           answers: project.questionnaire.answers,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2156,6 +2182,7 @@ export default function StudioPage() {
           regionCropped,
           existingPart,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2210,7 +2237,14 @@ export default function StudioPage() {
     if (aiBusy || !project) return;
     void (async () => {
       if (!(await requireAiLogin())) return;
-      if (!confirmAiMenuIfNeeded(project, "fill-size")) return;
+      if (
+        !confirmAiMenuIfNeeded(
+          project,
+          "fill-size",
+          t("studio.confirmRerun", { label: t("ai.fillSize") }),
+        )
+      )
+        return;
       focusTab("size");
       setSizeAiDialogOpen(true);
     })();
@@ -2248,6 +2282,7 @@ export default function StudioPage() {
           regionStandard: input.regionStandard,
           sampleSize: input.sampleSize,
           intake: project.intake,
+          locale,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -2315,6 +2350,7 @@ export default function StudioPage() {
               regionStandard: input.regionStandard,
               skipParts,
               intake: current.intake,
+              locale,
             }),
           });
           const dimData = (await dimRes.json().catch(() => ({}))) as {
@@ -2405,7 +2441,14 @@ export default function StudioPage() {
   const handleEnhanceAll = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
-    if (!confirmAiMenuIfNeeded(project, "enhance")) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "enhance",
+        t("studio.confirmRerun", { label: t("ai.enhance") }),
+      )
+    )
+      return;
     setAiImageContext({
       action: "enhance",
       preferIntake: true,
@@ -2419,7 +2462,7 @@ export default function StudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: ac.signal,
-        body: JSON.stringify({ project }),
+        body: JSON.stringify({ project, locale }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -2472,7 +2515,14 @@ export default function StudioPage() {
   const handleStyleReview = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
-    if (!confirmAiMenuIfNeeded(project, "explain")) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "explain",
+        t("studio.confirmRerun", { label: t("ai.explain") }),
+      )
+    )
+      return;
     setAiImageContext({
       action: "explain",
       sourceArtboardId: primaryArtboardId ?? activeArtboard?.id,
@@ -2507,6 +2557,7 @@ export default function StudioPage() {
           })),
           existingReview: project.style_review,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2825,6 +2876,7 @@ export default function StudioPage() {
           {fullCollectOpen && project && !garmentBlocked && (
             <FullCollectFlowOverlay
               project={project}
+              locale={locale}
               onProjectPatch={(next) => {
                 persist(next);
               }}

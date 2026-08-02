@@ -23,6 +23,7 @@ import {
 } from "@/lib/ai/client-login-gate";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import BrandMark from "@/components/brand/BrandMark";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 /** @deprecated 新建款不再区分 full；保留类型以免旧引用报错 */
 export type NewStyleMode = "quick" | "full";
@@ -43,6 +44,7 @@ export default function NewStyleEntryCard({
   onCreated,
   onCreatedNeedLogin,
 }: NewStyleEntryCardProps) {
+  const { locale } = useLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -123,7 +125,7 @@ export default function NewStyleEntryCard({
         const res = await fetch("/api/ai/intake", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ description, imageDataUrl }),
+          body: JSON.stringify({ description, imageDataUrl, locale }),
         });
         const intent = await res.json();
         if (!res.ok) {

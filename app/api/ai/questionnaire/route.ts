@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { generateQuestionnaire } from "@/lib/ai/intake";
 import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import { normalizeLocale } from "@/lib/i18n/locale";
 import type { IntakeData } from "@/types/project";
 
 export async function POST(req: NextRequest) {
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
           ? (body.detectedFeatures as string[])
           : [],
         intake: body.intake as IntakeData | undefined,
+        locale: normalizeLocale(body.locale),
       });
     },
   });

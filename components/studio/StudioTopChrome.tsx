@@ -16,6 +16,8 @@ import {
 } from "@/lib/ai/login-gate";
 import StudioAccountChip from "@/components/studio/StudioAccountChip";
 import BrandMark from "@/components/brand/BrandMark";
+import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   getCloudSyncMode,
@@ -42,6 +44,7 @@ export default function StudioTopChrome({
   projectTitle,
   onTip,
 }: StudioTopChromeProps) {
+  const { t } = useLocale();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
@@ -246,6 +249,7 @@ export default function StudioTopChrome({
       )}
 
       <div className="flex shrink-0 items-center gap-1.5">
+        <LocaleSwitcher />
         {/* 同步 + 自动：合并成一个控件，少占宽度 */}
         <div
           className={`inline-flex items-center overflow-hidden rounded-[var(--radius-sm)] border ${
@@ -255,8 +259,8 @@ export default function StudioTopChrome({
           }`}
           title={
             syncMode === "auto"
-              ? "自动同步已开：保存/登录会上传；点左侧可立即同步"
-              : "自动同步已关：点左侧「同步」才会上传到网上"
+              ? "Auto sync on"
+              : "Manual sync"
           }
         >
           <button
@@ -269,7 +273,7 @@ export default function StudioTopChrome({
                 : "text-foreground hover:bg-background"
             }`}
           >
-            {syncBusy ? "同步中…" : "同步"}
+            {syncBusy ? `${t("studio.sync")}…` : t("studio.sync")}
           </button>
           <span
             className={`h-4 w-px shrink-0 ${

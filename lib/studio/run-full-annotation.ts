@@ -18,12 +18,14 @@ import { STYLE_REVIEW_MAX, type BomItem, type ProcessItem } from "@/types/proces
 import type { TechPackProject, Annotation } from "@/types/project";
 import type { SizeRegionStandard } from "@/lib/size-chart/standards";
 import { fetchAi, notifyAiQuotaChanged } from "@/lib/ai/quota-client";
+import type { Locale } from "@/lib/i18n/locale";
 
 export type RunFullAnnotationInput = {
   project: TechPackProject;
   answers: Record<string, string | string[]>;
   regionStandard: SizeRegionStandard;
   sampleSize: string;
+  locale: Locale;
 };
 
 export type RunFullAnnotationResult = {
@@ -42,7 +44,7 @@ export type RunFullAnnotationResult = {
 export async function runFullTechPackAnnotation(
   input: RunFullAnnotationInput,
 ): Promise<RunFullAnnotationResult> {
-  const { answers, regionStandard, sampleSize } = input;
+  const { answers, regionStandard, sampleSize, locale } = input;
   let project: TechPackProject = {
     ...input.project,
     size_chart: {
@@ -88,6 +90,7 @@ export async function runFullTechPackAnnotation(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...aiBase,
+      locale,
       imageDataUrl: processImageUrl,
       processItems: project.process_items,
     }),
@@ -101,7 +104,7 @@ export async function runFullTechPackAnnotation(
     ? await loadImagePlacement(imgUrl)
     : { x: 0, y: 0, width: 1000, height: 750 };
 
-  let processItems: ProcessItem[] = [...project.process_items];
+  const processItems: ProcessItem[] = [...project.process_items];
   const processAnnotations: Annotation[] = [];
 
   for (const [i, region] of (batchData.regions ?? []).entries()) {
@@ -180,6 +183,7 @@ export async function runFullTechPackAnnotation(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...aiBase,
+        locale,
         imageDataUrl: bomImageUrl,
         processItems: project.process_items,
         existingBom: project.bom_items,
@@ -215,6 +219,7 @@ export async function runFullTechPackAnnotation(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...aiBase,
+        locale,
         imageDataUrl: sizeImageUrl,
         answers,
         existingChart: project.size_chart,
@@ -241,6 +246,7 @@ export async function runFullTechPackAnnotation(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...aiBase,
+              locale,
               imageDataUrl: sizeImageUrl,
               sizeChart: size_chart,
               sampleSize,
@@ -295,6 +301,7 @@ export async function runFullTechPackAnnotation(
       body: JSON.stringify({
         title: project.title,
         ...aiBase,
+        locale,
         imageDataUrl: processImageUrl,
         processItems: project.process_items.map(({ part, process, stitch }) => ({
           part,
