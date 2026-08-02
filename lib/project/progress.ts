@@ -3,6 +3,7 @@ import {
   countLinkedProcessItems,
   hasCanvasAnnotations,
 } from "@/lib/canvas/part-annotations";
+import type { TranslateFn } from "@/lib/i18n/translate";
 
 export function calcProgress(project: TechPackProject): number {
   let score = 0;
@@ -27,8 +28,25 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** 中文兼容（导出文档等无 Locale 处仍可用） */
 export const WORKFLOW_LABELS: Record<string, string> = {
   draft: "草稿",
   in_review: "审核中",
   finalized: "已定稿",
 };
+
+/** i18n keys → common.draft / inReview / finalized */
+export const WORKFLOW_LABEL_KEYS: Record<string, string> = {
+  draft: "common.draft",
+  in_review: "common.inReview",
+  finalized: "common.finalized",
+};
+
+export function getWorkflowLabel(
+  status: string | null | undefined,
+  t: TranslateFn,
+): string {
+  if (!status) return "";
+  const key = WORKFLOW_LABEL_KEYS[status];
+  return key ? t(key) : status;
+}

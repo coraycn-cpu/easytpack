@@ -101,7 +101,7 @@ import {
 import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize, type ComplianceIssue } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
-import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
+import { calcProgress, getWorkflowLabel } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import {
   AI_LOGIN_REQUIRED_MESSAGE,
@@ -2675,7 +2675,7 @@ export default function StudioPage() {
           targetGarmentLabel={project.intake.targetGarment?.label}
           photoType={project.intake.photoType}
           flatFrontGenerated={project.intake.flatFrontGenerated}
-          workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
+          workflowLabel={getWorkflowLabel(project.workflowStatus, t)}
           progress={progress}
           workflowStatus={project.workflowStatus}
           onWorkflowChange={(ws: WorkflowStatus) => {
