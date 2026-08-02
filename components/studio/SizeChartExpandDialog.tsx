@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import { regionStandardLabel } from "@/lib/size-chart/standards";
 import {
   addSizeColumn,
@@ -36,6 +37,7 @@ export default function SizeChartExpandDialog({
   onRemoveRowPart,
   dimensionCounts,
 }: SizeChartExpandDialogProps) {
+  const { t } = useLocale();
   const [mode, setMode] = useState<GradeMode>("fillEmpty");
   const [defaultStep, setDefaultStep] = useState(2);
   const [status, setStatus] = useState<string | null>(null);
@@ -54,13 +56,11 @@ export default function SizeChartExpandDialog({
 
   const applyGrade = () => {
     if (!sampleSize) {
-      setStatus("请先设置基准码，再进行跳码");
+      setStatus(t("panel.sizeNeedBaseline"));
       return;
     }
     if (mode === "overwriteNonSample") {
-      const ok = window.confirm(
-        "将按档差重写所有非基准码列，已手改的数值会被覆盖。确定继续？",
-      );
+      const ok = window.confirm(t("panel.sizeConfirmOverwrite"));
       if (!ok) return;
     }
     const result = applySizeGrading(chart, {
@@ -70,55 +70,61 @@ export default function SizeChartExpandDialog({
     });
     onChange(result.chart);
     setStatus(
-      `已填充 ${result.filled} 格` +
-        (result.skipped ? `，跳过 ${result.skipped} 个已有值` : "") +
-        "；可直接点单元格微调",
+      result.skipped
+        ? t("panel.sizeFilledSkip", {
+            filled: result.filled,
+            skipped: result.skipped,
+          })
+        : t("panel.sizeFilled", { filled: result.filled }),
     );
   };
 
   const expandHigh = () => {
     const name = window.prompt(
-      "扩大码段 · 增加更大码",
+      t("panel.sizePromptLarger"),
       suggestNextSizeLabel(chart.sizes),
     );
     if (!name?.trim()) return;
     onChange(addSizeColumn(chart, name.trim()));
-    setStatus(`已增加码列「${name.trim()}」`);
+    setStatus(t("panel.sizeAddedCol", { name: name.trim() }));
   };
 
   const expandLow = () => {
     const name = window.prompt(
-      "扩大码段 · 增加更小码",
+      t("panel.sizePromptSmaller"),
       suggestPrevSizeLabel(chart.sizes),
     );
     if (!name?.trim()) return;
     onChange(prependSizeColumn(chart, name.trim()));
-    setStatus(`已在左侧增加码列「${name.trim()}」`);
+    setStatus(t("panel.sizeAddedColLeft", { name: name.trim() }));
   };
 
   const removeSize = (size: string) => {
     if (size === sampleSize) {
-      setStatus("不能删除基准码列；请先更换基准码");
+      setStatus(t("panel.sizeCantDeleteBaseline"));
       return;
     }
-    if (!window.confirm(`删除码列「${size}」？该列数值会一并清除。`)) return;
+    if (!window.confirm(t("panel.sizeConfirmDeleteCol", { size }))) return;
     onChange(removeSizeColumn(chart, size));
-    setStatus(`已删除码列「${size}」`);
+    setStatus(t("panel.sizeDeletedCol", { size }));
   };
 
   const clearOthers = () => {
-    if (!window.confirm("清除所有非基准码列的数值？（码列保留）")) return;
+    if (!window.confirm(t("panel.sizeConfirmClear"))) return;
     onChange(clearNonSampleSizes(chart));
-    setStatus("已清除非基准码数值，可重新跳码");
+    setStatus(t("panel.sizeCleared"));
   };
 
   const addRow = () => {
     const values = Object.fromEntries(chart.sizes.map((s) => [s, ""]));
     onChange({
       ...chart,
-      rows: [...chart.rows, { part: "新部位", method: "平量", values }],
+      rows: [
+        ...chart.rows,
+        { part: t("panel.sizeNewPart"), method: t("panel.sizeNewMethod"), values },
+      ],
     });
-    setStatus("已添加部位行，可填写基准码后再跳码");
+    setStatus(t("panel.sizeAddedRow"));
   };
 
   const removeRow = (index: number) => {
@@ -129,7 +135,11 @@ export default function SizeChartExpandDialog({
     } else {
       onChange(next);
     }
-    setStatus(part ? `已删除部位「${part}」` : "已删除部位行");
+    setStatus(
+      part
+        ? t("panel.sizeDeletedPart", { part })
+        : t("panel.sizeDeletedRow"),
+    );
   };
 
   return (
@@ -138,12 +148,10 @@ export default function SizeChartExpandDialog({
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">
-              尺码表 · 编辑 / 跳码
+              {t("panel.sizeTitle")}
             </h2>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              同一窗口：改部位与数字、删行、加减码列、按档差跳码。以蓝色
-              <strong>基准码</strong>
-              为锚；默认「只填空格」，已手改数字不会被改掉。删部位会同步去掉画布对应尺寸线。
+              {t("panel.sizeSubtitle")}
             </p>
             {(regionLabel || sampleSize) && (
               <p className="mt-1 text-[10px] text-slate-400">
@@ -151,15 +159,15 @@ export default function SizeChartExpandDialog({
                 {regionLabel && sampleSize ? " · " : ""}
                 {sampleSize ? (
                   <>
-                    基准码{" "}
+                    {t("panel.sizeBaseline")}{" "}
                     <span className="font-medium text-brand">{sampleSize}</span>
                   </>
                 ) : (
-                  "未设置基准码"
+                  t("panel.sizeNoBaseline")
                 )}
                 {missingBaseline > 0 && (
                   <span className="ml-2 text-amber-600">
-                    · {missingBaseline} 行基准码为空，这些行无法跳码
+                    · {t("panel.sizeMissingBaseline", { n: missingBaseline })}
                   </span>
                 )}
               </p>
@@ -169,38 +177,38 @@ export default function SizeChartExpandDialog({
             type="button"
             onClick={onClose}
             className="rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="关闭"
+            aria-label={t("common.close")}
           >
             ✕
           </button>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-50 bg-slate-50/80 px-4 py-2.5">
-          <span className="text-[11px] text-slate-500">码段</span>
+          <span className="text-[11px] text-slate-500">{t("panel.sizeRange")}</span>
           <button
             type="button"
             onClick={expandLow}
             className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
           >
-            + 更小码
+            {t("panel.sizeAddSmaller")}
           </button>
           <button
             type="button"
             onClick={expandHigh}
             className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
           >
-            + 更大码
+            {t("panel.sizeAddLarger")}
           </button>
           <button
             type="button"
             onClick={addRow}
             className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
           >
-            + 部位
+            {t("panel.sizeAddPart")}
           </button>
           <span className="mx-1 text-slate-300">|</span>
           <label className="flex items-center gap-1 text-[11px] text-slate-600">
-            默认档差
+            {t("panel.sizeDefaultStep")}
             <input
               type="number"
               min={0.5}
@@ -219,7 +227,7 @@ export default function SizeChartExpandDialog({
               checked={mode === "fillEmpty"}
               onChange={() => setMode("fillEmpty")}
             />
-            只填空格
+            {t("panel.sizeFillEmpty")}
           </label>
           <label className="flex items-center gap-1 text-[11px] text-slate-600">
             <input
@@ -228,21 +236,21 @@ export default function SizeChartExpandDialog({
               checked={mode === "overwriteNonSample"}
               onChange={() => setMode("overwriteNonSample")}
             />
-            重写非基准列
+            {t("panel.sizeOverwrite")}
           </label>
           <button
             type="button"
             onClick={applyGrade}
             className="rounded bg-brand px-3 py-1.5 text-[11px] font-medium text-white hover:bg-brand-dark"
           >
-            按档差跳码
+            {t("panel.sizeGrade")}
           </button>
           <button
             type="button"
             onClick={clearOthers}
             className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50"
           >
-            清除非基准值
+            {t("panel.sizeClearNonSample")}
           </button>
         </div>
 
@@ -256,10 +264,15 @@ export default function SizeChartExpandDialog({
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
               <tr className="text-left text-xs text-slate-400">
-                <th className="sticky left-0 z-10 bg-white py-2 pr-2">部位</th>
-                <th className="py-2 pr-2">量法</th>
-                <th className="py-2 pr-2 text-center" title="该行档差 cm">
-                  档差
+                <th className="sticky left-0 z-10 bg-white py-2 pr-2">
+                  {t("panel.sizeColPart")}
+                </th>
+                <th className="py-2 pr-2">{t("panel.sizeColMethod")}</th>
+                <th
+                  className="py-2 pr-2 text-center"
+                  title={t("panel.sizeColGradeTitle")}
+                >
+                  {t("panel.sizeColGrade")}
                 </th>
                 {chart.sizes.map((s) => (
                   <th
@@ -273,7 +286,7 @@ export default function SizeChartExpandDialog({
                         {s}
                         {s === sampleSize && (
                           <span className="ml-0.5 text-[9px] font-normal">
-                            基准
+                            {t("panel.sizeBaselineBadge")}
                           </span>
                         )}
                       </span>
@@ -282,15 +295,17 @@ export default function SizeChartExpandDialog({
                           type="button"
                           onClick={() => removeSize(s)}
                           className="text-[10px] text-slate-300 hover:text-red-500"
-                          title="缩小码段：删除此码"
+                          title={t("panel.sizeDeleteColTitle")}
                         >
-                          删列
+                          {t("panel.sizeDeleteCol")}
                         </button>
                       )}
                     </div>
                   </th>
                 ))}
-                <th className="w-10 py-2 text-center">删</th>
+                <th className="w-10 py-2 text-center">
+                  {t("panel.sizeDeleteRowCol")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -316,7 +331,7 @@ export default function SizeChartExpandDialog({
                         />
                         {dimCount > 0 && (
                           <span className="shrink-0 text-[9px] text-emerald-600">
-                            {dimCount}线
+                            {t("panel.sizeLineCount", { n: dimCount })}
                           </span>
                         )}
                       </div>
@@ -346,7 +361,7 @@ export default function SizeChartExpandDialog({
                           }))
                         }
                         className="w-14 rounded border border-slate-200 px-1 py-1 text-center text-xs"
-                        title="本行相邻码档差（cm）"
+                        title={t("panel.sizeRowStepTitle")}
                       />
                     </td>
                     {chart.sizes.map((s) => {
@@ -381,10 +396,10 @@ export default function SizeChartExpandDialog({
                             }`}
                             title={
                               isSample
-                                ? "基准码"
+                                ? t("panel.sizeCellBaseline")
                                 : isManual
-                                  ? "已有值（手改或上次填充）；「只填空格」模式下不会覆盖"
-                                  : "可手改"
+                                  ? t("panel.sizeCellManual")
+                                  : t("panel.sizeCellEdit")
                             }
                           />
                         </td>
@@ -395,7 +410,7 @@ export default function SizeChartExpandDialog({
                         type="button"
                         onClick={() => removeRow(i)}
                         className="rounded px-1.5 py-0.5 text-xs text-slate-300 hover:bg-red-50 hover:text-red-500"
-                        title="删除此部位（会去掉画布对应尺寸线）"
+                        title={t("panel.sizeDeletePartTitle")}
                       >
                         ×
                       </button>
@@ -407,7 +422,7 @@ export default function SizeChartExpandDialog({
           </table>
           {chart.rows.length === 0 && (
             <p className="py-8 text-center text-xs text-slate-400">
-              暂无尺寸行，请点「+ 部位」或先用 AI 填尺寸
+              {t("panel.sizeEmpty")}
             </p>
           )}
         </div>
@@ -418,7 +433,7 @@ export default function SizeChartExpandDialog({
             onClick={onClose}
             className="rounded-lg border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:bg-slate-50"
           >
-            完成
+            {t("panel.done")}
           </button>
         </div>
       </div>

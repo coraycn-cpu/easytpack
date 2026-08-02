@@ -10,13 +10,23 @@ import {
   SizeDimensionAssistSchema,
   BatchSizeDimensionSchema,
   StyleReviewSchema,
-  STYLE_REVIEW_MAX,
+  STYLE_REVIEW_MAX_EN,
+  STYLE_REVIEW_MAX_ZH,
   type AiProvider,
 } from "@/types/process";
 import type { BomItem } from "@/types/process";
 import { getRegionOption, type SizeRegionStandard } from "@/lib/size-chart/standards";
 import { buildGarmentScopeContext, isModelPhoto, isSetTarget } from "@/lib/ai/garment-scope";
 import type { IntakeData, SizeChart, TechPackProject } from "@/types/project";
+import {
+  aiOutputLanguageBlock,
+  styleReviewSectionHeaders,
+} from "@/lib/i18n/ai-locale";
+import { normalizeLocale, type Locale } from "@/lib/i18n/locale";
+
+function withLocale(instructions: string, locale?: Locale | string | null): string {
+  return `${instructions}\n\n${aiOutputLanguageBlock(normalizeLocale(locale))}`;
+}
 
 export function getModel(): string {
   const provider = (process.env.AI_PROVIDER as AiProvider) || "gateway";
@@ -166,8 +176,11 @@ export async function generateSizeChartAssist(input: {
   sampleSize: string;
   regionStandard: SizeRegionStandard;
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
+  const loc = normalizeLocale(input.locale);
   const region = getRegionOption(input.regionStandard);
+  const methodLimit = loc === "en" ? 40 : 12;
   const context = prependScope(
     `
 品类：${input.category ?? "未指定"}
@@ -182,18 +195,21 @@ ${modelPhotoSizeNote(input.intake)}
     input.intake,
   );
 
-  const instructions = `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
+  const instructions = withLocale(
+    `你是资深版师，根据款式图与区域标准为 Tech Pack 生成尺码表（POM）。
 
 业务规则：
 1. 结合款式结构（品类、廓形、袖型等）与「${region.label}」习惯，选出该款式常用测量点（5–10 个）。
 2. sizes 数组输出该区域常用尺码列（必须包含「${input.sampleSize}」）。
 3. 每一行必须填写 baseline_cm（基准码「${input.sampleSize}」的估算值，cm，一位小数，不能为空）。
 4. 其他尺码列不要填数值；values 可省略或仅填基准码 key。
-5. method 简写（≤12 字）。
+5. method 简写（≤${methodLimit} ${loc === "en" ? "chars" : "字"}）。
 6. 即使已有尺码表只有部位名，也必须为每个部位给出 baseline_cm 估算。
 
 输出示例（基准码 M）：
-{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"},{"part":"胸围","method":"夹下1cm","baseline_cm":"108.0"}]}`;
+{"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"},{"part":"胸围","method":"夹下1cm","baseline_cm":"108.0"}]}`,
+    loc,
+  );
 
   try {
     const structured = await callStructured({
@@ -217,9 +233,12 @@ ${modelPhotoSizeNote(input.intake)}
 
   const { text } = await generateText({
     model: getModel(),
-    system: `你是资深版师。只输出 JSON，不要 markdown 说明。格式：
+    system: withLocale(
+      `你是资深版师。只输出 JSON，不要 markdown 说明。格式：
 {"sizes":["S","M","L"],"rows":[{"part":"衣长","method":"后中直量","baseline_cm":"72.0"}],"plainExplanation":"..."}
 基准码 ${input.sampleSize}，每行 baseline_cm 必填且 > 0。`,
+      input.locale,
+    ),
     messages: [{ role: "user", content: buildContent(context, input.imageDataUrl) }],
   });
 
@@ -247,6 +266,7 @@ export async function generateBomAssist(input: {
   existingBom?: BomItem[];
   answers?: Record<string, string | string[]>;
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
   const processText =
     input.processItems
@@ -280,13 +300,16 @@ ${existingText}
       : "同一套上下装才用 garmentPart 区分。";
 
   return callStructured({
-    instructions: `你是版房面辅料专员，根据款式图与工艺为 Tech Pack 生成 BOM 物料清单。
+    instructions: withLocale(
+      `你是版房面辅料专员，根据款式图与工艺为 Tech Pack 生成 BOM 物料清单。
 要求：
 1. 仅列出目标单款的面辅料；非目标款、配饰、鞋包物料不得加入。
 2. 列出主要面辅料（面料、里料、衬、拉链、纽扣、线、标等），${setBomRule}
 3. category 必须是 fabric/trim/accessory/packaging 之一。
 4. 不要删除用户已有物料。同款主面料/里料名称尽量与已有清单一致，勿因正面/背面再输出一条「主面料」；仅当正背面面料确实不同，或出现新的辅料/配件时才新增。
 5. plainExplanation 用小白能懂的话说明物料选择依据。`,
+      input.locale,
+    ),
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: BomAssistSchema,
@@ -300,6 +323,7 @@ export async function generateBatchAnnotations(input: {
   imageDataUrl?: string;
   processItems: Array<{ id?: string; part: string; process: string }>;
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
   const parts = input.processItems
     .map((p) => `- id=${p.id ?? "?"} | ${p.part}：${p.process}`)
@@ -322,9 +346,12 @@ userTips 简要说明标注了什么。`.trim(),
   );
 
   return callStructured({
-    instructions: `你是服装 Tech Pack 版师，在款式图上标注目标单款的结构部位区域。
+    instructions: withLocale(
+      `你是服装 Tech Pack 版师，在款式图上标注目标单款的结构部位区域。
 坐标必须落在目标款服装结构上；不得标注人脸、手、鞋、包、背景或其他非目标服装。每个区域一个矩形框。
 同一部位已有工艺条目时必须填 linkToExistingProcessId，可补充工艺说明，勿因换图新建重复工艺行。`,
+      input.locale,
+    ),
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: BatchAnnotateSchema,
@@ -341,6 +368,7 @@ export async function generateSizeDimensionAssist(input: {
   regionStandard: SizeRegionStandard;
   existingPart?: string;
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
   const region = getRegionOption(input.regionStandard);
   const context = prependScope(
@@ -357,7 +385,10 @@ ${modelPhotoSizeNote(input.intake)}
   );
 
   return callStructured({
-    instructions: `你是资深版师。根据款式图上的尺寸标注线，识别测量部位并估算基准码「${input.sampleSize}」的 cm 值（一位小数）。method 简写 ≤12 字。`,
+    instructions: withLocale(
+      `你是资深版师。根据款式图上的尺寸标注线，识别测量部位并估算基准码「${input.sampleSize}」的 cm 值（一位小数）。method 简写 ≤12 字。`,
+      input.locale,
+    ),
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: SizeDimensionAssistSchema,
@@ -375,6 +406,7 @@ export async function generateBatchSizeDimensions(input: {
   /** 已有尺寸线关联的部位，跳过 */
   skipParts?: string[];
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
   const region = getRegionOption(input.regionStandard);
   const rows = input.sizeChart.rows.filter((r) => r.part.trim());
@@ -408,12 +440,15 @@ ${modelPhotoSizeNote(input.intake)}`.trim(),
     input.intake,
   );
 
-  const instructions = `你是资深版师，在 Tech Pack 目标单款图上为尺码表测量点绘制尺寸标注线。
+  const instructions = withLocale(
+    `你是资深版师，在 Tech Pack 目标单款图上为尺码表测量点绘制尺寸标注线。
 要求：
 1. 为每个测量点输出一条线段，坐标落在目标款对应测量位置；不得标注背景、模特身体或其他服装。
 2. 线段长度合理（>30px），方向符合量法习惯。
 3. 只输出 type=dimension 的线段数据，不要矩形或文字框。
-4. userTips 简要说明标注了哪些测量点。`;
+4. userTips 简要说明标注了哪些测量点。`,
+    input.locale,
+  );
 
   const normalizeDimensions = (
     raw: Array<{ part: string; x: number; y: number; x2: number; y2: number }>,
@@ -454,9 +489,12 @@ ${modelPhotoSizeNote(input.intake)}`.trim(),
   const partList = targetRows.map((r) => r.part).join("、");
   const { text } = await generateText({
     model: getModel(),
-    system: `你是版师。只输出 JSON：
+    system: withLocale(
+      `你是版师。只输出 JSON：
 {"dimensions":[{"part":"衣长","x":120,"y":80,"x2":120,"y2":420}],"userTips":"..."}
 画布 ${CANVAS_W}×${CANVAS_H}，为每个部位输出一条线段，part 必须与给定列表一致：${partList}`,
+      input.locale,
+    ),
     messages: [{ role: "user", content: buildContent(context, input.imageDataUrl) }],
   });
 
@@ -480,6 +518,7 @@ export async function generateRegionAnnotate(input: {
   intake?: GarmentScopeInput;
   /** 已裁成框选局部时，勿再依赖坐标猜测整图其他部位 */
   regionCropped?: boolean;
+  locale?: Locale | string | null;
 }) {
   const regionLine = input.regionCropped
     ? `附图为用户框选区域的裁剪局部（可含少量邻接上下文）。请只描述图中主体结构部位，不要臆测图外部位（如把袖臂说成前胸）。`
@@ -496,7 +535,10 @@ ${input.existingPart ? `已有部位名参考：${input.existingPart}` : ""}
   );
 
   return callStructured({
-    instructions: `你是版房工艺师，根据目标单款局部区域填写工艺说明。勿描述模特、非目标服装或背景。输出简洁专业。部位命名必须与图中实际位置一致（胸/袖/下摆等勿混淆）。`,
+    instructions: withLocale(
+      `你是版房工艺师，根据目标单款局部区域填写工艺说明。勿描述模特、非目标服装或背景。输出简洁专业。部位命名必须与图中实际位置一致（胸/袖/下摆等勿混淆）。`,
+      input.locale,
+    ),
     userText: context,
     imageDataUrl: input.imageDataUrl,
     schema: RegionAnnotateSchema,
@@ -504,7 +546,10 @@ ${input.existingPart ? `已有部位名参考：${input.existingPart}` : ""}
   });
 }
 
-export async function enhanceTechPack(project: TechPackProject) {
+export async function enhanceTechPack(
+  project: TechPackProject,
+  opts?: { locale?: Locale | string | null },
+) {
   const context = prependScope(
     `
 款式：${project.title}
@@ -518,10 +563,13 @@ export async function enhanceTechPack(project: TechPackProject) {
   );
 
   return callStructured({
-    instructions: `你是版房总监，帮非服装专业人士补全 Tech Pack 中缺失的部分。
+    instructions: withLocale(
+      `你是版房总监，帮非服装专业人士补全 Tech Pack 中缺失的部分。
 仅针对已锁定的目标单款；不得补充非目标款物料或工艺。
 补全缺失的工艺条目、BOM、尺码表。不要删除用户已有内容，只补充和完善。
 summary 用友好语气告诉用户补了什么、还需要他们确认什么。`,
+      opts?.locale,
+    ),
     userText: context,
     imageDataUrl: project.intake.imageDataUrl,
     schema: EnhanceTechPackSchema,
@@ -538,7 +586,11 @@ export async function generateStyleReview(input: {
   bomItems?: Array<{ name: string; category?: string; spec?: string }>;
   existingReview?: string;
   intake?: GarmentScopeInput;
+  locale?: Locale | string | null;
 }) {
+  const loc = normalizeLocale(input.locale);
+  const maxChars = loc === "en" ? STYLE_REVIEW_MAX_EN : STYLE_REVIEW_MAX_ZH;
+  const headers = styleReviewSectionHeaders(loc);
   const processText =
     input.processItems
       ?.map((p) => `- ${p.part}：${p.process}${p.stitch ? `（${p.stitch}）` : ""}`)
@@ -563,20 +615,23 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
     input.intake,
   );
 
-  const instructions = `你是资深版房总监，为 Tech Pack 撰写「款式评语」，读者是版师、车版师、设计师等业内人员。
+  const instructions = withLocale(
+    `你是资深版房总监，为 Tech Pack 撰写「款式评语」，读者是版师、车版师、设计师等业内人员。
 仅评价已锁定的目标单款；勿评价模特、场景、配饰或其他可见服装。
 
 输出格式（必须包含以下四段标题，每段标题单独占一行）：
-【款式特点】款式名称、廓形结构、设计亮点与风格定位
-【面料建议】主辅料选型、克重/成分倾向、手感与功能性要求
-【工艺建议】关键工序、缝型线迹、辅料搭配与品质标准
-【注意事项】版型风险、对格对条、缩水/色牢度、车版与质检要点
+【${headers.features}】款式名称、廓形结构、设计亮点与风格定位
+【${headers.fabric}】主辅料选型、克重/成分倾向、手感与功能性要求
+【${headers.construction}】关键工序、缝型线迹、辅料搭配与品质标准
+【${headers.concerns}】版型风险、对格对条、缩水/色牢度、车版与质检要点
 
 写作要求：
 1. 使用业内术语，简洁专业，可直接用于工艺沟通与客户确认。
 2. 四段内容连贯，不要写成无关清单。
 3. 禁止写「用户上传了图片」「需要分析」「已生成初稿」等产品使用过程话。
-4. 总字数严格控制在 ${STYLE_REVIEW_MAX} 字以内（含标点与段落标题）。`;
+4. 总字数严格控制在 ${maxChars} ${loc === "en" ? "characters" : "字"}以内（含标点与段落标题）。`,
+    loc,
+  );
 
   const userContent = buildContent(context, input.imageDataUrl);
 
@@ -589,7 +644,7 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
       schemaName: "style_review",
     });
     const review = structured.review?.trim() ?? "";
-    if (review.length >= 20) return { review: review.slice(0, STYLE_REVIEW_MAX) };
+    if (review.length >= 20) return { review: review.slice(0, maxChars) };
   } catch (err) {
     console.warn("[style-review] structured output failed, falling back to text", err);
   }
@@ -600,7 +655,7 @@ ${input.existingReview ? `已有评语（可改写优化）：${input.existingRe
     messages: [{ role: "user", content: userContent }],
   });
 
-  const review = text.trim().slice(0, STYLE_REVIEW_MAX);
+  const review = text.trim().slice(0, maxChars);
   if (review.length < 20) {
     throw new Error("AI 未返回有效评语，请稍后重试");
   }

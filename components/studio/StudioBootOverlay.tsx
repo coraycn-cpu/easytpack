@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/i18n/LocaleProvider";
+
 type StudioBootOverlayProps = {
   /** 有图的画板总数；0 表示还在读项目 */
   imageTotal?: number;
@@ -15,11 +17,24 @@ export default function StudioBootOverlay({
   imageLoaded = 0,
   title,
 }: StudioBootOverlayProps) {
+  const { t } = useLocale();
   const hasImages = imageTotal > 0;
   const pct =
     hasImages && imageTotal > 0
       ? Math.min(96, Math.round((imageLoaded / imageTotal) * 100))
       : 18;
+
+  const defaultTitle = hasImages
+    ? t("studio.bootOpening")
+    : t("studio.bootLoadingProject");
+  const subtitle = hasImages
+    ? imageTotal > 1
+      ? t("studio.bootPreparingMulti", {
+          loaded: imageLoaded,
+          total: imageTotal,
+        })
+      : t("studio.bootPreparingOne")
+    : t("studio.bootAlmost");
 
   return (
     <div
@@ -36,14 +51,10 @@ export default function StudioBootOverlay({
           />
           <div>
             <p className="text-sm font-medium text-slate-900">
-              {title ?? (hasImages ? "正在打开工作台…" : "正在加载项目…")}
+              {title ?? defaultTitle}
             </p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-              {hasImages
-                ? imageTotal > 1
-                  ? `款式图较多，正在准备画布（${imageLoaded}/${imageTotal}）`
-                  : "正在准备画布图片…"
-                : "请稍候，马上进入画布"}
+              {subtitle}
             </p>
           </div>
         </div>

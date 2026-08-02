@@ -1,6 +1,7 @@
 import { getPrimaryArtboardId } from "@/lib/canvas/sizing-artboard";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import { fetchAi } from "@/lib/ai/quota-client";
+import type { Locale } from "@/lib/i18n/locale";
 import type { AiQuestion, TechPackProject } from "@/types/project";
 
 /** 互动补充问题上限（与问卷 schema / prompt 一致） */
@@ -28,6 +29,7 @@ export async function resolveFullCollectQuestionImage(
 
 export async function fetchFullCollectQuestionnaire(
   project: TechPackProject,
+  locale: Locale,
 ): Promise<{ intro: string; questions: AiQuestion[] }> {
   const imageDataUrl = await resolveFullCollectQuestionImage(project);
   const res = await fetchAi("/api/ai/questionnaire", {
@@ -40,6 +42,7 @@ export async function fetchFullCollectQuestionnaire(
       detectedCategory: project.intake.detectedCategory,
       detectedFeatures: project.intake.detectedFeatures,
       intake: project.intake,
+      locale,
     }),
   });
   const data = await res.json();

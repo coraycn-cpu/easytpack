@@ -6,6 +6,8 @@ import {
 import { AiChatResponseSchema } from "@/types/process";
 import { BRAND_NAME } from "@/lib/brand";
 import { getModel } from "./assist";
+import { aiChatLanguageBlock, aiOutputLanguageBlock } from "@/lib/i18n/ai-locale";
+import { normalizeLocale, type Locale } from "@/lib/i18n/locale";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -90,7 +92,9 @@ export async function chatWithAssistant(input: {
   images?: ChatImageAttachment[];
   /** @deprecated 等价于单张 intake */
   imageDataUrl?: string;
+  locale?: Locale | string | null;
 }) {
+  const loc = normalizeLocale(input.locale);
   const images: ChatImageAttachment[] =
     input.images && input.images.length > 0
       ? input.images
@@ -99,7 +103,10 @@ export async function chatWithAssistant(input: {
             {
               role: "intake",
               dataUrl: input.imageDataUrl,
-              label: "上传原始参考图（款式分析唯一图像来源）",
+              label:
+                loc === "en"
+                  ? "Original upload (sole source for style analysis)"
+                  : "上传原始参考图（款式分析唯一图像来源）",
             },
           ]
         : [];
@@ -129,13 +136,16 @@ ${describeAttachments(images)}
 - 无关：礼貌拒绝，不要答偏题，不要输出修改字段。
 若用户需要「标工艺 / 填物料 / 填尺寸 / 一键补全 / 写评语 / 生成背面 / 生成线稿」，用 suggested_actions，不要假装已完成。
 画布类建议请在 reason 里写清目标画板名称（若上下文有当前选中画板）。
+
+${aiChatLanguageBlock(loc)}
+${aiOutputLanguageBlock(loc)}
 `.trim();
 
   const { object } = await generateObject({
     model: getModel(),
     schema: AiChatResponseSchema,
     schemaName: "ai_chat",
-    instructions: CHAT_SYSTEM,
+    instructions: `${CHAT_SYSTEM}\n\n${aiChatLanguageBlock(loc)}\n${aiOutputLanguageBlock(loc)}`,
     messages: [
       {
         role: "user",

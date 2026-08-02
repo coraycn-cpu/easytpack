@@ -10,6 +10,7 @@ import { AI_ACTION_BUTTON_TITLES } from "@/lib/ai/image-source-hints";
 import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import { readImageDataUrlFromFile } from "@/lib/canvas/paste-image";
 import type { CanvasTool } from "@/types/canvas";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type CanvasToolbarProps = {
   tool: CanvasTool;
@@ -50,18 +51,18 @@ type CanvasToolbarProps = {
   pasteImageDisabled?: boolean;
 };
 
-const TOOLS: { id: CanvasTool; label: string; icon: string }[] = [
-  { id: "select", label: "选择", icon: "↖" },
-  { id: "pan", label: "移动", icon: "✋" },
-  { id: "rect", label: "方框", icon: "□" },
-  { id: "circle", label: "圆圈", icon: "○" },
-  { id: "arrow", label: "箭头", icon: "→" },
-  { id: "line", label: "直线", icon: "／" },
-  { id: "dash", label: "虚线", icon: "┅" },
-  { id: "text", label: "文字", icon: "T" },
-  { id: "dimension", label: "尺寸", icon: "↔" },
-  { id: "freehand", label: "画笔", icon: "✎" },
-  { id: "eraser", label: "橡皮", icon: "⌫" },
+const TOOL_IDS: { id: CanvasTool; labelKey: string; icon: string }[] = [
+  { id: "select", labelKey: "studio.toolSelect", icon: "↖" },
+  { id: "pan", labelKey: "studio.toolSelect", icon: "✋" },
+  { id: "rect", labelKey: "studio.toolRect", icon: "□" },
+  { id: "circle", labelKey: "studio.toolCircle", icon: "○" },
+  { id: "arrow", labelKey: "studio.toolArrow", icon: "→" },
+  { id: "line", labelKey: "studio.toolLine", icon: "／" },
+  { id: "dash", labelKey: "studio.toolDash", icon: "┅" },
+  { id: "text", labelKey: "studio.toolText", icon: "T" },
+  { id: "dimension", labelKey: "studio.toolDim", icon: "↔" },
+  { id: "freehand", labelKey: "studio.toolBrush", icon: "✎" },
+  { id: "eraser", labelKey: "studio.toolEraser", icon: "⌫" },
 ];
 
 export default function CanvasToolbar({
@@ -96,6 +97,7 @@ export default function CanvasToolbar({
   onPasteImage,
   pasteImageDisabled,
 }: CanvasToolbarProps) {
+  const { t, locale } = useLocale();
   const pasteFileRef = useRef<HTMLInputElement>(null);
   const light = theme === "light";
   const scale = viewportScale ?? zoom;
@@ -106,6 +108,10 @@ export default function CanvasToolbar({
   };
 
   const manualLocked = interactionLocked ?? false;
+  const toolLabel = (id: CanvasTool, labelKey: string) => {
+    if (id === "pan") return locale === "en" ? "Pan" : "移动";
+    return t(labelKey);
+  };
 
   const actionBtn = (disabled: boolean, danger?: boolean) =>
     light
@@ -182,25 +188,31 @@ export default function CanvasToolbar({
               light ? "bg-slate-100" : flat ? "bg-[#262626]" : "bg-zinc-800"
             }`}
           >
-            {TOOLS.map((t) => (
+            {TOOL_IDS.map((item) => (
               <button
-                key={t.id}
+                key={item.id}
                 type="button"
                 title={
-                  t.id === "eraser" ? ANN_ACTION_LABELS.eraserHint : t.label
+                  item.id === "eraser"
+                    ? locale === "en"
+                      ? "Eraser — click strokes"
+                      : ANN_ACTION_LABELS.eraserHint
+                    : toolLabel(item.id, item.labelKey)
                 }
                 onPointerDown={(e) => {
                   // pointerdown 先于 window mouseup，避免切工具时被 finishDrawing 抢回「选择」
                   if (e.button !== 0) return;
                   e.preventDefault();
-                  onToolChange(t.id);
+                  onToolChange(item.id);
                 }}
-                className={toolBtn(tool === t.id)}
+                className={toolBtn(tool === item.id)}
               >
                 <span className="text-sm leading-none" aria-hidden>
-                  {t.icon}
+                  {item.icon}
                 </span>
-                <span className="hidden lg:inline">{t.label}</span>
+                <span className="hidden lg:inline">
+                  {toolLabel(item.id, item.labelKey)}
+                </span>
               </button>
             ))}
             {onPasteImage && (
@@ -210,11 +222,15 @@ export default function CanvasToolbar({
                   disabled={manualLocked || pasteImageDisabled}
                   onClick={() => pasteFileRef.current?.click()}
                   className={`${toolBtn(false)} disabled:cursor-not-allowed disabled:opacity-40`}
-                  title={ANN_ACTION_LABELS.pasteImageHint}
+                  title={
+                    locale === "en"
+                      ? "Paste image (Ctrl+V)"
+                      : ANN_ACTION_LABELS.pasteImageHint
+                  }
                 >
                   <span className="text-sm leading-none">⧉</span>
                   <span className="hidden lg:inline">
-                    {ANN_ACTION_LABELS.pasteImage}
+                    {locale === "en" ? "Sticker" : ANN_ACTION_LABELS.pasteImage}
                   </span>
                 </button>
                 <input
@@ -278,11 +294,11 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  工艺层
+                  {t("studio.layerProcess")}
                 </label>
                 <label
                   className="inline-flex cursor-pointer items-center gap-1 text-xs text-slate-600"
-                  title="显示/隐藏尺寸标注层"
+                  title={t("studio.layerSize")}
                 >
                   <input
                     type="checkbox"
@@ -295,7 +311,7 @@ export default function CanvasToolbar({
                     }
                     className="rounded"
                   />
-                  尺寸层
+                  {t("studio.layerSize")}
                 </label>
               </div>
             </>
@@ -309,27 +325,27 @@ export default function CanvasToolbar({
               disabled={!canUndo}
               onClick={onUndo}
               className={actionBtn(!canUndo)}
-              title="撤销"
+              title={t("studio.undo")}
             >
-              撤销
+              {t("studio.undo")}
             </button>
             <button
               type="button"
               disabled={!canRedo}
               onClick={onRedo}
               className={actionBtn(!canRedo)}
-              title="重做"
+              title={t("studio.redo")}
             >
-              重做
+              {t("studio.redo")}
             </button>
             <button
               type="button"
               disabled={!canDelete}
               onClick={onDelete}
               className={actionBtn(!canDelete, true)}
-              title="删除选中"
+              title={t("studio.delete")}
             >
-              删除
+              {t("studio.delete")}
             </button>
           </div>
         </div>
@@ -344,10 +360,10 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFullCollect}
                   className={aiBtn(true)}
-                  title={AI_ACTION_BUTTON_TITLES["full-collect"]}
+                  title={t("studio.aiFull")}
                 >
                   <span>✦</span>
-                  AI 一键标注
+                  {t("studio.aiFull")}
                 </button>
               )}
               {onAnnotateProcess && (
@@ -356,11 +372,11 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onAnnotateProcess}
                   className={aiBtn()}
-                  title={`${AI_ACTION_BUTTON_TITLES["annotate-process"]} · ${ANN_ACTION_LABELS.aiBatchProcessHint}`}
+                  title={t("studio.aiProcess")}
                 >
                   {annotateProcessLoading
-                    ? "标注中…"
-                    : ANN_ACTION_LABELS.aiBatchProcess}
+                    ? t("studio.aiBusy")
+                    : t("studio.aiProcess")}
                 </button>
               )}
               {onFillBom && (
@@ -369,9 +385,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFillBom}
                   className={aiBtn()}
-                  title={AI_ACTION_BUTTON_TITLES["fill-bom"]}
+                  title={t("studio.aiBom")}
                 >
-                  AI 填物料
+                  {t("studio.aiBom")}
                 </button>
               )}
               {onFillSize && (
@@ -380,9 +396,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onFillSize}
                   className={aiBtn()}
-                  title={AI_ACTION_BUTTON_TITLES["fill-size"]}
+                  title={t("studio.aiSize")}
                 >
-                  AI 填尺寸
+                  {t("studio.aiSize")}
                 </button>
               )}
               {onEnhanceAll && (
@@ -391,9 +407,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onEnhanceAll}
                   className={aiBtn()}
-                  title={AI_ACTION_BUTTON_TITLES.enhance}
+                  title={t("studio.aiEnhance")}
                 >
-                  一键补全
+                  {t("studio.aiEnhance")}
                 </button>
               )}
               {onExplain && (
@@ -402,9 +418,9 @@ export default function CanvasToolbar({
                   disabled={aiBusy}
                   onClick={onExplain}
                   className={aiBtn()}
-                  title={AI_ACTION_BUTTON_TITLES.explain}
+                  title={t("studio.aiReview")}
                 >
-                  款式评语
+                  {t("studio.aiReview")}
                 </button>
               )}
             </div>

@@ -129,7 +129,10 @@ export const StudioDraftSchema = z.object({
   aiSummary: z.string().optional().describe("版房专家初稿说明"),
 });
 
-export const STYLE_REVIEW_MAX = 280;
+export const STYLE_REVIEW_MAX_ZH = 280;
+export const STYLE_REVIEW_MAX_EN = 900;
+/** Schema upper bound (EN); UI/prompt may use tighter ZH cap */
+export const STYLE_REVIEW_MAX = STYLE_REVIEW_MAX_EN;
 
 export const StyleReviewSchema = z.object({
   review: z
@@ -137,7 +140,7 @@ export const StyleReviewSchema = z.object({
     .min(20)
     .max(STYLE_REVIEW_MAX)
     .describe(
-      "款式评语，280字以内，面向版师/车版/设计师，含款式特点、面料建议、工艺建议、注意事项四段",
+      "Style remarks for pattern makers / sample room; include features, fabric, construction, concerns",
     ),
 });
 
@@ -148,7 +151,7 @@ export const SizeChartAssistSchema = z.object({
   rows: z.array(
     z.object({
       part: z.string().describe("测量点名称，符合区域标准习惯"),
-      method: z.string().max(12).describe("简写量法，≤12字"),
+      method: z.string().max(40).describe("POM method shorthand"),
       baseline_cm: z.coerce
         .string()
         .describe("该部位在样衣基准码下的测量值（cm，一位小数，必填，如 72.5）"),
@@ -186,7 +189,7 @@ export const RegionAnnotateSchema = z.object({
 
 export const SizeDimensionAssistSchema = z.object({
   part: z.string().describe("测量点名称"),
-  method: z.string().max(12).describe("简写量法，≤12字"),
+  method: z.string().max(40).describe("POM method shorthand"),
   baseline_cm: z.coerce.string().describe("基准码测量值（cm，一位小数）"),
 });
 

@@ -1,3 +1,6 @@
+import type { Locale } from "@/lib/i18n/locale";
+import { normalizeLocale } from "@/lib/i18n/locale";
+
 export type AiLoadingPresetId =
   | "intake"
   | "questionnaire"
@@ -22,7 +25,7 @@ export type AiLoadingPreset = {
   tips: string[];
 };
 
-export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
+const ZH: Record<AiLoadingPresetId, AiLoadingPreset> = {
   intake: {
     title: "AI 正在理解你的款式",
     subtitle: "通常需要 15–40 秒，请勿关闭或重复提交",
@@ -104,7 +107,7 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
     title: "AI 正在生成款式评语",
     subtitle: "约 5–15 秒",
     steps: [{ icon: "📝", title: "撰写评语", desc: "款式特点·面料·工艺·注意事项" }],
-    tips: ["评语将显示在数据面板「评语」Tab", "四段式结构，控制在 280 字以内"],
+    tips: ["评语将显示在数据面板「评语」Tab", "四段式结构，控制在字数上限内"],
   },
   "region-annotate": {
     title: "AI 正在识别选中区域",
@@ -148,14 +151,161 @@ export const AI_LOADING_PRESETS: Record<AiLoadingPresetId, AiLoadingPreset> = {
   },
 };
 
-export function getAiLoadingPreset(id?: AiLoadingPresetId | null): AiLoadingPreset {
-  return AI_LOADING_PRESETS[id ?? "default"];
+const EN: Record<AiLoadingPresetId, AiLoadingPreset> = {
+  intake: {
+    title: "AI is reading your style",
+    subtitle: "Usually 15–40s — don’t close or resubmit",
+    steps: [
+      { icon: "📷", title: "Read image", desc: "Outline & main construction" },
+      { icon: "🔍", title: "Detect type", desc: "Flat / model / collage" },
+      { icon: "✨", title: "Key points", desc: "Ops & style highlights" },
+      { icon: "📝", title: "Next steps", desc: "Prepare follow-up prompts" },
+    ],
+    tips: [
+      "Model or multi-garment shots may need you to confirm the target piece",
+      "Plain language is fine — no jargon required",
+      "Please wait; avoid double-clicks",
+    ],
+  },
+  questionnaire: {
+    title: "AI is preparing questions",
+    subtitle: "About 10–20s",
+    steps: [
+      { icon: "💬", title: "Review info", desc: "Check description & image" },
+      { icon: "❓", title: "Draft Qs", desc: "Short confirmations to ask" },
+    ],
+    tips: ["Keep answers short", "Don’t navigate away while AI runs"],
+  },
+  draft: {
+    title: "AI is drafting the tech pack",
+    subtitle: "Usually 30–60s — keep this page open",
+    steps: [
+      { icon: "⚙️", title: "Construction", desc: "Main part ops notes" },
+      { icon: "🧵", title: "BOM", desc: "Key fabrics & trims" },
+      { icon: "📐", title: "Canvas marks", desc: "Structure regions on image" },
+      { icon: "📏", title: "Size estimate", desc: "POMs & sample size" },
+    ],
+    tips: [
+      "You can edit the draft on canvas",
+      "Studio opens when done",
+      "Don’t click submit again",
+    ],
+  },
+  "annotate-process": {
+    title: "AI Ops in progress",
+    subtitle: "Finding regions & writing ops · ~15–30s",
+    steps: [
+      { icon: "🎯", title: "Locate parts", desc: "Main structure boxes" },
+      { icon: "📋", title: "Write ops", desc: "Part names & methods" },
+      { icon: "🔗", title: "Link rows", desc: "Tie boxes to ops lines" },
+    ],
+    tips: ["Canvas locked — don’t annotate yet", "Review in Ops tab when done"],
+  },
+  "fill-bom": {
+    title: "AI BOM in progress",
+    subtitle: "Building BOM · ~15–30s",
+    steps: [
+      { icon: "🧶", title: "Materials", desc: "Infer fabrics & trims" },
+      { icon: "📦", title: "List", desc: "Spec & usage fields" },
+    ],
+    tips: ["Won’t delete existing BOM rows", "Check BOM tab when done"],
+  },
+  "fill-size": {
+    title: "AI Size in progress",
+    subtitle: "POMs, sample size & dimension lines · ~30–60s",
+    steps: [
+      { icon: "📏", title: "Pick POMs", desc: "By region standard" },
+      { icon: "🔢", title: "Estimate", desc: "Sample-size cm values" },
+      { icon: "↔", title: "Draw lines", desc: "Blue AI dimension lines" },
+    ],
+    tips: ["Existing linked parts won’t duplicate", "Check Sizes tab + canvas"],
+  },
+  enhance: {
+    title: "AI Enhance in progress",
+    subtitle: "Fill gaps in ops / BOM / sizes · ~20–40s",
+    steps: [
+      { icon: "🔎", title: "Find gaps", desc: "Scan missing fields" },
+      { icon: "✅", title: "Fill in", desc: "Add without deleting yours" },
+    ],
+    tips: ["Only fills blanks — won’t overwrite your edits"],
+  },
+  explain: {
+    title: "AI Remarks in progress",
+    subtitle: "About 5–15s",
+    steps: [
+      { icon: "📝", title: "Write notes", desc: "Features · fabric · ops · risks" },
+    ],
+    tips: ["Shows in Notes tab", "Four sections, within length limit"],
+  },
+  "region-annotate": {
+    title: "AI reading selection",
+    subtitle: "About 10–20s",
+    steps: [
+      { icon: "🔲", title: "Analyze", desc: "Structure in the box" },
+      { icon: "📝", title: "Write ops", desc: "Part construction note" },
+    ],
+    tips: ["Don’t move or delete the selection"],
+  },
+  "size-dimension": {
+    title: "AI reading size line",
+    subtitle: "About 10–20s",
+    steps: [
+      { icon: "📏", title: "Analyze", desc: "POM & measure method" },
+      { icon: "🔢", title: "Estimate", desc: "Sample-size cm value" },
+    ],
+    tips: ["Don’t move or delete the size line"],
+  },
+  "view-image": {
+    title: "AI generating view",
+    subtitle: "Image gen may take 30–90s",
+    steps: [
+      { icon: "🖼", title: "Read ref", desc: "Selected style image" },
+      { icon: "🎨", title: "Draw view", desc: "Back / line / detail…" },
+      { icon: "📌", title: "Place board", desc: "Add to canvas" },
+    ],
+    tips: [
+      "Slow — don’t double-click",
+      "New artboard appears when done",
+      "Preview shows the ref sent to AI",
+    ],
+  },
+  chat: {
+    title: "Assistant is replying",
+    subtitle: "About 5–20s",
+    steps: [{ icon: "💬", title: "Understand", desc: "Parse your request" }],
+    tips: ["Reply may update ops, BOM, or sizes"],
+  },
+  default: {
+    title: "AI working",
+    subtitle: "Please wait — don’t repeat the action",
+    steps: [{ icon: "🤖", title: "Working", desc: "Finishing your request" }],
+    tips: ["Keep this page open until done"],
+  },
+};
+
+export const AI_LOADING_PRESETS = ZH;
+
+export function getAiLoadingPreset(
+  id?: AiLoadingPresetId | null,
+  locale?: Locale | string | null,
+): AiLoadingPreset {
+  const map = normalizeLocale(locale) === "en" ? EN : ZH;
+  return map[id ?? "default"];
 }
 
 /** 按任务标签微调生图 overlay 副标题 */
-export function viewImageSubtitleForTask(taskLabel?: string): string | undefined {
+export function viewImageSubtitleForTask(
+  taskLabel?: string,
+  locale?: Locale | string | null,
+): string | undefined {
   const t = taskLabel?.trim();
   if (!t) return undefined;
+  const en = normalizeLocale(locale) === "en";
+  if (en) {
+    if (/flat|平铺/i.test(t)) return `Generating “${t}” · ~30–90s · original upload`;
+    if (/line|线稿/i.test(t)) return `Generating “${t}” · ~30–90s · from color view`;
+    return `Generating “${t}” · ~30–90s`;
+  }
   if (/平铺/.test(t)) return `正在生成「${t}」，约 30–90 秒 · 参考原上传图`;
   if (/线稿/.test(t)) return `正在生成「${t}」，约 30–90 秒 · 描摹选定彩图`;
   return `正在生成「${t}」，约 30–90 秒，请耐心等待`;

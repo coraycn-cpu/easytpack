@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type DataExpandShellProps = {
   open: boolean;
@@ -21,6 +22,7 @@ export default function DataExpandShell({
   children,
   footerLeft,
 }: DataExpandShellProps) {
+  const { t } = useLocale();
   if (!open) return null;
 
   return (
@@ -39,7 +41,7 @@ export default function DataExpandShell({
             type="button"
             onClick={onClose}
             className="rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="关闭"
+            aria-label={t("common.close")}
           >
             ✕
           </button>
@@ -54,7 +56,7 @@ export default function DataExpandShell({
             onClick={onClose}
             className="rounded-lg border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:bg-slate-50"
           >
-            完成
+            {t("panel.done")}
           </button>
         </div>
       </div>

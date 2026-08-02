@@ -1,8 +1,33 @@
 /** 档位展示文案（客户端可安全引用） */
 
+import type { TranslateFn } from "@/lib/i18n/translate";
+
 export type UserPlan = "free" | "comped" | "paused";
 
-export function planLabel(plan: UserPlan | string | null | undefined): string {
+/** i18n message key for plan badge / level label */
+export function planLabelKey(
+  plan: UserPlan | string | null | undefined,
+): string {
+  switch (plan) {
+    case "paused":
+      return "account.planPaused";
+    case "comped":
+      return "account.planComped";
+    case "free":
+    default:
+      return "account.planFree";
+  }
+}
+
+/**
+ * 档位中文文案（无 t 时兼容旧调用）。
+ * 传入 `t` 时走 i18n：account.planFree / planPaused / planComped。
+ */
+export function planLabel(
+  plan: UserPlan | string | null | undefined,
+  t?: TranslateFn,
+): string {
+  if (t) return t(planLabelKey(plan));
   switch (plan) {
     case "paused":
       return "已暂停";
@@ -19,10 +44,16 @@ export function parseUserPlan(raw: unknown): UserPlan {
   return "free";
 }
 
-/** 邮箱前缀当会员名；没有邮箱时用「会员」 */
-export function memberDisplayName(email: string | null | undefined): string {
+/**
+ * 邮箱前缀当会员名；没有邮箱时用 emptyLabel（默认「会员」）。
+ * 界面请传 `t("account.member")`。
+ */
+export function memberDisplayName(
+  email: string | null | undefined,
+  emptyLabel = "会员",
+): string {
   const raw = (email || "").trim();
-  if (!raw) return "会员";
+  if (!raw) return emptyLabel;
   const at = raw.indexOf("@");
   if (at > 0) return raw.slice(0, at);
   return raw;

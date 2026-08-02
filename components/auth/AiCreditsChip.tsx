@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   AI_QUOTA_CHANGED_EVENT,
   type AiQuotaChangedDetail,
@@ -21,6 +22,7 @@ type QuotaSummary = {
  * 顶栏 AI 额度胶囊（仅展示；点进去用户中心）
  */
 export default function AiCreditsChip() {
+  const { t } = useLocale();
   const [ready, setReady] = useState(false);
   const [summary, setSummary] = useState<QuotaSummary | null>(null);
 
@@ -93,16 +95,20 @@ export default function AiCreditsChip() {
       className="hidden items-center gap-1.5 rounded-full border border-brand-light bg-surface px-2.5 py-1 text-[11px] font-medium text-brand-dark hover:bg-brand-soft sm:inline-flex"
       title={
         summary.paused
-          ? "AI 已暂停，打开用户中心查看"
-          : `本月剩余约 ${left} 点 · 已用 ${summary.used}/${summary.limit}`
+          ? t("credits.pausedTitle")
+          : t("credits.leftTitle", {
+              n: left,
+              used: summary.used,
+              limit: summary.limit,
+            })
       }
     >
       <span className="text-brand" aria-hidden>
         ✦
       </span>
       {summary.paused
-        ? "AI 已暂停"
-        : `${left} AI 点`}
+        ? t("credits.paused")
+        : t("credits.leftLabel", { n: left })}
     </Link>
   );
 }

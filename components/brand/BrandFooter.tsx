@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   BRAND_CONTACT_EMAIL,
   BRAND_SITE,
@@ -18,10 +21,12 @@ export default function BrandFooter({
   className = "",
   showGuideLink = true,
 }: BrandFooterProps) {
+  const { t } = useLocale();
+
   return (
     <footer
       className={`pointer-events-auto text-center ${className}`}
-      aria-label="站点页脚"
+      aria-label={t("footer.aria")}
     >
       <a
         href={BRAND_SITE_URL}
@@ -40,12 +45,12 @@ export default function BrandFooter({
             href={GUIDE_PAGE_PATH}
             className="font-medium text-brand hover:text-brand-dark"
           >
-            功能介绍与使用说明 / FAQ
+            {t("footer.guide")}
           </Link>
         </p>
       ) : null}
       <p className="mt-2 text-[11px] leading-relaxed text-muted">
-        业务联系：
+        {t("footer.contact")}
         <a
           href={`mailto:${BRAND_CONTACT_EMAIL}`}
           className="font-medium text-brand hover:text-brand-dark"
@@ -53,7 +58,7 @@ export default function BrandFooter({
           {BRAND_CONTACT_EMAIL}
         </a>
         <span className="mx-1.5 text-border">·</span>
-        注册可免费试用
+        {t("footer.freeTrial")}
       </p>
     </footer>
   );

@@ -2,21 +2,37 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  HOME_TECHPACK_DEMO_TITLE,
-  HOME_TECHPACK_SLIDES,
-} from "@/lib/content/home-techpack-demo";
+import { useLocale } from "@/components/i18n/LocaleProvider";
+import { HOME_TECHPACK_SLIDES } from "@/lib/content/home-techpack-demo";
 
 const INTERVAL_MS = 4200;
 
-const EXPORT_HINT = "可导出 PDF / XLS / JPG 等格式，对接生产单数据";
+const SLIDE_LABEL_KEYS = [
+  "home.slideCover",
+  "home.slideFrontModel",
+  "home.slideBackLine",
+  "home.slideProcess",
+  "home.slideProcess",
+  "home.slideBom",
+  "home.slideBom",
+  "home.slideSize",
+  "home.slideSizeReview",
+] as const;
 
 /**
  * 首页左侧：工艺包 PDF 各页自动轮播展示。
  * 悬停暂停；点图放大；点圆点可跳转。
  */
 export default function HomeTechpackCarousel() {
-  const slides = HOME_TECHPACK_SLIDES;
+  const { t } = useLocale();
+  const slides = HOME_TECHPACK_SLIDES.map((slide, i) => {
+    const label = t(SLIDE_LABEL_KEYS[i] ?? "home.demoTitle");
+    return {
+      ...slide,
+      label,
+      alt: t("home.slideAlt", { n: i + 1, label }),
+    };
+  });
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -72,16 +88,16 @@ export default function HomeTechpackCarousel() {
       }}
     >
       <p className="mb-2 text-[12px] font-medium leading-relaxed text-foreground">
-        {EXPORT_HINT}
+        {t("home.exportHint")}
       </p>
 
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className="text-[11px] font-medium text-muted">
-          {HOME_TECHPACK_DEMO_TITLE}
+          {t("home.demoTitle")}
         </p>
         <p className="shrink-0 text-[10px] text-muted">
           {index + 1}/{slides.length} · {current.label}
-          <span className="ml-1.5 text-brand">点击可放大</span>
+          <span className="ml-1.5 text-brand">{t("home.clickZoom")}</span>
         </p>
       </div>
 
@@ -90,7 +106,7 @@ export default function HomeTechpackCarousel() {
         onClick={() => setLightboxOpen(true)}
         className="relative block w-full cursor-zoom-in overflow-hidden rounded-[var(--radius-sm)] bg-white ring-1 ring-border transition hover:ring-brand"
         style={{ aspectRatio: "1200 / 849" }}
-        aria-label={`放大查看：${current.alt}`}
+        aria-label={t("home.zoomAria", { alt: current.alt })}
       >
         {slides.map((slide, i) => (
           // eslint-disable-next-line @next/next/no-img-element
@@ -114,7 +130,10 @@ export default function HomeTechpackCarousel() {
           <button
             key={slide.src}
             type="button"
-            aria-label={`第 ${i + 1} 页：${slide.label}`}
+            aria-label={t("home.pageAria", {
+              n: i + 1,
+              label: slide.label,
+            })}
             aria-current={i === index}
             onClick={() => setIndex(i)}
             className={`h-1.5 rounded-full transition-all ${
@@ -133,7 +152,7 @@ export default function HomeTechpackCarousel() {
             className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/70 p-3 backdrop-blur-[2px] sm:p-6"
             role="dialog"
             aria-modal="true"
-            aria-label="工艺包示例放大查看"
+            aria-label={t("home.zoomTitle")}
             onClick={() => setLightboxOpen(false)}
           >
             <div
@@ -142,7 +161,7 @@ export default function HomeTechpackCarousel() {
             >
               <div className="mb-2 flex items-center justify-between gap-3 text-white">
                 <p className="min-w-0 truncate text-sm font-medium">
-                  {HOME_TECHPACK_DEMO_TITLE}
+                  {t("home.demoTitle")}
                   <span className="ml-2 font-normal text-white/70">
                     {index + 1}/{slides.length} · {current.label}
                   </span>
@@ -151,9 +170,9 @@ export default function HomeTechpackCarousel() {
                   type="button"
                   onClick={() => setLightboxOpen(false)}
                   className="shrink-0 rounded-md bg-white/15 px-3 py-1.5 text-xs hover:bg-white/25"
-                  aria-label="关闭"
+                  aria-label={t("common.close")}
                 >
-                  关闭
+                  {t("common.close")}
                 </button>
               </div>
 
@@ -171,7 +190,7 @@ export default function HomeTechpackCarousel() {
                       type="button"
                       onClick={goPrev}
                       className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-slate-900/55 px-3 py-2 text-sm text-white hover:bg-slate-900/75"
-                      aria-label="上一页"
+                      aria-label={t("common.prev")}
                     >
                       ‹
                     </button>
@@ -179,7 +198,7 @@ export default function HomeTechpackCarousel() {
                       type="button"
                       onClick={goNext}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-slate-900/55 px-3 py-2 text-sm text-white hover:bg-slate-900/75"
-                      aria-label="下一页"
+                      aria-label={t("common.next")}
                     >
                       ›
                     </button>
@@ -188,7 +207,7 @@ export default function HomeTechpackCarousel() {
               </div>
 
               <p className="mt-2 text-center text-[11px] text-white/70">
-                左右键翻页 · Esc 或点遮罩关闭 · {EXPORT_HINT}
+                {t("home.zoomHint")} · {t("home.exportHint")}
               </p>
             </div>
           </div>,

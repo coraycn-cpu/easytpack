@@ -6,6 +6,7 @@ import {
   type AiLoadingPresetId,
   type AiLoadingStep,
 } from "@/lib/ai/loading-presets";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type AiAnalysisOverlayProps = {
   imagePreview?: string | null;
@@ -34,13 +35,15 @@ export default function AiAnalysisOverlay({
   tips: tipsOverride,
   subtitle: subtitleOverride,
   onCancel,
-  cancelLabel = "跳过，先手动标注",
+  cancelLabel,
 }: AiAnalysisOverlayProps) {
-  const config = getAiLoadingPreset(preset);
+  const { locale, t } = useLocale();
+  const config = getAiLoadingPreset(preset, locale);
   const displayTitle = title ?? config.title;
   const displaySubtitle = subtitleOverride ?? config.subtitle;
   const steps = stepsOverride ?? config.steps;
   const tips = tipsOverride ?? config.tips;
+  const resolvedCancel = cancelLabel ?? t("studio.aiSkipManual");
 
   const [stepIndex, setStepIndex] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
@@ -100,7 +103,8 @@ export default function AiAnalysisOverlay({
                 )}
                 {noteShort && !imageSourceHint?.includes(noteShort.slice(0, 12)) && (
                   <p className="mt-0.5 text-xs text-blue-100/80">
-                    修正/自定义：{noteShort}
+                    {t("studio.overlayCorrection")}
+                    {noteShort}
                   </p>
                 )}
               </div>
@@ -113,12 +117,12 @@ export default function AiAnalysisOverlay({
                 <div className="relative">
                   <img
                     src={imagePreview}
-                    alt="本次参考图"
+                    alt={t("studio.overlayRefAlt")}
                     className="h-32 w-32 rounded-xl object-cover shadow-lg ring-2 ring-blue-100"
                   />
                   <div className="absolute inset-0 animate-pulse rounded-xl bg-blue-400/20" />
                   <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-brand px-3 py-0.5 text-[10px] font-medium text-white">
-                    参考图
+                    {t("studio.overlayRefBadge")}
                   </div>
                 </div>
               </div>
@@ -162,15 +166,15 @@ export default function AiAnalysisOverlay({
                   onClick={onCancel}
                   className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  {cancelLabel}
+                  {resolvedCancel}
                 </button>
                 <p className="text-center text-[10px] text-slate-400">
-                  可随时跳过，稍后再点左侧 AI
+                  {t("studio.overlayCancelHint")}
                 </p>
               </div>
             ) : (
               <p className="mt-2 text-center text-[10px] font-medium text-amber-600/90">
-                ⚠ AI 处理中，界面已锁定，请勿重复点击
+                {t("studio.overlayLocked")}
               </p>
             )}
           </div>

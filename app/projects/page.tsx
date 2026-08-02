@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/layout/AppHeader";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import SyncPreferenceControls from "@/components/account/SyncPreferenceControls";
 import GuestRegisterNudge from "@/components/auth/GuestRegisterNudge";
 import ProjectThumb from "@/components/projects/ProjectThumb";
 import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
-import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
+import { calcProgress, getWorkflowLabel } from "@/lib/project/progress";
 import { resolveProjectRepository } from "@/lib/project/repository";
 import {
   duplicateProject,
@@ -56,6 +57,7 @@ type WorkflowFilter = "all" | "draft" | "in_review" | "finalized";
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [projects, setProjects] = useState<TechPackProject[]>([]);
   const [listReady, setListReady] = useState(false);
   const [cloudRefreshing, setCloudRefreshing] = useState(false);
@@ -78,6 +80,22 @@ export default function ProjectsPage() {
   const [syncMode, setSyncMode] = useState<CloudSyncMode>("auto");
   const [importBusy, setImportBusy] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
+
+  const CAT_LABEL = useMemo<Record<string, string>>(
+    () => ({
+      上衣: t("projects.catTops"),
+      裤装: t("projects.catPants"),
+      裙装: t("projects.catSkirts"),
+      套装: t("projects.catSets"),
+      外套: t("projects.catOuter"),
+      配件: t("projects.catAccessories"),
+      其它: t("projects.catOther"),
+      未分类: t("common.uncategorized"),
+    }),
+    [t],
+  );
+
+  const catLabel = (c: string) => CAT_LABEL[c] ?? c;
 
   const refresh = () => {
     void (async () => {
@@ -132,11 +150,17 @@ export default function ProjectsPage() {
         if (!q) return true;
         const title = (p.title || "").toLowerCase();
         const cat = getProjectLibraryCategory(p).toLowerCase();
+        const catDisplay = catLabel(getProjectLibraryCategory(p)).toLowerCase();
         const style = (p.styleNo || "").toLowerCase();
-        return title.includes(q) || cat.includes(q) || style.includes(q);
+        return (
+          title.includes(q) ||
+          cat.includes(q) ||
+          catDisplay.includes(q) ||
+          style.includes(q)
+        );
       });
     return sortProjectsByUpdatedAtDesc(list);
-  }, [projects, workflowFilter, categoryFilter, query]);
+  }, [projects, workflowFilter, categoryFilter, query, CAT_LABEL]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -154,7 +178,7 @@ export default function ProjectsPage() {
 
   const handleClearCache = () => {
     evacuateNonProjectStorage();
-    setCacheNote("已清理视角缓存、用量与质量日志；项目未删除");
+    setCacheNote(t("projects.cacheCleared"));
     refresh();
   };
 
@@ -193,29 +217,29 @@ export default function ProjectsPage() {
       const repo = await resolveProjectRepository();
       const p = await repo.get(id);
       if (!p) {
-        window.alert("项目不存在或已删除");
+        window.alert(t("projects.notFound"));
         return;
       }
       const json = exportProjectJsonBackup(p);
       const safe = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 40) || "project";
       downloadTextFile(`${safe}-backup.json`, json);
-      setCacheNote(`已导出「${title}」JSON 备份（图片若为 idb 引用需本机还原）`);
+      setCacheNote(t("projectsExtra.exportedBackup", { title }));
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "导出失败");
+      window.alert(e instanceof Error ? e.message : t("projects.exportFail"));
     }
   };
 
   const handleExportTelemetry = () => {
     const jsonl = exportAiTelemetryJsonl();
     if (!jsonl.trim()) {
-      setCacheNote("暂无质量日志可导出");
+      setCacheNote(t("projectsExtra.noQualityLog"));
       return;
     }
     downloadTextFile(
       `easytpack-ai-telemetry-${new Date().toISOString().slice(0, 10)}.jsonl`,
       jsonl,
     );
-    setCacheNote("已导出质量日志");
+    setCacheNote(t("projectsExtra.exportedQuality"));
   };
 
   const handleImportBackup = async (file: File | null) => {
@@ -223,27 +247,33 @@ export default function ProjectsPage() {
     setImportBusy(true);
     try {
       if (file.size > 20 * 1024 * 1024) {
-        throw new Error("文件过大（超过 20MB），请换较小备份或先压缩图片");
+        throw new Error(t("projectsExtra.fileTooBig"));
       }
       const text = await file.text();
       const result = await importProjectJsonBackup(text);
       refresh();
       const warn =
         result.warnings.length > 0
-          ? `（注意：${result.warnings.join(" ")}）`
+          ? `（${result.warnings.join(" ")}）`
           : "";
-      setCacheNote(`已恢复「${result.project.title}」${warn}`);
+      setCacheNote(
+        t("projectsExtra.restored", {
+          title: result.project.title,
+          warn,
+        }),
+      );
       if (
         window.confirm(
-          `已恢复「${result.project.title}」。是否打开 Studio？${
-            result.warnings[0] ? `\n\n${result.warnings[0]}` : ""
-          }`,
+          t("projectsExtra.openStudioAsk", {
+            title: result.project.title,
+            warn: result.warnings[0] ? `\n\n${result.warnings[0]}` : "",
+          }),
         )
       ) {
         router.push(`/project/${result.project.id}/studio`);
       }
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "导入失败");
+      window.alert(e instanceof Error ? e.message : t("projects.importFail"));
     } finally {
       setImportBusy(false);
     }
@@ -268,13 +298,17 @@ export default function ProjectsPage() {
       const repo = await resolveProjectRepository();
       await repo.save(updated);
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      const displayCat = catLabel(nextCat || LIBRARY_UNCATEGORIZED);
       setCacheNote(
-        `已将「${shortProjectTitle(current.title)}」分到「${
-          nextCat || LIBRARY_UNCATEGORIZED
-        }」`,
+        t("projectsExtra.categorized", {
+          title: shortProjectTitle(current.title),
+          cat: displayCat,
+        }),
       );
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "分类保存失败");
+      window.alert(
+        e instanceof Error ? e.message : t("projectsExtra.categoryFail"),
+      );
     }
   };
 
@@ -284,39 +318,49 @@ export default function ProjectsPage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">项目库</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t("projects.title")}
+            </h1>
             <p className="mt-1 text-sm text-muted">
               {cloudLoggedIn
-                ? `云端 + 本机 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`
-                : `本机保存 · 共 ${projects.length} 个 · 约占 ${formatStorageBytes(stats.totalBytes)}`}
+                ? t("projects.subtitleCloudBytes", {
+                    n: projects.length,
+                    bytes: formatStorageBytes(stats.totalBytes),
+                  })
+                : t("projects.subtitleLocalBytes", {
+                    n: projects.length,
+                    bytes: formatStorageBytes(stats.totalBytes),
+                  })}
               {" · "}
-              相册式浏览，可分类、删除、分页
-              {cloudRefreshing ? " · 正在同步云端…" : ""}
+              {t("projects.albumHint")}
+              {cloudRefreshing ? ` · ${t("projects.syncing")}` : ""}
             </p>
           </div>
           <Link
             href="/"
             className="pf-btn-primary shrink-0 px-4 py-2 text-sm"
           >
-            + 新建款式
+            {t("projects.newStyle")}
           </Link>
         </div>
 
         <details className="pf-card mb-4 px-4 py-3 text-xs text-muted">
           <summary className="cursor-pointer font-medium text-foreground">
-            本机存储与备份（点击展开）
+            {t("projects.localStorage")}
           </summary>
           <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
             <li>
-              项目数据 {formatStorageBytes(stats.projectsBytes)} · 视角缓存{" "}
-              {formatStorageBytes(stats.trainingBytes)} · AI 用量{" "}
-              {formatStorageBytes(stats.meterBytes)} · 质量日志{" "}
-              {formatStorageBytes(stats.telemetryBytes)}
+              {t("projects.storageBreakdown", {
+                projects: formatStorageBytes(stats.projectsBytes),
+                training: formatStorageBytes(stats.trainingBytes),
+                meter: formatStorageBytes(stats.meterBytes),
+                quality: formatStorageBytes(stats.telemetryBytes),
+              })}
             </li>
             <li>
-              正式 AI 额度请看「用户中心」云端已用/上限（生图成功约 5 点）
+              {t("projects.quotaHint")}
               {getAiTelemetryStorageBytes() > 0
-                ? ` · 本机质量日志 ${formatStorageBytes(getAiTelemetryStorageBytes())}`
+                ? ` · ${formatStorageBytes(getAiTelemetryStorageBytes())}`
                 : ""}
             </li>
           </ul>
@@ -327,18 +371,20 @@ export default function ProjectsPage() {
               onClick={handleClearCache}
               className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              清理缓存
-              {cacheBytes > 0 ? `（约 ${formatStorageBytes(cacheBytes)}）` : ""}
+              {t("projects.clearCache")}
+              {cacheBytes > 0 ? `（${formatStorageBytes(cacheBytes)}）` : ""}
             </button>
             <button
               type="button"
               onClick={handleExportTelemetry}
               className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
             >
-              导出质量日志
+              {t("projects.exportQualityLog")}
             </button>
             <label className="cursor-pointer rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
-              {importBusy ? "导入中…" : "导入 JSON 备份"}
+              {importBusy
+                ? t("projects.importing")
+                : t("projects.importBackup")}
               <input
                 type="file"
                 accept="application/json,.json"
@@ -355,13 +401,13 @@ export default function ProjectsPage() {
         </details>
 
         <div className="mb-4 rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-4 py-3 text-xs text-foreground">
-          <p className="font-medium text-brand-dark">云端同步</p>
+          <p className="font-medium text-brand-dark">{t("projects.cloudSync")}</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted">
             {cloudLoggedIn
               ? syncMode === "auto"
-                ? "当前：自动同步。登录与保存时会尽量传到云端。"
-                : "当前：手动同步。保存只写本机，需要时再点下方按钮。"
-              : `未登录：稿在本机浏览器。注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI，还能同步到云端。`}
+                ? t("projects.syncAutoHint")
+                : t("projects.syncManualHint")
+              : t("projects.syncGuestHint", { n: FREE_MONTHLY_AI_GIFT })}
           </p>
           {cloudLoggedIn ? (
             <div className="mt-2">
@@ -383,7 +429,9 @@ export default function ProjectsPage() {
                   onClick={handleSyncBoth}
                   className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-40"
                 >
-                  {syncBusy ? "同步中…" : "双向同步"}
+                  {syncBusy
+                    ? t("projects.syncingBtn")
+                    : t("projects.syncBoth")}
                 </button>
                 <button
                   type="button"
@@ -391,7 +439,7 @@ export default function ProjectsPage() {
                   onClick={handlePull}
                   className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
                 >
-                  从云端拉取
+                  {t("projects.pullCloud")}
                 </button>
                 <button
                   type="button"
@@ -399,7 +447,7 @@ export default function ProjectsPage() {
                   onClick={handlePush}
                   className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100 disabled:opacity-40"
                 >
-                  推到云端
+                  {t("projects.pushCloud")}
                 </button>
               </>
             ) : (
@@ -407,7 +455,7 @@ export default function ProjectsPage() {
                 href="/?mode=login&next=/projects"
                 className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-blue-800 hover:bg-blue-100"
               >
-                已有账号？去登录
+                {t("projects.goLogin")}
               </Link>
             )}
           </div>
@@ -427,23 +475,25 @@ export default function ProjectsPage() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索标题 / 分类 / 款号"
+            placeholder={t("projects.searchPh")}
             className="pf-input px-3 py-2 text-sm sm:max-w-xs"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[11px] text-muted">分类</label>
+            <label className="text-[11px] text-muted">
+              {t("projects.category")}
+            </label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="pf-input w-auto px-2 py-1.5 text-xs"
             >
-              <option value="all">全部分类</option>
+              <option value="all">{t("projects.allCategories")}</option>
               <option value={LIBRARY_UNCATEGORIZED}>
-                {LIBRARY_UNCATEGORIZED}
+                {t("common.uncategorized")}
               </option>
               {categories.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {catLabel(c)}
                 </option>
               ))}
             </select>
@@ -453,10 +503,10 @@ export default function ProjectsPage() {
         <div className="mb-4 flex flex-wrap gap-2">
           {(
             [
-              ["all", "全部状态"],
-              ["draft", "草稿"],
-              ["in_review", "审核中"],
-              ["finalized", "已定稿"],
+              ["all", t("projects.allStatus")],
+              ["draft", t("common.draft")],
+              ["in_review", t("common.inReview")],
+              ["finalized", t("common.finalized")],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -476,13 +526,13 @@ export default function ProjectsPage() {
 
         {!listReady ? (
           <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
-            正在加载项目…
+            {t("projects.loading")}
           </div>
         ) : filtered.length === 0 ? (
           <div className="pf-card border-dashed py-16 text-center text-sm text-muted">
-            没有符合条件的项目。{" "}
+            {t("projects.empty")}{" "}
             <Link href="/" className="pf-btn-text">
-              去新建款式
+              {t("projects.goNew")}
             </Link>
           </div>
         ) : (
@@ -512,25 +562,28 @@ export default function ProjectsPage() {
                           {shortProjectTitle(p.title, 18)}
                         </p>
                         <p className="text-[11px] text-muted">
-                          {cat} · {WORKFLOW_LABELS[p.workflowStatus] ?? p.workflowStatus}{" "}
-                          · {calcProgress(p)}%
+                          {catLabel(cat)} ·{" "}
+                          {getWorkflowLabel(p.workflowStatus, t)} ·{" "}
+                          {calcProgress(p)}%
                         </p>
                         <p className="text-[10px] leading-relaxed text-zinc-400">
-                          建于 {formatProjectDateTime(p.createdAt)}
+                          {t("projects.created")}{" "}
+                          {formatProjectDateTime(p.createdAt)}
                           <br />
-                          更新 {formatProjectDateTime(p.updatedAt)}
+                          {t("projects.updated")}{" "}
+                          {formatProjectDateTime(p.updatedAt)}
                         </p>
                       </div>
                     </Link>
                     <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-2 py-2">
                       <select
-                        aria-label="设置分类"
+                        aria-label={t("projects.setCategory")}
                         value={cat}
                         onChange={(e) => {
                           const v = e.target.value;
                           if (v === "__custom__") {
                             const name = window.prompt(
-                              "输入新分类名称",
+                              t("projects.newCategoryPrompt"),
                               customCategory || "",
                             );
                             if (name?.trim()) {
@@ -545,26 +598,28 @@ export default function ProjectsPage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <option value={LIBRARY_UNCATEGORIZED}>
-                          {LIBRARY_UNCATEGORIZED}
+                          {t("common.uncategorized")}
                         </option>
                         {categories.map((c) => (
                           <option key={c} value={c}>
-                            {c}
+                            {catLabel(c)}
                           </option>
                         ))}
-                        <option value="__custom__">+ 新建分类…</option>
+                        <option value="__custom__">
+                          {t("projects.newCategory")}
+                        </option>
                       </select>
                       <button
                         type="button"
-                        title="备份"
+                        title={t("projects.backup")}
                         onClick={() => void handleExportBackup(p.id, p.title)}
                         className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
                       >
-                        备份
+                        {t("projects.backup")}
                       </button>
                       <button
                         type="button"
-                        title="复制"
+                        title={t("projects.duplicate")}
                         onClick={() => {
                           void (async () => {
                             try {
@@ -577,7 +632,7 @@ export default function ProjectsPage() {
                               window.alert(
                                 e instanceof Error
                                   ? e.message
-                                  : "复制失败，本地空间可能已满",
+                                  : t("projectsExtra.dupFail"),
                               );
                               refresh();
                             }
@@ -585,15 +640,17 @@ export default function ProjectsPage() {
                         }}
                         className="rounded px-1.5 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100"
                       >
-                        复制
+                        {t("projects.duplicate")}
                       </button>
                       <button
                         type="button"
-                        title="删除"
+                        title={t("common.delete")}
                         onClick={() => {
                           if (
                             window.confirm(
-                              `确定删除「${p.title || "未命名"}」？删除后不可恢复。`,
+                              t("projects.deleteConfirm", {
+                                title: p.title || t("projects.unnamed"),
+                              }),
                             )
                           ) {
                             void (async () => {
@@ -605,7 +662,7 @@ export default function ProjectsPage() {
                         }}
                         className="rounded px-1.5 py-1 text-[10px] text-rose-500 hover:bg-rose-50"
                       >
-                        删除
+                        {t("common.delete")}
                       </button>
                     </div>
                   </article>
@@ -615,7 +672,11 @@ export default function ProjectsPage() {
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
               <p>
-                共 {filtered.length} 个 · 第 {safePage} / {totalPages} 页
+                {t("projects.pageInfo", {
+                  n: filtered.length,
+                  page: safePage,
+                  total: totalPages,
+                })}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -624,7 +685,7 @@ export default function ProjectsPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 disabled:opacity-40"
                 >
-                  上一页
+                  {t("projects.prevPage")}
                 </button>
                 <button
                   type="button"
@@ -634,7 +695,7 @@ export default function ProjectsPage() {
                   }
                   className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 disabled:opacity-40"
                 >
-                  下一页
+                  {t("projects.nextPage")}
                 </button>
               </div>
             </div>

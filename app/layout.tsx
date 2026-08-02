@@ -6,6 +6,7 @@ import {
   BRAND_SITE_URL,
   BRAND_SLOGAN,
 } from "@/lib/brand";
+import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -56,7 +57,9 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      <body className="flex min-h-full flex-col font-sans">
+        <LocaleProvider>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

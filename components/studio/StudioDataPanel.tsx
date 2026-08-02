@@ -26,6 +26,7 @@ import { generateProcessId } from "@/lib/process/ids";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import type { BomItem, ProcessItem } from "@/types/process";
 import type { Annotation, SizeChart, TechPackProject } from "@/types/project";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type Tab = "process" | "bom" | "size" | "review";
 
@@ -58,11 +59,11 @@ type StudioDataPanelProps = {
   interactionLocked?: boolean;
 };
 
-const BOM_CATEGORIES: Array<{ value: BomItem["category"]; label: string }> = [
-  { value: "fabric", label: "面料" },
-  { value: "trim", label: "辅料" },
-  { value: "accessory", label: "配件" },
-  { value: "packaging", label: "包装" },
+const BOM_CATEGORY_VALUES: BomItem["category"][] = [
+  "fabric",
+  "trim",
+  "accessory",
+  "packaging",
 ];
 
 const EMPTY_PROCESS: ProcessItem = {
@@ -108,6 +109,11 @@ export default function StudioDataPanel({
   highlightTab,
   interactionLocked,
 }: StudioDataPanelProps) {
+  const { t } = useLocale();
+  const bomCategories = BOM_CATEGORY_VALUES.map((value) => ({
+    value,
+    label: t(`panel.${value}`),
+  }));
   const [collapsed, setCollapsed] = useState(false);
   const [processExpandOpen, setProcessExpandOpen] = useState(false);
   const [bomExpandOpen, setBomExpandOpen] = useState(false);
@@ -242,19 +248,19 @@ export default function StudioDataPanel({
             }`}
           >
             {tab === "process"
-              ? "工艺"
+              ? t("studio.process")
               : tab === "bom"
-                ? "物料"
+                ? t("studio.bom")
                 : tab === "size"
-                  ? "尺寸"
-                  : "评语"}
+                  ? t("studio.size")
+                  : t("studio.review")}
           </button>
         ))}
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="ml-auto rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-          title={collapsed ? "展开面板" : "折叠面板"}
+          title={collapsed ? t("panel.expandPanel") : t("panel.collapsePanel")}
           aria-expanded={!collapsed}
         >
           {collapsed ? "◀" : "▼"}
@@ -275,7 +281,7 @@ export default function StudioDataPanel({
             return (
               <div className="mb-2 rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5">
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  图层 · 当前图 {layers.length}
+                  {t("panel.layers", { n: layers.length })}
                 </p>
                 <ul className="max-h-28 space-y-0.5 overflow-y-auto">
                   {layers.map((ann, idx) => {
@@ -319,28 +325,28 @@ export default function StudioDataPanel({
             activeTab={activeTab}
           />
           {selectedAnnIds.length === 1 && !shapeLinkable && !dimensionLinkable && selectionMode === "other" && (
-            <p className="mb-2 text-[10px] text-slate-400">装饰标注不可关联工艺/尺寸</p>
+            <p className="mb-2 text-[10px] text-slate-400">{t("panel.decoNoLink")}</p>
           )}
           {selectedAnnIds.length === 1 && shapeLinkable && activeTab === "process" && (
-            <p className="mb-2 text-[10px] text-brand">勾选工艺行以关联当前区域</p>
+            <p className="mb-2 text-[10px] text-brand">{t("panel.checkProcess")}</p>
           )}
           {selectedAnnIds.length === 1 && dimensionLinkable && activeTab === "size" && (
-            <p className="mb-2 text-[10px] text-emerald-600">勾选尺寸行以关联当前尺寸线</p>
+            <p className="mb-2 text-[10px] text-emerald-600">{t("panel.checkSize")}</p>
           )}
 
           {activeTab === "process" && (
             <div className="space-y-1.5">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <p className="text-[10px] text-slate-400">
-                  侧栏可快速改；大面板便于通览编辑
+                  {t("panel.sidebarHint")}
                 </p>
                 <button
                   type="button"
                   onClick={() => setProcessExpandOpen(true)}
                   className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
-                  title="打开大面板编辑工艺"
+                  title={t("panel.openProcess")}
                 >
-                  展开编辑
+                  {t("panel.expandEdit")}
                 </button>
               </div>
               {project.process_items.map((item, i) => {
@@ -382,7 +388,7 @@ export default function StudioDataPanel({
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => onToggleProcessLink(processId, e.target.checked)}
                           className="shrink-0"
-                          title="关联当前选中区域"
+                          title={t("panel.linkRegion")}
                         />
                       )}
                       <span
@@ -396,11 +402,13 @@ export default function StudioDataPanel({
                         value={item.part}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateProcess(i, { part: e.target.value })}
-                        placeholder="部位名称"
+                        placeholder={t("panel.partName")}
                         className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-800 outline-none"
                       />
                       {shapeCount > 0 && (
-                        <span className="shrink-0 text-[9px] text-blue-500">{shapeCount} 区</span>
+                        <span className="shrink-0 text-[9px] text-blue-500">
+                          {t("panel.regionCount", { n: shapeCount })}
+                        </span>
                       )}
                       <button
                         type="button"
@@ -409,7 +417,7 @@ export default function StudioDataPanel({
                           removeProcess(i);
                         }}
                         className="shrink-0 text-slate-300 hover:text-red-500"
-                        title="删除"
+                        title={t("common.delete")}
                       >
                         ×
                       </button>
@@ -418,7 +426,7 @@ export default function StudioDataPanel({
                       value={item.process}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => updateProcess(i, { process: e.target.value })}
-                      placeholder="工艺描述"
+                      placeholder={t("panel.processDesc")}
                       rows={2}
                       className="w-full resize-none bg-transparent text-[11px] leading-snug text-slate-600 outline-none"
                     />
@@ -427,13 +435,13 @@ export default function StudioDataPanel({
                         value={item.stitch ?? ""}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateProcess(i, { stitch: e.target.value })}
-                        placeholder="针法/线迹"
+                        placeholder={t("panel.stitch")}
                         className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                       />
                       <input
                         value={item.seam_allowance ?? ""}
                         onChange={(e) => updateProcess(i, { seam_allowance: e.target.value })}
-                        placeholder="缝份"
+                        placeholder={t("panel.seam")}
                         className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                       />
                     </div>
@@ -450,7 +458,7 @@ export default function StudioDataPanel({
                 onClick={addProcess}
                 className="w-full rounded border border-dashed border-slate-300 py-1.5 text-[11px] text-slate-500 hover:border-slate-400 hover:text-slate-700"
               >
-                + 添加工艺行
+                {t("panel.addProcess")}
               </button>
             </div>
           )}
@@ -459,15 +467,15 @@ export default function StudioDataPanel({
             <div className="space-y-1.5">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <p className="text-[10px] text-slate-400">
-                  侧栏可快速改；大面板表格更易填写
+                  {t("panel.bomSidebarHint")}
                 </p>
                 <button
                   type="button"
                   onClick={() => setBomExpandOpen(true)}
                   className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
-                  title="打开大面板编辑物料"
+                  title={t("panel.openBom")}
                 >
-                  展开编辑
+                  {t("panel.expandEdit")}
                 </button>
               </div>
               {project.bom_items.map((item, i) => (
@@ -479,13 +487,14 @@ export default function StudioDataPanel({
                     <input
                       value={item.name}
                       onChange={(e) => updateBom(i, { name: e.target.value })}
-                      placeholder="物料名称"
+                      placeholder={t("panel.materialName")}
                       className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-800 outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => removeBom(i)}
                       className="shrink-0 text-slate-300 hover:text-red-500"
+                      title={t("common.delete")}
                     >
                       ×
                     </button>
@@ -498,7 +507,7 @@ export default function StudioDataPanel({
                       }
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     >
-                      {BOM_CATEGORIES.map((c) => (
+                      {bomCategories.map((c) => (
                         <option key={c.value} value={c.value}>
                           {c.label}
                         </option>
@@ -507,37 +516,37 @@ export default function StudioDataPanel({
                     <input
                       value={item.garmentPart ?? ""}
                       onChange={(e) => updateBom(i, { garmentPart: e.target.value })}
-                      placeholder="上装/下装"
+                      placeholder={t("panel.garmentPart")}
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                     <input
                       value={item.spec ?? ""}
                       onChange={(e) => updateBom(i, { spec: e.target.value })}
-                      placeholder="规格"
+                      placeholder={t("panel.spec")}
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                     <input
                       value={item.color ?? ""}
                       onChange={(e) => updateBom(i, { color: e.target.value })}
-                      placeholder="颜色"
+                      placeholder={t("panel.color")}
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                     <input
                       value={item.usage ?? ""}
                       onChange={(e) => updateBom(i, { usage: e.target.value })}
-                      placeholder="用量"
+                      placeholder={t("panel.qty")}
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                     <input
                       value={item.supplier ?? ""}
                       onChange={(e) => updateBom(i, { supplier: e.target.value })}
-                      placeholder="供应商"
+                      placeholder={t("panel.supplier")}
                       className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                     <input
                       value={item.code ?? ""}
                       onChange={(e) => updateBom(i, { code: e.target.value })}
-                      placeholder="物料编码"
+                      placeholder={t("panel.materialCode")}
                       className="col-span-2 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-600 outline-none ring-1 ring-slate-200"
                     />
                   </div>
@@ -551,7 +560,7 @@ export default function StudioDataPanel({
                 onClick={addBom}
                 className="w-full rounded border border-dashed border-slate-300 py-1.5 text-[11px] text-slate-500"
               >
-                + 添加物料行
+                {t("panel.addBom")}
               </button>
             </div>
           )}
@@ -560,15 +569,15 @@ export default function StudioDataPanel({
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] leading-relaxed text-slate-500">
-                  改数字会同步到画布尺寸线；删除部位会去掉对应标注线。跳码与大表编辑在同一窗口。
+                  {t("panel.sizeHint")}
                 </p>
                 <button
                   type="button"
                   onClick={() => setSizeExpandOpen(true)}
                   className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
-                  title="打开大面板：改数字、删行、跳码放码"
+                  title={t("panel.openSize")}
                 >
-                  编辑 / 跳码
+                  {t("panel.editGrade")}
                 </button>
               </div>
               <SizeChartEditor
@@ -594,15 +603,15 @@ export default function StudioDataPanel({
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] leading-relaxed text-slate-500">
-                  面向版师/车版/设计师。图不准处可点下方芯片写入说明，或直接在画布标注。
+                  {t("panel.reviewHint")}
                 </p>
                 <button
                   type="button"
                   onClick={() => setReviewExpandOpen(true)}
                   className="shrink-0 rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-dark"
-                  title="打开大面板编辑评语"
+                  title={t("panel.openReview")}
                 >
-                  展开编辑
+                  {t("panel.expandEdit")}
                 </button>
               </div>
               <div className="flex flex-wrap gap-1">
@@ -638,11 +647,14 @@ export default function StudioDataPanel({
                 }
                 rows={10}
                 maxLength={REVIEW_MAX}
-                placeholder={`【款式特点】连帽卫衣，落肩廓形，罗纹收口\n【面料建议】…\n【工艺建议】…\n【注意事项】…`}
+                placeholder={t("panel.reviewPh")}
                 className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-brand"
               />
               <p className="text-right text-[10px] text-slate-400">
-                {(project.style_review ?? "").length}/{REVIEW_MAX} 字
+                {t("panel.charCount", {
+                  n: (project.style_review ?? "").length,
+                  max: REVIEW_MAX,
+                })}
               </p>
             </div>
           )}
