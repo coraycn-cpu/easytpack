@@ -90,15 +90,18 @@ function StatTile({
   );
 }
 
+function AccountLoading() {
+  const { t } = useLocale();
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
+      {t("account.loading")}
+    </div>
+  );
+}
+
 export default function AccountPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
-          加载账号…
-        </div>
-      }
-    >
+    <Suspense fallback={<AccountLoading />}>
       <AccountPageInner />
     </Suspense>
   );
@@ -131,9 +134,9 @@ function AccountPageInner() {
     const tip = consumeInviteClaimTip();
     if (tip) setTip(tip);
     if (showResetHint) {
-      setTip("请在下方设置新密码（来自邮箱重置链接）。");
+      setTip(t("account.setPasswordTip"));
     }
-  }, [showResetHint]);
+  }, [showResetHint, t]);
 
   useEffect(() => {
     if (!configured) {
@@ -166,17 +169,17 @@ function AccountPageInner() {
         const err = (await res.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(err?.error || "读取用量失败");
+        throw new Error(err?.error || t("account.usageFail"));
       }
       const data = (await res.json()) as CloudUsagePage;
       setCloudUsage(data);
       setPage(data.page);
     } catch (e) {
-      setUsageError(e instanceof Error ? e.message : "读取用量失败");
+      setUsageError(e instanceof Error ? e.message : t("account.usageFail"));
     } finally {
       setUsageLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!ready || !email || !configured) return;
@@ -192,9 +195,9 @@ function AccountPageInner() {
         | (InviteProfile & { error?: string })
         | null;
       if (!res.ok) {
-        throw new Error(json?.error || "读取邀请信息失败");
+        throw new Error(json?.error || t("account.inviteFail"));
       }
-      if (!json?.inviteCode) throw new Error("未返回邀请码");
+      if (!json?.inviteCode) throw new Error(t("account.noInviteCode"));
       setInvite({
         inviteCode: json.inviteCode,
         points: json.points,
@@ -205,11 +208,11 @@ function AccountPageInner() {
         pointsCap: json.pointsCap,
       });
     } catch (e) {
-      setInviteError(e instanceof Error ? e.message : "读取邀请信息失败");
+      setInviteError(e instanceof Error ? e.message : t("account.inviteFail"));
     } finally {
       setInviteLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!ready || !email || !configured) return;
@@ -235,9 +238,9 @@ function AccountPageInner() {
     const url = buildInviteRegisterUrl(invite.inviteCode);
     try {
       await navigator.clipboard.writeText(url);
-      setTip("邀请链接已复制，发给好友注册即可");
+      setTip(t("account.inviteCopied"));
     } catch {
-      setTip(`请手动复制：${url}`);
+      setTip(t("account.copyManual", { url }));
     }
   };
 
@@ -258,7 +261,7 @@ function AccountPageInner() {
     if (!configured || passwordBusy) return;
     const pwd = newPassword.trim();
     if (pwd.length < 6) {
-      setTip("新密码至少 6 位。");
+      setTip(t("auth.errWeakPass"));
       return;
     }
     setPasswordBusy(true);
@@ -267,20 +270,16 @@ function AccountPageInner() {
       const { error } = await supabase.auth.updateUser({ password: pwd });
       if (error) throw error;
       setNewPassword("");
-      setTip("新密码已保存，以后请用新密码登录。");
+      setTip(t("account.passwordSaved"));
     } catch (e) {
-      setTip(e instanceof Error ? e.message : "改密失败，请稍后重试");
+      setTip(e instanceof Error ? e.message : t("auth.errGeneric"));
     } finally {
       setPasswordBusy(false);
     }
   };
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
-        加载账号…
-      </div>
-    );
+    return <AccountLoading />;
   }
 
   if (!configured) {
@@ -292,10 +291,10 @@ function AccountPageInner() {
             {t("account.title")}
           </h1>
           <p className="mt-3 text-sm text-muted">
-            当前是本机模式（未配置云端）。配置后可登录、同步项目与查看 AI 额度。
+            {t("account.localModeTip")}
           </p>
           <Link href="/projects" className="mt-6 inline-block text-sm text-brand">
-            ← 我的项目
+            ← {t("account.myProjects")}
           </Link>
         </main>
       </div>
@@ -309,25 +308,28 @@ function AccountPageInner() {
       ? Math.min(100, Math.round((cloudUsage.used / cloudUsage.limit) * 100))
       : 0;
 
+  const planLabel =
+    cloudUsage?.plan === "paused"
+      ? t("account.paused")
+      : cloudUsage?.plan === "comped"
+        ? t("account.comped")
+        : t("account.freePlan");
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
-        {/* 顶栏：身份 + 快捷入口 */}
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground">
               {t("account.title")}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              {email ?? "已登录"} ·{" "}
-              {cloudUsage?.plan === "paused"
-                ? "已暂停"
-                : cloudUsage?.plan === "comped"
-                  ? "内部赠送"
-                  : "个人版"}{" "}
-              · 同步
-              {syncMode === "auto" ? "自动" : "手动"}
+              {email ?? t("account.signedIn")} · {planLabel} ·{" "}
+              {t("account.sync")}{" "}
+              {syncMode === "auto"
+                ? t("account.syncAuto")
+                : t("account.syncManual")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -335,20 +337,20 @@ function AccountPageInner() {
               href="/projects"
               className="rounded-md border border-border bg-white px-3 py-1.5 text-xs text-foreground hover:bg-background"
             >
-              我的项目
+              {t("account.myProjects")}
             </Link>
             <Link
               href="/"
               className="rounded-md border border-border bg-white px-3 py-1.5 text-xs text-foreground hover:bg-background"
             >
-              回首页
+              {t("account.backHome")}
             </Link>
             {isAdmin ? (
               <Link
                 href="/admin"
                 className="rounded-md border bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
               >
-                管理后台
+                {t("account.admin")}
               </Link>
             ) : null}
             <button
@@ -357,7 +359,7 @@ function AccountPageInner() {
               onClick={() => void handleSignOut()}
               className="rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:bg-background disabled:opacity-50"
             >
-              {busy ? "退出中…" : "退出"}
+              {busy ? t("account.signingOut") : t("common.logout")}
             </button>
           </div>
         </div>
@@ -376,7 +378,7 @@ function AccountPageInner() {
             {t("account.password")}
           </p>
           <p className="mt-1 text-[11px] text-muted">
-            忘记密码时：首页点「忘记密码」收邮件 → 点链接回到这里设置新密码。
+            {t("account.forgotHint")}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input
@@ -384,7 +386,7 @@ function AccountPageInner() {
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="新密码（至少 6 位）"
+              placeholder={t("account.newPasswordPh")}
               className="pf-input max-w-xs px-3 py-2 text-sm"
             />
             <button
@@ -393,12 +395,13 @@ function AccountPageInner() {
               onClick={() => void handleUpdatePassword()}
               className="pf-btn-primary px-3 py-2 text-xs disabled:opacity-40"
             >
-              {passwordBusy ? "保存中…" : "保存新密码"}
+              {passwordBusy
+                ? t("account.savingPassword")
+                : t("account.savePassword")}
             </button>
           </div>
         </section>
 
-        {/* 简易数据看板 */}
         <section className="mb-5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-muted">
@@ -413,15 +416,17 @@ function AccountPageInner() {
               }}
               className="text-[11px] text-brand hover:underline disabled:opacity-40"
             >
-              {usageLoading || inviteLoading ? "刷新中…" : "刷新数据"}
+              {usageLoading || inviteLoading
+                ? t("account.refreshing")
+                : t("account.refresh")}
             </button>
           </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile
-              label="AI 已用"
+              label={t("account.aiUsed")}
               value={
                 cloudUsage?.paused
-                  ? "已暂停"
+                  ? t("account.paused")
                   : cloudUsage
                     ? `${cloudUsage.used}/${cloudUsage.limit}`
                     : usageLoading
@@ -431,13 +436,19 @@ function AccountPageInner() {
               hint={
                 cloudUsage
                   ? cloudUsage.paused
-                    ? "管理员已暂停 AI"
-                    : `已用 ${usagePct}% · 免费 ${cloudUsage.base ?? "—"} + 邀请 ${cloudUsage.inviteBonus ?? cloudUsage.bonus ?? 0} + 加赠 ${cloudUsage.adminBonus ?? 0}`
-                  : "云端月额度"
+                    ? t("account.adminPaused")
+                    : t("account.usageBreakdown", {
+                        pct: usagePct,
+                        base: cloudUsage.base ?? "—",
+                        invite:
+                          cloudUsage.inviteBonus ?? cloudUsage.bonus ?? 0,
+                        admin: cloudUsage.adminBonus ?? 0,
+                      })
+                  : t("account.cloudQuota")
               }
             />
             <StatTile
-              label="邀请积分"
+              label={t("account.invitePoints")}
               value={
                 invite
                   ? `${invite.points}/${invite.pointsCap}`
@@ -445,10 +456,10 @@ function AccountPageInner() {
                     ? "…"
                     : "—"
               }
-              hint="计入 AI 额度上限"
+              hint={`${t("account.inviteBoth")} · ${t("account.countsToward")}`}
             />
             <StatTile
-              label="成功邀请"
+              label={t("account.successInvites")}
               value={
                 invite
                   ? `${invite.inviteSuccessCount}/${invite.maxSuccess}`
@@ -459,15 +470,15 @@ function AccountPageInner() {
               hint={
                 invite
                   ? invite.inviteRemaining > 0
-                    ? `还可邀 ${invite.inviteRemaining} 人`
-                    : "名额已满"
-                  : "双方各得积分"
+                    ? t("account.inviteMore", { n: invite.inviteRemaining })
+                    : t("account.inviteFull")
+                  : t("account.inviteHint")
               }
             />
             <StatTile
-              label="计价说明"
-              value="生图 5 点"
-              hint="其它 AI 成功多为 1 点；一键标注约 6 点"
+              label={t("account.pricing")}
+              value={t("account.genCost")}
+              hint={t("account.pricingHint")}
             />
           </div>
           {cloudUsage ? (
@@ -479,11 +490,13 @@ function AccountPageInner() {
             </div>
           ) : null}
           <p className="mt-2 text-[11px] leading-relaxed text-muted">
-            正式额度以云端「已用 / 上限」为准（成功才扣点）。邀请分会加进每月上限，不是另一套钱包。
+            {t("account.quotaTitle", {
+              used: cloudUsage?.used ?? "—",
+              limit: cloudUsage?.limit ?? "—",
+            })}
           </p>
         </section>
 
-        {/* 功能区：左操作 / 右用量，不再整页竖排 */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           <div className="flex flex-col gap-4 lg:col-span-2">
             <section className="pf-card px-4 py-4">
@@ -491,7 +504,9 @@ function AccountPageInner() {
                 {t("account.sync")}
               </p>
               <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                自动：登录/保存时上传。手动：只写本机，需要时再同步。
+                {syncMode === "auto"
+                  ? t("projects.syncAutoHint")
+                  : t("projects.syncManualHint")}
               </p>
               <div className="mt-3">
                 <SyncPreferenceControls
@@ -505,7 +520,7 @@ function AccountPageInner() {
                 href="/projects"
                 className="mt-3 inline-block text-[11px] text-brand hover:underline"
               >
-                去「我的项目」拉取 / 推送 →
+                {t("account.myProjects")} →
               </Link>
             </section>
 
@@ -520,13 +535,14 @@ function AccountPageInner() {
                   onClick={() => void loadInvite()}
                   className="text-[11px] text-brand hover:underline disabled:opacity-40"
                 >
-                  {inviteLoading ? "…" : "刷新"}
+                  {inviteLoading ? "…" : t("account.refresh")}
                 </button>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                双方各得 {invite?.rewardPoints ?? INVITE_REWARD_POINTS} 分 · 最多{" "}
-                {invite?.maxSuccess ?? 6} 人 · 上限{" "}
-                {invite?.pointsCap ?? 300}
+                {t("guest.benefit4", {
+                  reward: invite?.rewardPoints ?? INVITE_REWARD_POINTS,
+                  cap: invite?.pointsCap ?? 300,
+                })}
               </p>
               {inviteError ? (
                 <p className="mt-2 text-[11px] text-amber-700">{inviteError}</p>
@@ -534,7 +550,6 @@ function AccountPageInner() {
               {invite ? (
                 <div className="mt-3 space-y-2 text-[11px] text-foreground">
                   <p className="break-all text-muted">
-                    邀请码{" "}
                     <code className="rounded bg-background px-1 text-foreground">
                       {invite.inviteCode}
                     </code>
@@ -545,12 +560,14 @@ function AccountPageInner() {
                     onClick={() => void copyInviteLink()}
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-[11px] font-medium text-foreground hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    复制邀请链接
+                    {t("account.copyInvite")}
                   </button>
                 </div>
               ) : (
                 <p className="mt-3 text-[11px] text-muted">
-                  {inviteLoading ? "加载中…" : "暂无邀请信息"}
+                  {inviteLoading
+                    ? t("account.inviteLoading")
+                    : t("account.cannotRead")}
                 </p>
               )}
             </section>
@@ -560,14 +577,14 @@ function AccountPageInner() {
                 {t("account.team")}
               </p>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                多人共享款式库、成员权限、团队额度即将开放。
+                {t("account.teamSoonBody")}
               </p>
               <button
                 type="button"
                 disabled
                 className="mt-3 cursor-not-allowed rounded-md border border-border bg-background px-3 py-1.5 text-[11px] text-muted"
               >
-                即将开放
+                {t("account.comingSoon")}
               </button>
             </section>
           </div>
@@ -583,11 +600,18 @@ function AccountPageInner() {
                 onClick={() => void loadUsage(page)}
                 className="text-[11px] text-brand hover:underline disabled:opacity-40"
               >
-                {usageLoading ? "刷新中…" : "刷新"}
+                {usageLoading
+                  ? t("account.refreshing")
+                  : t("account.refresh")}
               </button>
             </div>
             <p className="mt-1 text-[11px] text-muted">
-              本月 {cloudUsage?.total ?? 0} 条记录 · 超额将暂时无法调用 AI
+              {t("account.quotaTitle", {
+                used: cloudUsage?.used ?? 0,
+                limit: cloudUsage?.limit ?? 0,
+              })}
+              {" · "}
+              {cloudUsage?.total ?? 0}
             </p>
             {usageError ? (
               <p className="mt-2 text-[11px] text-amber-700">{usageError}</p>
@@ -595,13 +619,15 @@ function AccountPageInner() {
 
             <div className="mt-3 overflow-hidden rounded-lg border border-border">
               <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-border bg-background px-2.5 py-1.5 text-[10px] font-medium text-muted">
-                <span>功能</span>
-                <span>点数</span>
-                <span>时间</span>
+                <span>{t("account.colFeature")}</span>
+                <span>{t("account.colPoints")}</span>
+                <span>{t("account.colTime")}</span>
               </div>
               {items.length === 0 ? (
                 <p className="px-2.5 py-8 text-center text-[11px] text-muted">
-                  {usageLoading ? "加载明细…" : "本月暂无消耗记录"}
+                  {usageLoading
+                    ? t("account.loadingDetail")
+                    : t("account.noUsage")}
                 </p>
               ) : (
                 <ul className="divide-y divide-border">
@@ -614,7 +640,9 @@ function AccountPageInner() {
                         <p className="truncate font-medium text-foreground">
                           {aiMeterActionLabel(item.action)}
                           {!item.ok ? (
-                            <span className="ml-1 text-amber-600">失败</span>
+                            <span className="ml-1 text-amber-600">
+                              {t("account.failed")}
+                            </span>
                           ) : null}
                         </p>
                         <p className="truncate text-[10px] text-muted">
@@ -646,10 +674,14 @@ function AccountPageInner() {
                 onClick={() => void loadUsage(page - 1)}
                 className="rounded-md border border-border px-2.5 py-1 text-[11px] text-muted hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
               >
-                上一页
+                {t("projects.prevPage")}
               </button>
               <span className="text-[11px] text-muted">
-                第 {page} / {totalPages} 页
+                {t("projects.pageInfo", {
+                  n: cloudUsage?.total ?? 0,
+                  page,
+                  total: totalPages,
+                })}
               </span>
               <button
                 type="button"
@@ -657,7 +689,7 @@ function AccountPageInner() {
                 onClick={() => void loadUsage(page + 1)}
                 className="rounded-md border border-border px-2.5 py-1 text-[11px] text-muted hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
               >
-                下一页
+                {t("projects.nextPage")}
               </button>
             </div>
           </section>

@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ArtboardSlot } from "@/lib/studio/artboard-layout";
-import { ANN_ACTION_LABELS } from "@/lib/studio/annotation-ux";
 import {
   COMM_PACK_COPY,
-  REGION_EDIT_LABELS,
   WHOLE_IMAGE_CORRECTION_CHIPS,
 } from "@/lib/studio/region-edit-ux";
 import {
@@ -15,6 +13,7 @@ import {
 } from "@/lib/studio/reference-artboard";
 import { formatAiDraftBadge } from "@/lib/studio/view-artboard-names";
 import type { Artboard } from "@/types/project";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 function isPhotoReferenceArtboard(ab: Artboard): boolean {
   return (
@@ -23,6 +22,17 @@ function isPhotoReferenceArtboard(ab: Artboard): boolean {
     ab.name === "参考图"
   );
 }
+
+/** Chip prompt stays Chinese for the model; label is locale-aware for display. */
+const CORRECTION_CHIP_LABELS_EN: Record<
+  (typeof WHOLE_IMAGE_CORRECTION_CHIPS)[number],
+  string
+> = {
+  去掉假人台改真平铺: "Remove mannequin → flat lay",
+  白底更干净: "Cleaner white background",
+  只保留目标单件: "Keep target garment only",
+  版型与参考更一致: "Match reference silhouette",
+};
 
 export type ArtboardCropUi = {
   artboardId: string;
@@ -124,9 +134,21 @@ export default function ViewRegenerateOverlays({
   onGenerateLineArt,
   onDeleteArtboard,
 }: ViewRegenerateOverlaysProps) {
+  const { locale, t } = useLocale();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [composerId, setComposerId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const aiDraftBadge =
+    locale === "en" ? "AI draft" : COMM_PACK_COPY.aiDraftBadge;
+  const originalBadge =
+    locale === "en" ? "Original" : COMM_PACK_COPY.originalBadge;
+  const failedGenBadge =
+    locale === "en" ? "Gen failed" : COMM_PACK_COPY.failedGenBadge;
+  const failedGenHint =
+    locale === "en"
+      ? "Not a real render — tap Fix to retry or delete this board"
+      : COMM_PACK_COPY.failedGenHint;
 
   useEffect(() => {
     setDrafts((prev) => {
@@ -261,7 +283,11 @@ export default function ViewRegenerateOverlays({
 
         const handleDelete = () => {
           if (!onDeleteArtboard || locked) return;
-          if (window.confirm(`删除「${ab.name}」？此操作不可撤销。`)) {
+          if (
+            window.confirm(
+              t("projects.deleteConfirm", { title: ab.name }),
+            )
+          ) {
             onDeleteArtboard(ab.id);
           }
         };
@@ -281,11 +307,11 @@ export default function ViewRegenerateOverlays({
           meta?.generationStatus === "failed";
 
         const imageTopBadge = isFailedPlaceholder
-          ? COMM_PACK_COPY.failedGenBadge
+          ? failedGenBadge
           : meta != null
-            ? formatAiDraftBadge(ab, COMM_PACK_COPY.aiDraftBadge)
+            ? formatAiDraftBadge(ab, aiDraftBadge)
             : isPhotoReferenceArtboard(ab)
-              ? COMM_PACK_COPY.originalBadge
+              ? originalBadge
               : null;
 
         if (!hasAnyAction && !imageTopBadge) return null;
@@ -309,8 +335,7 @@ export default function ViewRegenerateOverlays({
                   }`}
                   title={
                     isFailedPlaceholder
-                      ? meta?.lastSynthesisError ??
-                        COMM_PACK_COPY.failedGenHint
+                      ? meta?.lastSynthesisError ?? failedGenHint
                       : undefined
                   }
                 >
@@ -335,25 +360,21 @@ export default function ViewRegenerateOverlays({
                       <RailButton
                         label={
                           regionEditingThis
-                            ? REGION_EDIT_LABELS.confirmNext
-                            : "确认"
+                            ? t("common.next")
+                            : t("common.confirm")
                         }
                         title={
                           regionEditingThis
-                            ? REGION_EDIT_LABELS.dialogHint
-                            : ANN_ACTION_LABELS.cropConfirm
+                            ? t("studio.regionEdit")
+                            : t("studio.crop")
                         }
                         tone="success"
                         disabled={locked}
                         onClick={() => onConfirmCrop?.()}
                       />
                       <RailButton
-                        label="取消"
-                        title={
-                          regionEditingThis
-                            ? REGION_EDIT_LABELS.cancel
-                            : ANN_ACTION_LABELS.cropCancel
-                        }
+                        label={t("common.cancel")}
+                        title={t("common.cancel")}
                         disabled={locked}
                         onClick={() => onCancelCrop?.()}
                       />
@@ -362,8 +383,8 @@ export default function ViewRegenerateOverlays({
                     <>
                       {croppable && (
                         <RailButton
-                          label="剪裁"
-                          title={ANN_ACTION_LABELS.cropImageHint}
+                          label={t("studio.crop")}
+                          title={t("studio.crop")}
                           tone="primary"
                           disabled={locked}
                           onClick={() => onStartCrop?.(ab.id)}
@@ -371,8 +392,8 @@ export default function ViewRegenerateOverlays({
                       )}
                       {canRegion && (
                         <RailButton
-                          label={REGION_EDIT_LABELS.rail}
-                          title={REGION_EDIT_LABELS.railHint}
+                          label={t("studio.regionEdit")}
+                          title={t("studio.regionEdit")}
                           tone="accent"
                           disabled={locked}
                           onClick={() => onStartRegionEdit?.(ab.id)}
@@ -380,16 +401,20 @@ export default function ViewRegenerateOverlays({
                       )}
                       {canUndoImage && (
                         <RailButton
-                          label={REGION_EDIT_LABELS.undoImage}
-                          title={REGION_EDIT_LABELS.undoImageHint}
+                          label={t("studio.undoImage")}
+                          title={t("studio.undoImage")}
                           disabled={locked}
                           onClick={() => onUndoArtboardImage?.(ab.id)}
                         />
                       )}
                       {canConvertToLineArt && (
                         <RailButton
-                          label={busy ? "生成中" : "线稿"}
-                          title="按当前彩图严格转换为线稿"
+                          label={
+                            busy
+                              ? t("studio.generating")
+                              : t("studio.lineArtBtn")
+                          }
+                          title={t("studio.lineArtOverlayHint")}
                           tone="success"
                           disabled={locked}
                           onClick={() => onGenerateLineArt?.(ab.id)}
@@ -397,12 +422,14 @@ export default function ViewRegenerateOverlays({
                       )}
                       {showRegen && (
                         <RailButton
-                          label={busy ? "生成中" : hasDraft ? "重生成" : "修正"}
-                          title={
-                            hasDraft
-                              ? "整图按修正词重生成（局部小改请优先用「局部」）"
-                              : "整图修正（局部小改请优先用「局部」）"
+                          label={
+                            busy
+                              ? t("studio.generating")
+                              : hasDraft
+                                ? t("studio.regenBtn")
+                                : t("studio.correctBtn")
                           }
+                          title={t("studio.correctPrompt")}
                           tone={hasDraft ? "accent" : "neutral"}
                           disabled={locked}
                           onClick={() => openComposer(ab.id)}
@@ -410,7 +437,7 @@ export default function ViewRegenerateOverlays({
                       )}
                       {(deletable || aiDeletable) && (
                         <RailButton
-                          label="删除"
+                          label={t("studio.deleteBoard")}
                           tone="danger"
                           disabled={locked}
                           onClick={handleDelete}
@@ -440,7 +467,7 @@ export default function ViewRegenerateOverlays({
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-slate-900">
-                  修正提示词
+                  {t("studio.correctPrompt")}
                   {composerAb?.name ? ` · ${composerAb.name}` : ""}
                 </h3>
                 <button
@@ -448,13 +475,17 @@ export default function ViewRegenerateOverlays({
                   className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
                   onClick={closeComposer}
                 >
-                  关闭
+                  {t("common.close")}
                 </button>
               </div>
               <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
                 {composerIsLineArt
-                  ? "基于当前这张线稿做局部修改（不是从彩图重抽）。例如：「花纹线条再清晰」「领口再圆一点」。"
-                  : "基于当前这张款式图做局部修改（不是回到原上传图重抽）。例如：「去掉假模特改真平铺」「领口罗纹再清晰」。局部小改优先用画板旁「局部」。"}
+                  ? locale === "en"
+                    ? "Edit this line art (not re-trace from color). e.g. clearer pattern lines, rounder neckline."
+                    : "基于当前这张线稿做局部修改（不是从彩图重抽）。例如：「花纹线条再清晰」「领口再圆一点」。"
+                  : locale === "en"
+                    ? "Edit this style image (not from the original upload). Prefer Region for small fixes."
+                    : "基于当前这张款式图做局部修改（不是回到原上传图重抽）。例如：「去掉假模特改真平铺」「领口罗纹再清晰」。局部小改优先用画板旁「局部」。"}
               </p>
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {WHOLE_IMAGE_CORRECTION_CHIPS.map((chip) => (
@@ -464,6 +495,7 @@ export default function ViewRegenerateOverlays({
                     disabled={composerLocked}
                     className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-brand-light hover:bg-brand-soft disabled:opacity-50"
                     onClick={() => {
+                      // Insert Chinese prompt for the model even when UI is English
                       const cur = drafts[composerId] ?? "";
                       const next = cur.trim()
                         ? `${cur.trim()}；${chip}`
@@ -471,7 +503,9 @@ export default function ViewRegenerateOverlays({
                       setDraft(composerId, next);
                     }}
                   >
-                    {chip}
+                    {locale === "en"
+                      ? CORRECTION_CHIP_LABELS_EN[chip]
+                      : chip}
                   </button>
                 ))}
               </div>
@@ -481,8 +515,12 @@ export default function ViewRegenerateOverlays({
                 onChange={(e) => setDraft(composerId, e.target.value)}
                 placeholder={
                   composerIsLineArt
-                    ? "必填：修正要求…"
-                    : "必填：如「改为衣服平摊白底、不要人台」"
+                    ? locale === "en"
+                      ? "Required: correction…"
+                      : "必填：修正要求…"
+                    : locale === "en"
+                      ? "Required: e.g. flat lay on white, no mannequin"
+                      : "必填：如「改为衣服平摊白底、不要人台」"
                 }
                 rows={6}
                 disabled={composerLocked}
@@ -494,7 +532,7 @@ export default function ViewRegenerateOverlays({
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
                   onClick={closeComposer}
                 >
-                  取消
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="button"
@@ -502,7 +540,9 @@ export default function ViewRegenerateOverlays({
                   className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={submitComposer}
                 >
-                  {composerBusy ? "生成中…" : "提交并重新生成"}
+                  {composerBusy
+                    ? t("studio.generating")
+                    : t("studio.submitRegen")}
                 </button>
               </div>
             </div>

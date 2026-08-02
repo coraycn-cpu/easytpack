@@ -35,14 +35,14 @@ type ChatMessage = {
 
 const DEFAULT_STATUS = COMM_PACK_COPY.dockIdleHint;
 
-const ACTION_LABELS: Record<AiChatSuggestedAction, string> = {
-  "annotate-process": "标工艺",
-  "fill-bom": "填物料",
-  "fill-size": "填尺寸",
-  enhance: "一键补全",
-  explain: "写评语",
-  "view-back": "生成背面",
-  "view-line-art": "生成线稿",
+const ACTION_KEYS: Record<AiChatSuggestedAction, string> = {
+  "annotate-process": "ai.actionProcess",
+  "fill-bom": "ai.actionBom",
+  "fill-size": "ai.actionSize",
+  enhance: "ai.actionEnhance",
+  explain: "ai.actionExplain",
+  "view-back": "studio.viewBack",
+  "view-line-art": "studio.lineArtBtn",
 };
 
 function historyStorageKey(locale: Locale, projectId: string) {
@@ -133,7 +133,7 @@ export default function StudioAiDock({
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingHint, setLoadingHint] = useState("AI 正在思考…");
+  const [loadingHint, setLoadingHint] = useState(() => t("studio.aiThinking"));
   const [pendingActions, setPendingActions] = useState<
     Array<{ action: AiChatSuggestedAction; reason: string }>
   >([]);
@@ -142,7 +142,11 @@ export default function StudioAiDock({
   const skipPersistRef = useRef(false);
   const historyKey = historyStorageKey(locale, project.id);
 
-  const displayStatus = statusText?.trim() || DEFAULT_STATUS;
+  const displayStatus =
+    statusText?.trim() ||
+    (locale === "en"
+      ? "Mark issues · region edit · handoff tables to pattern"
+      : DEFAULT_STATUS);
 
   const resolvedActiveId =
     activeArtboardId ?? project.canvas_data.activeArtboardId;
@@ -155,14 +159,16 @@ export default function StudioAiDock({
 
   const actionTitle = useCallback(
     (action: AiChatSuggestedAction) => {
-      const base = ACTION_LABELS[action];
+      const base = t(ACTION_KEYS[action]);
       if (isBoardScopedChatAction(action) && activeArtboardName) {
         return `${base} · ${activeArtboardName}`;
       }
-      if (action === "fill-bom") return `${base} · 上传原图`;
+      if (action === "fill-bom") {
+        return `${base} · ${t("studio.overlayRefBadge")}`;
+      }
       return base;
     },
-    [activeArtboardName],
+    [activeArtboardName, t],
   );
 
   useEffect(() => {
@@ -256,7 +262,7 @@ export default function StudioAiDock({
 
         const imageMode = resolveChatImageMode(trimmed);
         setLoadingHint(
-          `AI 正在思考（${chatImageModeLabel(imageMode, activeArtboardName)}）…`,
+          `${t("studio.aiThinking")}（${chatImageModeLabel(imageMode, activeArtboardName)}）`,
         );
 
         const images: ChatImageAttachment[] = [];
@@ -341,7 +347,12 @@ export default function StudioAiDock({
           {
             id: `err_${Date.now()}`,
             role: "assistant",
-            content: e instanceof Error ? e.message : "发送失败，请重试",
+            content:
+              e instanceof Error
+                ? e.message
+                : locale === "en"
+                  ? "Send failed — retry"
+                  : "发送失败，请重试",
           },
         ]);
       } finally {
@@ -358,6 +369,7 @@ export default function StudioAiDock({
       onProjectUpdate,
       locale,
       router,
+      t,
     ],
   );
 
@@ -387,14 +399,14 @@ export default function StudioAiDock({
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--brand)] bg-[var(--brand)] px-3 py-2 text-white">
           <div>
             <p className="text-xs font-semibold">{t("ai.chatTitle")}</p>
-            <p className="text-[10px] opacity-80">本款答疑 · 改工艺包</p>
+            <p className="text-[10px] opacity-80">{t("ai.chatPlaceholder")}</p>
           </div>
           <button
             type="button"
             disabled={loading}
             onClick={() => setOpen(false)}
             className="rounded px-2 py-0.5 text-sm hover:bg-white/20 disabled:opacity-40"
-            aria-label="收起对话"
+            aria-label={t("common.close")}
           >
             ✕
           </button>
@@ -416,7 +428,8 @@ export default function StudioAiDock({
                 {m.content}
                 {m.changeSummary && m.changeSummary.length > 0 && (
                   <p className="mt-1 border-t border-slate-200/80 pt-1 text-[10px] text-emerald-700">
-                    已更新：{m.changeSummary.join(" · ")}
+                    {t("studio.updatedPrefix")}
+                    {m.changeSummary.join(" · ")}
                   </p>
                 )}
               </div>
@@ -426,7 +439,7 @@ export default function StudioAiDock({
           {pendingActions.length > 0 && !loading && (
             <div className="rounded-lg border border-brand-light bg-brand-soft p-2">
               <p className="mb-1.5 text-[10px] font-medium text-brand-dark">
-                AI 建议执行（需确认）：
+                {t("ai.chatTitle")}
               </p>
               <div className="flex flex-col gap-1">
                 {pendingActions.map((s) => (
@@ -444,7 +457,10 @@ export default function StudioAiDock({
                         {
                           id: `run_${Date.now()}`,
                           role: "assistant",
-                          content: `已开始执行「${actionTitle(s.action)}」…`,
+                          content:
+                            locale === "en"
+                              ? `Running “${actionTitle(s.action)}”…`
+                              : `已开始执行「${actionTitle(s.action)}」…`,
                         },
                       ]);
                     }}
@@ -464,7 +480,7 @@ export default function StudioAiDock({
                 onClick={() => setPendingActions([])}
                 className="mt-1.5 text-[10px] text-slate-500 underline"
               >
-                忽略建议
+                {t("studio.ignoreSuggestion")}
               </button>
             </div>
           )}
@@ -522,7 +538,7 @@ export default function StudioAiDock({
         type="button"
         disabled={disabled && !open}
         onClick={toggleOpen}
-        title={open ? "收起 AI 对话" : "打开 AI 对话"}
+        title={open ? t("common.close") : t("ai.chatTitle")}
         className={`pointer-events-auto inline-flex max-w-[min(90vw,560px)] items-center gap-2 rounded-full border border-slate-200/90 bg-white/95 px-3 py-1.5 shadow-md backdrop-blur transition hover:border-blue-200 hover:shadow-lg disabled:opacity-50 ${
           open ? "ring-2 ring-blue-200" : ""
         }`}

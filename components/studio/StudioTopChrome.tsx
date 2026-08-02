@@ -11,8 +11,6 @@ import { getCachedAuthUser, invalidateClientAuthCache } from "@/lib/supabase/aut
 import { syncAfterLogin } from "@/lib/project/cloud-sync";
 import {
   FREE_MONTHLY_AI_GIFT,
-  REGISTER_CTA_LABEL,
-  STUDIO_GUEST_BAR_TEXT,
 } from "@/lib/ai/login-gate";
 import StudioAccountChip from "@/components/studio/StudioAccountChip";
 import BrandMark from "@/components/brand/BrandMark";
@@ -123,7 +121,7 @@ export default function StudioTopChrome({
       await supabase.auth.signOut();
       invalidateClientAuthCache();
       setEmail(null);
-      onTip?.("已退出登录，项目仍留在本机浏览器");
+      onTip?.(t("common.logout"));
       router.refresh();
     } finally {
       setAuthBusy(false);
@@ -142,7 +140,7 @@ export default function StudioTopChrome({
       return;
     }
     setSyncBusy(true);
-    onTip?.("正在双向同步（含图片，请稍候）…");
+    onTip?.(t("studio.syncingCloud"));
     try {
       const res = await syncAfterLogin();
       onTip?.(res.message);
@@ -161,6 +159,8 @@ export default function StudioTopChrome({
   );
   const loginHref = `/?mode=register&next=${encodeURIComponent(`/project/${currentProjectId}/studio`)}`;
   const showGuestHint = ready && configured && !email;
+  const displayTitle = projectTitle?.trim() || t("common.unnamed");
+  const guestBarTitle = t("guest.registerGift", { n: FREE_MONTHLY_AI_GIFT });
 
   const overlayOpen = menuOpen || accountMenuOpen;
 
@@ -182,11 +182,11 @@ export default function StudioTopChrome({
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           className="flex max-w-[10rem] items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left hover:bg-brand-soft sm:max-w-[14rem]"
-          title="切换项目"
+          title={t("studio.switchProject")}
           aria-expanded={menuOpen}
         >
           <span className="truncate text-sm font-semibold text-foreground">
-            {projectTitle?.trim() || "未命名款式"}
+            {displayTitle}
           </span>
           <span className="shrink-0 text-[10px] text-muted">
             {menuOpen ? "▴" : "▾"}
@@ -195,12 +195,12 @@ export default function StudioTopChrome({
         {menuOpen && (
           <div className="absolute left-0 top-full z-[60] mt-1 w-64 overflow-hidden rounded-[var(--radius-sm)] border border-border bg-surface shadow-lg">
             <p className="border-b border-border bg-background px-3 py-1.5 text-[10px] font-medium text-muted">
-              最近更新（最多 {RECENT_PROJECTS_LIMIT} 个）
+              {t("auth.recent", { n: RECENT_PROJECTS_LIMIT })}
             </p>
             <ul className="max-h-56 overflow-y-auto py-1">
               <li>
                 <span className="block truncate bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-dark">
-                  当前 · {projectTitle?.trim() || "本款"}
+                  {displayTitle}
                 </span>
               </li>
               {others.map((p) => (
@@ -221,7 +221,7 @@ export default function StudioTopChrome({
               ))}
               {others.length === 0 && (
                 <li className="px-3 py-1.5 text-[11px] text-muted">
-                  暂无其它最近项目
+                  {t("projects.empty")}
                 </li>
               )}
             </ul>
@@ -230,7 +230,7 @@ export default function StudioTopChrome({
               className="block border-t border-border px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft"
               onClick={() => setMenuOpen(false)}
             >
-              查看全部项目（项目库）→
+              {t("studio.openLibrary")}
             </Link>
           </div>
         )}
@@ -239,10 +239,9 @@ export default function StudioTopChrome({
       {showGuestHint ? (
         <p
           className="hidden min-w-0 flex-1 truncate text-[11px] text-amber-800/90 md:block"
-          title={STUDIO_GUEST_BAR_TEXT}
+          title={guestBarTitle}
         >
-          可手动标注 · 本机已自动保存 · 注册送每月 {FREE_MONTHLY_AI_GIFT} 点
-          AI + 云端存档
+          {t("studio.guestTip")}
         </p>
       ) : (
         <div className="min-w-0 flex-1" />
@@ -259,8 +258,8 @@ export default function StudioTopChrome({
           }`}
           title={
             syncMode === "auto"
-              ? "Auto sync on"
-              : "Manual sync"
+              ? t("projects.syncLabelAuto")
+              : t("projects.syncLabelManual")
           }
         >
           <button
@@ -292,8 +291,8 @@ export default function StudioTopChrome({
               setCloudSyncMode(next);
               onTip?.(
                 next === "auto"
-                  ? "已开自动同步：之后保存/登录会自动上传"
-                  : "已关自动同步：保存只留本机，需点「同步」才上传",
+                  ? t("projects.syncAutoTip")
+                  : t("projects.syncManualTip"),
               );
             }}
             className={`flex items-center gap-1.5 px-2 py-1 text-[11px] disabled:opacity-50 ${
@@ -314,7 +313,7 @@ export default function StudioTopChrome({
                 }`}
               />
             </span>
-            <span className="font-medium">自动</span>
+            <span className="font-medium">{t("studio.autoSync")}</span>
           </button>
         </div>
 
@@ -322,7 +321,7 @@ export default function StudioTopChrome({
           <span className="px-1 text-[11px] text-muted">…</span>
         ) : !configured ? (
           <span className="hidden text-[11px] text-muted sm:inline">
-            本机模式
+            {t("studio.localMode")}
           </span>
         ) : email ? (
           <StudioAccountChip
@@ -336,9 +335,9 @@ export default function StudioTopChrome({
           <Link
             href={loginHref}
             className="pf-btn-primary px-2.5 py-1 text-[11px]"
-            title={STUDIO_GUEST_BAR_TEXT}
+            title={guestBarTitle}
           >
-            {REGISTER_CTA_LABEL}
+            {t("guest.cta")}
           </Link>
         )}
       </div>

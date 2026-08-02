@@ -16,8 +16,6 @@ import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
 import {
   AI_LOGIN_REQUIRED_MESSAGE,
   FREE_MONTHLY_AI_GIFT,
-  LOGIN_CTA_LABEL,
-  REGISTER_CTA_LABEL,
   buildLoginHref,
   messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
@@ -44,7 +42,7 @@ export default function NewStyleEntryCard({
   onCreated,
   onCreatedNeedLogin,
 }: NewStyleEntryCardProps) {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -117,7 +115,7 @@ export default function NewStyleEntryCard({
       let intake: IntakeData = {
         description,
         imageDataUrl,
-        detectedCategory: "未分类",
+        detectedCategory: t("common.uncategorized"),
       };
 
       if (isLogged) {
@@ -129,7 +127,13 @@ export default function NewStyleEntryCard({
         });
         const intent = await res.json();
         if (!res.ok) {
-          throw new Error(messageFromAiResponse(intent, "分析失败"));
+          throw new Error(
+            messageFromAiResponse(
+              intent,
+              t("studio.tipAnalyzeFail"),
+              locale,
+            ),
+          );
         }
         intake = applyIntentToIntake(intake, intent);
       } else if (preferLogin) {
@@ -144,7 +148,7 @@ export default function NewStyleEntryCard({
         title:
           intake.suggestedTitle ||
           description.trim().slice(0, 40) ||
-          "我的款式",
+          t("common.unnamed"),
         intake,
         regionStandard: sizeStandard.regionStandard,
         sampleSize,
@@ -162,13 +166,10 @@ export default function NewStyleEntryCard({
       onCreated?.(project.id);
       return project;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "创建失败";
-      const isQuota = /quota|QuotaExceeded|存储空间已满/i.test(msg);
-      setError(
-        isQuota
-          ? "本地存储空间已满。可先到「我的项目」删除旧款，或清理缓存后重试；大图会自动压缩。"
-          : msg,
-      );
+      const msg =
+        err instanceof Error ? err.message : t("studio.tipCreateFail");
+      const isQuota = /quota|QuotaExceeded|存储空间已满|storage full/i.test(msg);
+      setError(isQuota ? t("studio.tipStorageFull") : msg);
       return null;
     } finally {
       setLoading(false);
@@ -195,7 +196,7 @@ export default function NewStyleEntryCard({
             <div className="relative mx-auto max-w-full overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
               <img
                 src={imagePreview}
-                alt="款式预览"
+                alt={t("studio.uploadStyle")}
                 className="mx-auto max-h-44 w-full object-contain"
               />
               <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 bg-gradient-to-t from-black/50 to-transparent px-3 pb-2.5 pt-8">
@@ -204,19 +205,19 @@ export default function NewStyleEntryCard({
                   onClick={openFilePicker}
                   className="rounded-md bg-white/95 px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-white"
                 >
-                  重传
+                  {t("studio.replaceMainImage")}
                 </button>
                 <button
                   type="button"
                   onClick={clearImage}
                   className="rounded-md bg-white/95 px-3 py-1 text-[11px] font-medium text-red-600 shadow-sm hover:bg-white"
                 >
-                  删除
+                  {t("common.delete")}
                 </button>
               </div>
             </div>
             <p className="mt-2 text-center text-[10px] text-slate-400">
-              点击「重传」更换图片，「删除」后可重新上传
+              {t("studio.replaceMainImage")} · {t("common.delete")}
             </p>
           </div>
         ) : (
@@ -226,21 +227,21 @@ export default function NewStyleEntryCard({
             className="flex w-full flex-col items-center border-b border-dashed border-slate-200 bg-slate-50/80 py-10 text-slate-400 transition hover:bg-brand-soft/50 hover:text-brand"
           >
             <span className="text-3xl">📷</span>
-            <span className="mt-2 text-sm font-medium">上传款式图</span>
-            <span className="mt-0.5 text-[11px]">手绘稿、参考图、灵感拼贴均可</span>
+            <span className="mt-2 text-sm font-medium">{t("studio.uploadStyle")}</span>
+            <span className="mt-0.5 text-[11px]">{t("studio.needImage")}</span>
           </button>
         )}
 
         <div className="space-y-3 p-4">
           <div>
             <label className="mb-1 block text-[11px] font-medium text-slate-600">
-              款式描述（可选）
+              {t("studio.tipStyleNotes")}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              placeholder="例如：夏季休闲马甲，胸口有扣..."
+              placeholder={t("studio.tipStyleNotesPh")}
               className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-brand"
             />
           </div>
@@ -254,11 +255,10 @@ export default function NewStyleEntryCard({
           {showGuestLoginPush ? (
             <div className="rounded-xl border border-blue-200 bg-brand-soft/70 px-3 py-3 text-left">
               <p className="text-xs font-semibold text-blue-950">
-                登录后可用 AI 基础分析
+                {t("studio.tipLoginForAi")}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-950/80">
-                已有账号可先登录，再用同一张图做基础款式分析（不是全量标注）。
-                还没有账号请回首页注册。未登录也可先带图进画布手动标注。
+                {t("studio.tipLoginHint")}
               </p>
             </div>
           ) : null}
@@ -272,7 +272,7 @@ export default function NewStyleEntryCard({
                   onClick={() => void createProject({ preferLogin: "login" })}
                   className="pf-btn-secondary flex min-h-11 items-center justify-center py-2.5 text-sm disabled:opacity-40"
                 >
-                  {LOGIN_CTA_LABEL}
+                  {t("guest.loginCta")}
                 </button>
                 <button
                   type="button"
@@ -280,7 +280,7 @@ export default function NewStyleEntryCard({
                   onClick={() => void createProject()}
                   className="pf-btn-primary py-2.5 text-sm disabled:opacity-40"
                 >
-                  暂不登录，带图进入画布（不调用 AI）
+                  {t("studio.guestEnterWithImage")}
                 </button>
               </>
             ) : (
@@ -291,8 +291,8 @@ export default function NewStyleEntryCard({
                 className="pf-btn-primary py-2.5 text-sm disabled:opacity-40"
               >
                 {loggedIn
-                  ? "AI 理解款式并进入画布"
-                  : "进入画布（可手动标注）"}
+                  ? t("studio.aiUnderstandEnter")
+                  : t("studio.guestEnterWithImage")}
               </button>
             )}
             {!loggedIn && !showGuestLoginPush ? (
@@ -304,7 +304,7 @@ export default function NewStyleEntryCard({
             ) : null}
             {loggedIn ? (
               <p className="text-center text-[10px] leading-relaxed text-slate-500">
-                会先做基础款式分析（选款引导等），不会自动开全量一键标注。
+                {t("studio.tipWillAnalyze")}
               </p>
             ) : null}
           </div>
@@ -313,8 +313,7 @@ export default function NewStyleEntryCard({
             <div className="space-y-2">
               <GuestRegisterNudge next="/" />
               <p className="text-center text-[10px] text-zinc-400">
-                刚才已用手动方式建款进画布；注册后即可用 AI（每月{" "}
-                {FREE_MONTHLY_AI_GIFT} 点）。
+                {t("studio.tipGuestDidManual", { n: FREE_MONTHLY_AI_GIFT })}
               </p>
             </div>
           ) : null}
@@ -322,20 +321,20 @@ export default function NewStyleEntryCard({
           {error && (
             <div className="space-y-1.5 text-center">
               <p className="text-xs text-red-600">{error}</p>
-              {/存储空间已满/.test(error) && (
+              {/存储空间已满|storage full/i.test(error) && (
                 <Link
                   href="/projects"
                   className="inline-block text-[11px] font-medium text-brand hover:underline"
                 >
-                  打开我的项目 · 删除或清理空间 →
+                  {t("account.myProjects")} →
                 </Link>
               )}
-              {/注册|使用 AI|AI 额度/.test(error) && (
+              {/注册|使用 AI|AI 额度|sign up|AI credit/i.test(error) && (
                 <Link
                   href={buildLoginHref({ mode: "register", next: "/" })}
                   className="inline-block text-[11px] font-medium text-brand hover:underline"
                 >
-                  {REGISTER_CTA_LABEL} →
+                  {t("guest.cta")} →
                 </Link>
               )}
             </div>
@@ -368,6 +367,7 @@ export function CanvasHubChrome({
     progress: number;
   }>;
 }) {
+  const { t } = useLocale();
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4">
       <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur">
@@ -378,12 +378,12 @@ export function CanvasHubChrome({
           href="/projects"
           className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur hover:text-brand"
         >
-          我的项目
+          {t("account.myProjects")}
         </Link>
         {recentProjects && recentProjects.length > 0 && (
           <div className="max-w-[200px] rounded-lg border border-slate-200/80 bg-white/95 p-2 shadow-sm backdrop-blur">
             <p className="mb-1 text-[10px] font-medium text-slate-400">
-              继续编辑
+              {t("studio.recentProjects")}
             </p>
             <ul className="space-y-0.5">
               {recentProjects.slice(0, 3).map((p) => (

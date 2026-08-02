@@ -81,16 +81,19 @@ export default function ProjectsPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
 
-  const CAT_LABEL: Record<string, string> = {
-    上衣: t("projects.catTops"),
-    裤装: t("projects.catPants"),
-    裙装: t("projects.catSkirts"),
-    套装: t("projects.catSets"),
-    外套: t("projects.catOuter"),
-    配件: t("projects.catAccessories"),
-    其它: t("projects.catOther"),
-    未分类: t("common.uncategorized"),
-  };
+  const CAT_LABEL = useMemo<Record<string, string>>(
+    () => ({
+      上衣: t("projects.catTops"),
+      裤装: t("projects.catPants"),
+      裙装: t("projects.catSkirts"),
+      套装: t("projects.catSets"),
+      外套: t("projects.catOuter"),
+      配件: t("projects.catAccessories"),
+      其它: t("projects.catOther"),
+      未分类: t("common.uncategorized"),
+    }),
+    [t],
+  );
 
   const catLabel = (c: string) => CAT_LABEL[c] ?? c;
 
@@ -157,7 +160,7 @@ export default function ProjectsPage() {
         );
       });
     return sortProjectsByUpdatedAtDesc(list);
-  }, [projects, workflowFilter, categoryFilter, query]);
+  }, [projects, workflowFilter, categoryFilter, query, CAT_LABEL]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -220,7 +223,7 @@ export default function ProjectsPage() {
       const json = exportProjectJsonBackup(p);
       const safe = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 40) || "project";
       downloadTextFile(`${safe}-backup.json`, json);
-      setCacheNote(`已导出「${title}」JSON 备份（图片若为 idb 引用需本机还原）`);
+      setCacheNote(t("projectsExtra.exportedBackup", { title }));
     } catch (e) {
       window.alert(e instanceof Error ? e.message : t("projects.exportFail"));
     }
@@ -229,14 +232,14 @@ export default function ProjectsPage() {
   const handleExportTelemetry = () => {
     const jsonl = exportAiTelemetryJsonl();
     if (!jsonl.trim()) {
-      setCacheNote("暂无质量日志可导出");
+      setCacheNote(t("projectsExtra.noQualityLog"));
       return;
     }
     downloadTextFile(
       `easytpack-ai-telemetry-${new Date().toISOString().slice(0, 10)}.jsonl`,
       jsonl,
     );
-    setCacheNote("已导出质量日志");
+    setCacheNote(t("projectsExtra.exportedQuality"));
   };
 
   const handleImportBackup = async (file: File | null) => {
@@ -244,21 +247,27 @@ export default function ProjectsPage() {
     setImportBusy(true);
     try {
       if (file.size > 20 * 1024 * 1024) {
-        throw new Error("文件过大（超过 20MB），请换较小备份或先压缩图片");
+        throw new Error(t("projectsExtra.fileTooBig"));
       }
       const text = await file.text();
       const result = await importProjectJsonBackup(text);
       refresh();
       const warn =
         result.warnings.length > 0
-          ? `（注意：${result.warnings.join(" ")}）`
+          ? `（${result.warnings.join(" ")}）`
           : "";
-      setCacheNote(`已恢复「${result.project.title}」${warn}`);
+      setCacheNote(
+        t("projectsExtra.restored", {
+          title: result.project.title,
+          warn,
+        }),
+      );
       if (
         window.confirm(
-          `已恢复「${result.project.title}」。是否打开 Studio？${
-            result.warnings[0] ? `\n\n${result.warnings[0]}` : ""
-          }`,
+          t("projectsExtra.openStudioAsk", {
+            title: result.project.title,
+            warn: result.warnings[0] ? `\n\n${result.warnings[0]}` : "",
+          }),
         )
       ) {
         router.push(`/project/${result.project.id}/studio`);
@@ -291,10 +300,15 @@ export default function ProjectsPage() {
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
       const displayCat = catLabel(nextCat || LIBRARY_UNCATEGORIZED);
       setCacheNote(
-        `已将「${shortProjectTitle(current.title)}」分到「${displayCat}」`,
+        t("projectsExtra.categorized", {
+          title: shortProjectTitle(current.title),
+          cat: displayCat,
+        }),
       );
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "分类保存失败");
+      window.alert(
+        e instanceof Error ? e.message : t("projectsExtra.categoryFail"),
+      );
     }
   };
 
@@ -618,7 +632,7 @@ export default function ProjectsPage() {
                               window.alert(
                                 e instanceof Error
                                   ? e.message
-                                  : "复制失败，本地空间可能已满",
+                                  : t("projectsExtra.dupFail"),
                               );
                               refresh();
                             }

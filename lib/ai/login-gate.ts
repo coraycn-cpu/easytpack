@@ -37,6 +37,14 @@ export const LOGIN_CTA_LABEL = "已有账号？登录";
 export const AI_LOGIN_REQUIRED_MESSAGE =
   `使用 AI 需要先注册。现在注册即送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI 额度，还能把稿存到云端、换设备继续。你仍可先在画布上手动标注。`;
 
+/** UI 展示用：按语言返回未登录 AI 提示（服务端仍可用中文常量） */
+export function aiLoginRequiredMessage(locale?: string): string {
+  if (locale === "en") {
+    return `AI requires sign-up. Register for ${FREE_MONTHLY_AI_GIFT} AI pts/mo + cloud sync. You can still annotate manually on the canvas.`;
+  }
+  return AI_LOGIN_REQUIRED_MESSAGE;
+}
+
 export const CLOUD_SAVE_LOGIN_MESSAGE =
   `把稿存到云端需要先注册。注册免费，并送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI 额度；本机浏览器里仍会自动保存，可继续手动标注。`;
 

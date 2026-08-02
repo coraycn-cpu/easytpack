@@ -4,6 +4,7 @@ import { isLoggedInForCloud } from "@/lib/project/cloud-sync";
 import {
   AI_LOGIN_REQUIRED_CODE,
   AI_LOGIN_REQUIRED_MESSAGE,
+  aiLoginRequiredMessage,
   CLOUD_SAVE_LOGIN_MESSAGE,
   FREE_MONTHLY_AI_GIFT,
   LOGIN_CTA_LABEL,
@@ -15,6 +16,7 @@ import {
 export {
   AI_LOGIN_REQUIRED_CODE,
   AI_LOGIN_REQUIRED_MESSAGE,
+  aiLoginRequiredMessage,
   CLOUD_SAVE_LOGIN_MESSAGE,
   FREE_MONTHLY_AI_GIFT,
   LOGIN_CTA_LABEL,
@@ -35,13 +37,19 @@ export function isAiLoginRequiredPayload(
 export function messageFromAiResponse(
   payload: unknown,
   fallback = "请求失败",
+  locale?: string,
 ): string {
   if (isAiLoginRequiredPayload(payload)) {
-    return AI_LOGIN_REQUIRED_MESSAGE;
+    return aiLoginRequiredMessage(locale);
   }
   if (payload && typeof payload === "object") {
     const err = (payload as { error?: unknown }).error;
-    if (typeof err === "string" && err.trim()) return err;
+    if (typeof err === "string" && err.trim()) {
+      if (err === AI_LOGIN_REQUIRED_MESSAGE || err.includes("使用 AI 需要先注册")) {
+        return aiLoginRequiredMessage(locale);
+      }
+      return err;
+    }
   }
   return fallback;
 }

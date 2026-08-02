@@ -1,6 +1,7 @@
 "use client";
 
 import DataExpandShell from "@/components/studio/DataExpandShell";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { BomItem } from "@/types/process";
 
 type BomExpandDialogProps = {
@@ -10,11 +11,11 @@ type BomExpandDialogProps = {
   onChange: (items: BomItem[]) => void;
 };
 
-const BOM_CATEGORIES: Array<{ value: BomItem["category"]; label: string }> = [
-  { value: "fabric", label: "面料" },
-  { value: "trim", label: "辅料" },
-  { value: "accessory", label: "配件" },
-  { value: "packaging", label: "包装" },
+const BOM_CATEGORY_VALUES: BomItem["category"][] = [
+  "fabric",
+  "trim",
+  "accessory",
+  "packaging",
 ];
 
 const EMPTY: BomItem = {
@@ -34,6 +35,12 @@ export default function BomExpandDialog({
   items,
   onChange,
 }: BomExpandDialogProps) {
+  const { t } = useLocale();
+  const bomCategories = BOM_CATEGORY_VALUES.map((value) => ({
+    value,
+    label: t(`panel.${value}`),
+  }));
+
   const update = (index: number, patch: Partial<BomItem>) => {
     const next = [...items];
     next[index] = { ...next[index], ...patch };
@@ -50,15 +57,15 @@ export default function BomExpandDialog({
     <DataExpandShell
       open={open}
       onClose={onClose}
-      title="物料清单"
-      subtitle="大面板编辑面辅料，修改即时保存；点「完成」关闭面板。"
+      title={t("panel.bomTitle")}
+      subtitle={t("panel.bomSubtitle")}
       footerLeft={
         <button
           type="button"
           onClick={add}
           className="rounded border border-dashed border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 hover:border-slate-400"
         >
-          + 添加物料行
+          {t("panel.addBom")}
         </button>
       }
     >
@@ -66,14 +73,14 @@ export default function BomExpandDialog({
         <table className="w-full min-w-[720px] border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-slate-200 text-[11px] text-slate-500">
-              <th className="px-1.5 py-2 font-medium">名称</th>
-              <th className="px-1.5 py-2 font-medium">类别</th>
-              <th className="px-1.5 py-2 font-medium">部位</th>
-              <th className="px-1.5 py-2 font-medium">规格</th>
-              <th className="px-1.5 py-2 font-medium">颜色</th>
-              <th className="px-1.5 py-2 font-medium">用量</th>
-              <th className="px-1.5 py-2 font-medium">供应商</th>
-              <th className="px-1.5 py-2 font-medium">编码</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.name")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.categoryCol")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.partCol")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.spec")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.color")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.qty")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.supplier")}</th>
+              <th className="px-1.5 py-2 font-medium">{t("panel.codeCol")}</th>
               <th className="w-8 px-1 py-2" />
             </tr>
           </thead>
@@ -84,7 +91,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.name}
                     onChange={(e) => update(i, { name: e.target.value })}
-                    placeholder="物料名称"
+                    placeholder={t("panel.materialName")}
                     className="w-full min-w-[100px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -98,7 +105,7 @@ export default function BomExpandDialog({
                     }
                     className="w-full rounded border border-slate-200 px-1 py-1 outline-none focus:border-blue-400"
                   >
-                    {BOM_CATEGORIES.map((c) => (
+                    {bomCategories.map((c) => (
                       <option key={c.value} value={c.value}>
                         {c.label}
                       </option>
@@ -109,7 +116,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.garmentPart ?? ""}
                     onChange={(e) => update(i, { garmentPart: e.target.value })}
-                    placeholder="上装/下装"
+                    placeholder={t("panel.garmentPart")}
                     className="w-full min-w-[64px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -117,7 +124,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.spec ?? ""}
                     onChange={(e) => update(i, { spec: e.target.value })}
-                    placeholder="规格"
+                    placeholder={t("panel.spec")}
                     className="w-full min-w-[120px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -125,7 +132,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.color ?? ""}
                     onChange={(e) => update(i, { color: e.target.value })}
-                    placeholder="颜色"
+                    placeholder={t("panel.color")}
                     className="w-full min-w-[64px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -133,7 +140,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.usage ?? ""}
                     onChange={(e) => update(i, { usage: e.target.value })}
-                    placeholder="用量"
+                    placeholder={t("panel.qty")}
                     className="w-full min-w-[72px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -141,7 +148,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.supplier ?? ""}
                     onChange={(e) => update(i, { supplier: e.target.value })}
-                    placeholder="供应商"
+                    placeholder={t("panel.supplier")}
                     className="w-full min-w-[72px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -149,7 +156,7 @@ export default function BomExpandDialog({
                   <input
                     value={item.code ?? ""}
                     onChange={(e) => update(i, { code: e.target.value })}
-                    placeholder="编码"
+                    placeholder={t("panel.materialCode")}
                     className="w-full min-w-[72px] rounded border border-slate-200 px-1.5 py-1 outline-none focus:border-blue-400"
                   />
                 </td>
@@ -158,7 +165,7 @@ export default function BomExpandDialog({
                     type="button"
                     onClick={() => remove(i)}
                     className="text-slate-300 hover:text-red-500"
-                    title="删除"
+                    title={t("common.delete")}
                   >
                     ×
                   </button>
@@ -169,7 +176,7 @@ export default function BomExpandDialog({
         </table>
         {items.length === 0 && (
           <p className="py-10 text-center text-xs text-slate-400">
-            暂无物料，可添加行或使用「一键补全」
+            {t("panel.bomEmpty")}
           </p>
         )}
       </div>
