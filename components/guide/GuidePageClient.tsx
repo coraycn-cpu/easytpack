@@ -31,6 +31,9 @@ export default function GuidePageClient() {
             <Link href="/" className="pf-btn-text">
               {copy.navHome}
             </Link>
+            <Link href="/articles" className="pf-btn-text">
+              {locale === "en" ? "Articles" : "专题文章"}
+            </Link>
             <Link href="/?mode=register" className="pf-btn-primary px-3 py-1.5">
               {copy.navRegister}
             </Link>
