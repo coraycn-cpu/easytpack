@@ -173,9 +173,16 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
         <p className="mt-2 text-[11px] text-muted">
           {hub.updated} {article.updatedAt}
         </p>
-        <p className="mt-4 rounded-lg border border-brand-light bg-brand-soft/50 px-4 py-3 text-sm leading-relaxed text-foreground">
-          {copy.definition}
-        </p>
+
+        <aside className="mt-4 rounded-lg border border-brand-light bg-brand-soft/50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand">
+            {hub.quickAnswer}
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-foreground">
+            {copy.definition}
+          </p>
+        </aside>
+
         <p className="mt-3 text-sm text-muted">
           <span className="font-medium text-foreground">
             {hub.audienceLabel}:{" "}
@@ -183,8 +190,68 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
           {copy.audience}
         </p>
 
-        {copy.sections.map((section) => (
-          <section key={section.heading} className="mt-8">
+        {copy.keyTakeaways && copy.keyTakeaways.length > 0 ? (
+          <section className="mt-6" aria-labelledby="key-takeaways">
+            <h2 id="key-takeaways" className="text-base font-semibold">
+              {hub.keyTakeaways}
+            </h2>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
+              {copy.keyTakeaways.map((t) => (
+                <li key={t.slice(0, 40)}>{t}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <nav
+          aria-label={hub.onThisPage}
+          className="mt-6 rounded-lg border border-border bg-surface px-4 py-3"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {hub.onThisPage}
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            {copy.keyTakeaways && copy.keyTakeaways.length > 0 ? (
+              <li>
+                <a
+                  href="#key-takeaways"
+                  className="text-brand hover:text-brand-dark"
+                >
+                  {hub.keyTakeaways}
+                </a>
+              </li>
+            ) : null}
+            {copy.sections.map((section, i) => (
+              <li key={section.heading}>
+                <a
+                  href={`#sec-${i}`}
+                  className="text-brand hover:text-brand-dark"
+                >
+                  {section.heading}
+                </a>
+              </li>
+            ))}
+            {copy.steps && copy.steps.length > 0 ? (
+              <li>
+                <a href="#steps" className="text-brand hover:text-brand-dark">
+                  {hub.stepsHeading}
+                </a>
+              </li>
+            ) : null}
+            <li>
+              <a href="#faq" className="text-brand hover:text-brand-dark">
+                {hub.faqHeading}
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        {copy.sections.map((section, i) => (
+          <section
+            key={section.heading}
+            id={`sec-${i}`}
+            className="mt-8 scroll-mt-20"
+          >
             <h2 className="text-xl font-semibold">{section.heading}</h2>
             {section.paragraphs?.map((p) => (
               <p
@@ -205,7 +272,7 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
         ))}
 
         {copy.steps && copy.steps.length > 0 ? (
-          <section className="mt-8">
+          <section id="steps" className="mt-8 scroll-mt-20">
             <h2 className="text-xl font-semibold">{hub.stepsHeading}</h2>
             <ol className="mt-4 space-y-4">
               {copy.steps.map((step, i) => (
@@ -228,7 +295,7 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
           </section>
         ) : null}
 
-        <section className="mt-10">
+        <section id="faq" className="mt-10 scroll-mt-20">
           <h2 className="text-xl font-semibold">{hub.faqHeading}</h2>
           <div className="mt-4 space-y-3">
             {copy.faq.map((item) => (

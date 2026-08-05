@@ -1,13 +1,14 @@
 import type { ArticleRecord } from "@/lib/content/articles/types";
 import { BRAND_SHORT_NAME } from "@/lib/brand";
+import { INDEXABLE_BATCH } from "@/lib/content/articles/batch-indexable";
 
 const PUB = "2026-08-05";
 
 /**
- * 首发 6 篇：英文优先撰写，中文同步。
- * slug 保持英文，利于 URL / 外贸 SEO。
+ * 首发 + 角色/对比系列；第三批易收录长尾见 INDEXABLE_BATCH。
+ * slug 保持英文，利于 URL / 外贸 SEO。EN 优先，ZH 同步。
  */
-export const ARTICLES: ArticleRecord[] = [
+const CORE_ARTICLES: ArticleRecord[] = [
   {
     slug: "what-is-tech-pack",
     publishedAt: PUB,
@@ -18,6 +19,8 @@ export const ARTICLES: ArticleRecord[] = [
       "tech-pack-checklist",
       "how-to-make-tech-pack",
       "ai-tech-pack-tools",
+      "what-is-bom-apparel",
+      "flat-sketch-vs-tech-pack",
     ],
     en: {
       title: "What is an apparel tech pack?",
@@ -1180,6 +1183,11 @@ export const ARTICLES: ArticleRecord[] = [
       ctaLabel: "在 PackFlow 试用 AI",
     },
   },
+];
+
+export const ARTICLES: ArticleRecord[] = [
+  ...CORE_ARTICLES,
+  ...INDEXABLE_BATCH,
 ];
 
 export function listArticles(): ArticleRecord[] {
