@@ -3,12 +3,13 @@ import { BRAND_SHORT_NAME } from "@/lib/brand";
 import { INDEXABLE_BATCH } from "@/lib/content/articles/batch-indexable";
 import { CATEGORY_PAIN_BATCH } from "@/lib/content/articles/batch-category-pain";
 import { SHIRT_DENIM_FIT_BATCH } from "@/lib/content/articles/batch-shirt-denim-fit";
+import { GRADUATES_KIDS_QC_BATCH } from "@/lib/content/articles/batch-graduates-kids-qc";
 
 const PUB = "2026-08-05";
 
 /**
- * 首发 + 角色/对比；长尾见 INDEXABLE_BATCH；
- * 品类/痛点见 CATEGORY_PAIN_BATCH；衬衫牛仔复板见 SHIRT_DENIM_FIT_BATCH。
+ * 首发 + 角色/对比；长尾 INDEXABLE；品类痛点 CATEGORY；
+ * 衬衫牛仔 SHIRT_DENIM；毕业生/童装/验货 GRADUATES_KIDS_QC。
  */
 const CORE_ARTICLES: ArticleRecord[] = [
   {
@@ -1193,6 +1194,7 @@ export const ARTICLES: ArticleRecord[] = [
   ...INDEXABLE_BATCH,
   ...CATEGORY_PAIN_BATCH,
   ...SHIRT_DENIM_FIT_BATCH,
+  ...GRADUATES_KIDS_QC_BATCH,
 ];
 
 export function listArticles(): ArticleRecord[] {
