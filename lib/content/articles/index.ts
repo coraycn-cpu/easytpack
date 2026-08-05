@@ -21,9 +21,10 @@ const CORE_ARTICLES: ArticleRecord[] = [
       "tech-pack-vs-bom",
       "tech-pack-checklist",
       "how-to-make-tech-pack",
-      "ai-tech-pack-tools",
       "what-is-bom-apparel",
       "flat-sketch-vs-tech-pack",
+      "first-tech-pack-for-fashion-graduates",
+      "hoodie-tech-pack-guide",
     ],
     en: {
       title: "What is an apparel tech pack?",
@@ -136,8 +137,11 @@ const CORE_ARTICLES: ArticleRecord[] = [
     series: "fundamentals",
     relatedSlugs: [
       "what-is-tech-pack",
+      "what-is-bom-apparel",
+      "what-is-pom-apparel",
       "tech-pack-checklist",
       "size-chart-basics",
+      "how-to-write-construction-notes",
     ],
     en: {
       title: "Tech pack vs BOM vs size chart vs ops sheet",
@@ -239,8 +243,10 @@ const CORE_ARTICLES: ArticleRecord[] = [
     relatedSlugs: [
       "what-is-tech-pack",
       "how-to-make-tech-pack",
+      "how-to-send-tech-pack-to-factory",
       "how-to-annotate-garment",
-      "excel-vs-tech-pack-software",
+      "tech-pack-qc-inspection-checklist",
+      "common-factory-tech-pack-questions",
     ],
     en: {
       title: "Tech pack checklist before you email the factory",
@@ -364,6 +370,10 @@ const CORE_ARTICLES: ArticleRecord[] = [
       "what-is-tech-pack",
       "tech-pack-checklist",
       "how-to-annotate-garment",
+      "how-to-write-garment-bom",
+      "first-tech-pack-for-fashion-graduates",
+      "tee-tshirt-tech-pack-guide",
+      "hoodie-tech-pack-guide",
     ],
     en: {
       title: "How to make a tech pack from a style photo (4 steps)",
@@ -471,6 +481,9 @@ const CORE_ARTICLES: ArticleRecord[] = [
       "how-to-make-tech-pack",
       "tech-pack-checklist",
       "size-chart-basics",
+      "how-to-write-construction-notes",
+      "print-embroidery-tech-pack",
+      "how-to-spec-zipper-trims",
     ],
     en: {
       title: "How to annotate a garment image for production",
@@ -683,6 +696,8 @@ const CORE_ARTICLES: ArticleRecord[] = [
       "size-chart-basics",
       "tech-pack-checklist",
       "for-merchandisers",
+      "how-to-read-factory-comments",
+      "first-tech-pack-for-fashion-graduates",
     ],
     en: {
       title: "Tech packs for pattern makers: what to look for",

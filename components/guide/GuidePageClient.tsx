@@ -34,6 +34,9 @@ export default function GuidePageClient() {
             <Link href="/articles" className="pf-btn-text">
               {locale === "en" ? "Articles" : "专题文章"}
             </Link>
+            <Link href="/articles#topic-start-here" className="pf-btn-text hidden sm:inline">
+              {locale === "en" ? "Topics" : "专题入口"}
+            </Link>
             <Link href="/?mode=register" className="pf-btn-primary px-3 py-1.5">
               {copy.navRegister}
             </Link>
@@ -64,6 +67,9 @@ export default function GuidePageClient() {
           </a>
           <a href="#faq" className="text-brand hover:text-brand-dark">
             {copy.tocFaq}
+          </a>
+          <a href="#articles" className="text-brand hover:text-brand-dark">
+            {locale === "en" ? "Articles" : "专题文章"}
           </a>
           <a href="#contact" className="text-brand hover:text-brand-dark">
             {copy.tocContact}
@@ -161,6 +167,55 @@ export default function GuidePageClient() {
               </details>
             ))}
           </div>
+        </section>
+
+        <section id="articles" className="mt-12 scroll-mt-20">
+          <h2 className="text-xl font-semibold">
+            {locale === "en" ? "Tech pack articles" : "工艺包专题文章"}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            {locale === "en"
+              ? "Guides for SEO/learning: basics, BOM & sizes, categories, graduates, and factory QA — linked as topic hubs."
+              : "可学习、可收录的专题：基础、BOM/尺码、品类、毕业生、验货等，已做成专题入口互链。"}
+          </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li>
+              <Link
+                href="/articles#topic-start-here"
+                className="font-medium text-brand hover:text-brand-dark"
+              >
+                {locale === "en"
+                  ? "Start here · Tech pack basics →"
+                  : "从这里开始 · 工艺包基础 →"}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/articles#topic-categories"
+                className="font-medium text-brand hover:text-brand-dark"
+              >
+                {locale === "en" ? "By garment category →" : "按服装品类 →"}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/articles#topic-roles-graduates"
+                className="font-medium text-brand hover:text-brand-dark"
+              >
+                {locale === "en"
+                  ? "For graduates & roles →"
+                  : "毕业生与角色专题 →"}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/articles"
+                className="font-medium text-brand hover:text-brand-dark"
+              >
+                {locale === "en" ? "All articles →" : "全部专题文章 →"}
+              </Link>
+            </li>
+          </ul>
         </section>
 
         <section
