@@ -65,6 +65,8 @@ export function ArticlesIndexClient() {
   const articles = listArticles();
   const fundamentals = articles.filter((a) => a.series === "fundamentals");
   const howto = articles.filter((a) => a.series === "howto");
+  const roles = articles.filter((a) => a.series === "roles");
+  const compare = articles.filter((a) => a.series === "compare");
 
   const renderGroup = (
     heading: string,
@@ -121,6 +123,8 @@ export function ArticlesIndexClient() {
         </p>
         {renderGroup(hub.seriesFundamentals, fundamentals)}
         {renderGroup(hub.seriesHowto, howto)}
+        {renderGroup(hub.seriesRoles, roles)}
+        {renderGroup(hub.seriesCompare, compare)}
       </main>
       <div className="border-t border-border px-4 py-8">
         <BrandFooter showArticlesLink={false} />

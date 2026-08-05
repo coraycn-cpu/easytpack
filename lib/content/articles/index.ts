@@ -17,6 +17,7 @@ export const ARTICLES: ArticleRecord[] = [
       "tech-pack-vs-bom",
       "tech-pack-checklist",
       "how-to-make-tech-pack",
+      "ai-tech-pack-tools",
     ],
     en: {
       title: "What is an apparel tech pack?",
@@ -233,6 +234,7 @@ export const ARTICLES: ArticleRecord[] = [
       "what-is-tech-pack",
       "how-to-make-tech-pack",
       "how-to-annotate-garment",
+      "excel-vs-tech-pack-software",
     ],
     en: {
       title: "Tech pack checklist before you email the factory",
@@ -662,6 +664,520 @@ export const ARTICLES: ArticleRecord[] = [
         },
       ],
       ctaLabel: "在 PackFlow 编辑尺码表",
+    },
+  },
+  {
+    slug: "for-pattern-makers",
+    publishedAt: PUB,
+    updatedAt: PUB,
+    series: "roles",
+    relatedSlugs: [
+      "how-to-annotate-garment",
+      "size-chart-basics",
+      "tech-pack-checklist",
+      "for-merchandisers",
+    ],
+    en: {
+      title: "Tech packs for pattern makers: what to look for",
+      description:
+        "How pattern makers read tech packs — drawings, POM, construction notes, and revision hygiene before sampling.",
+      definition:
+        "For pattern makers, a useful tech pack shows clear flats or photos with part callouts, a sample-size POM chart with methods, and construction notes that match the drawings — not marketing copy alone.",
+      audience: "Pattern makers and tech designers reviewing packs from brands or freelancers.",
+      sections: [
+        {
+          heading: "What usually blocks sampling",
+          bullets: [
+            "Ambiguous which garment in a set is in scope",
+            "POM names that do not match anything on the image",
+            "Ops notes that contradict the drawing (e.g. zipper side)",
+            "Missing sample size or mixed body vs garment measures",
+          ],
+        },
+        {
+          heading: "A pattern-friendly pack",
+          bullets: [
+            "Front flat (or clean product crop) plus critical details",
+            "Callouts linked to short ops rows by the same part name",
+            "Sample size locked; grades only after fit agree — or buyer rule attached",
+            "Revision date when drawings change",
+          ],
+        },
+        {
+          heading: "Working with PackFlow packs",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} keeps ops, BOM, and size beside the canvas so pattern review can check drawing and tables together. AI drafts still need human fit judgment.`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "Can AI replace pattern making?",
+          answer:
+            "No. AI can speed annotation and table drafts. Pattern makers own block, fit, and production risk.",
+        },
+        {
+          question: "What if only a model photo is provided?",
+          answer:
+            "Ask for a flat or crop, and treat wearing ease as unknown until measured on a sample.",
+        },
+      ],
+      ctaLabel: "Review a pack in PackFlow",
+    },
+    zh: {
+      title: "版师看工艺包：先核对什么？",
+      description:
+        "版师视角：图面、POM、工艺说明与版本习惯——打样前少踩坑。",
+      definition:
+        "对版师来说，好用的工艺包要有清晰平铺/产品图与部位引出、带量法的基准码尺码表，以及与图面一致的工艺说明——不能只有营销文案。",
+      audience: "接收品牌或自由设计师资料的版师、工艺师。",
+      sections: [
+        {
+          heading: "常见卡打样的点",
+          bullets: [
+            "套装里到底做哪一件说不清",
+            "尺码点名称在图上对不上",
+            "工艺说明与图矛盾（如门襟左右）",
+            "没写基准码，或号型寸与成衣寸混用",
+          ],
+        },
+        {
+          heading: "版师友好的包长什么样",
+          bullets: [
+            "正面平铺（或干净产品裁切）+ 关键细节",
+            "引出与工艺表用同一套部位名",
+            "先锁定基准码；跳码等合身确认或买家规则齐全再写",
+            "改图就改版本日期",
+          ],
+        },
+        {
+          heading: "和 PackFlow 稿件协作",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} 把工艺、物料、尺寸放在画布旁，便于对照图和表。AI 草稿仍需人工判断合身。`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "AI 能替代打版吗？",
+          answer:
+            "不能。AI 加快标注与表格；版型、合身与生产风险仍由版师负责。",
+        },
+        {
+          question: "只有模特图怎么办？",
+          answer:
+            "尽量要平铺或裁切图；穿着松量在未量样前视为未知。",
+        },
+      ],
+      ctaLabel: "在 PackFlow 核对工艺包",
+    },
+  },
+  {
+    slug: "for-merchandisers",
+    publishedAt: PUB,
+    updatedAt: PUB,
+    series: "roles",
+    relatedSlugs: [
+      "tech-pack-checklist",
+      "tech-pack-vs-bom",
+      "how-to-make-tech-pack",
+      "for-export-apparel",
+    ],
+    en: {
+      title: "Tech packs for merchandisers: keep sampling moving",
+      description:
+        "A merchandiser’s view of tech packs — BOM readiness, TBD hygiene, factory questions, and version control.",
+      definition:
+        "Merchandisers use tech packs to align materials, timelines, and factory questions: a clear BOM, labeled unknowns, and one current revision reduce sampling delays.",
+      audience: "Merchandisers, production coordinators, and brand ops.",
+      sections: [
+        {
+          heading: "Your job in the pack",
+          bullets: [
+            "Style identity and which SKU / colorway the pack covers",
+            "BOM rows buyers and factories can purchase against",
+            "Open risks listed (fabric lead time, artwork pending)",
+            "Single file/version everyone replies to",
+          ],
+        },
+        {
+          heading: "Speed without sloppy packs",
+          paragraphs: [
+            "Empty cells without labels create silent risk. Prefer “TBD — fabric mill X by date” over blank rows.",
+            "When the factory asks a question, update the same project instead of scattering answers across chat screenshots.",
+          ],
+        },
+        {
+          heading: "In PackFlow",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} stores the style as one project with export for sharing. Cloud sync (after sign-in) helps when design and merchandising sit on different devices.`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "Should merchandising own the size chart?",
+          answer:
+            "Often jointly with tech design. Merchandising should ensure the sample size and units are stated; pattern owns methods and fit.",
+        },
+        {
+          question: "How many revisions are normal?",
+          answer:
+            "Expect several before bulk. Date each send so factories discard old PDFs.",
+        },
+      ],
+      ctaLabel: "Organize a style in PackFlow",
+    },
+    zh: {
+      title: "跟单怎么用工艺包推动打样？",
+      description:
+        "跟单视角：BOM 是否可采购、TBD 怎么写、工厂问答与版本怎么管。",
+      definition:
+        "跟单用工艺包对齐物料、交期与工厂问题：清晰 BOM、标明未知项、只维护一个当前版本，能明显减少打样延误。",
+      audience: "跟单、生产协调、品牌运营。",
+      sections: [
+        {
+          heading: "跟单在包里要盯的",
+          bullets: [
+            "款号身份、本包对应哪个色/SKU",
+            "BOM 行是否够采购下单",
+            "风险写明（面料交期、图稿未到）",
+            "所有人回复同一份当前版本",
+          ],
+        },
+        {
+          heading: "要快，但不要糊",
+          paragraphs: [
+            "空格子又不说明，是静默风险。宁可写「TBD — 某日前面料厂确认」。",
+            "工厂提问后，改同一项目，避免答案散落在聊天截图里。",
+          ],
+        },
+        {
+          heading: "在 PackFlow 里",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} 以项目保存整款并可导出分享。登录后云端同步，方便设计与跟单不在同一台电脑。`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "尺码表该跟单负责吗？",
+          answer:
+            "常与工艺/版师共管。跟单确保写清基准码与单位；量法与合身由版师把关。",
+        },
+        {
+          question: "改几版算正常？",
+          answer:
+            "大货前常有多轮。每次发送写日期，方便工厂丢掉旧 PDF。",
+        },
+      ],
+      ctaLabel: "用 PackFlow 整理一款",
+    },
+  },
+  {
+    slug: "for-export-apparel",
+    publishedAt: PUB,
+    updatedAt: PUB,
+    series: "roles",
+    relatedSlugs: [
+      "what-is-tech-pack",
+      "tech-pack-checklist",
+      "excel-vs-tech-pack-software",
+      "for-merchandisers",
+    ],
+    en: {
+      title: "English tech packs for export apparel",
+      description:
+        "What overseas buyers and factories expect in an English tech pack: labels, units, and bilingual habits.",
+      definition:
+        "An export-ready apparel tech pack uses clear English part and POM labels, states cm (or agreed units), and keeps drawings aligned with BOM and construction notes for overseas buyers and factories.",
+      audience: "Export merchandisers and brands selling to US/EU buyers.",
+      sections: [
+        {
+          heading: "Language & labeling",
+          bullets: [
+            "Prefer standard fashion English on tables (Collar, Placket, POM names)",
+            "Keep Chinese notes if your domestic factory needs them — many teams ship bilingual packs",
+            "Avoid slang or internal codes without a glossary",
+          ],
+        },
+        {
+          heading: "Units and fit culture",
+          bullets: [
+            "State cm vs inch explicitly",
+            "Sample size code (e.g. M / 38) next to the chart",
+            "Call out when a back view is illustrative, not a graded pattern",
+          ],
+        },
+        {
+          heading: "PackFlow angle",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} can export packs with English-oriented labels for overseas review while you still draft in Chinese when preferred. Always human-check translations before buyer send.`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "Is machine translation enough?",
+          answer:
+            "For internal drafts maybe; for buyer/factory send, review stitch and fabric terms — wrong words cause wrong materials.",
+        },
+        {
+          question: "Do buyers need full grade rules upfront?",
+          answer:
+            "Often sample first. Attach grade only when the buyer already fixed it or sample is approved.",
+        },
+      ],
+      ctaLabel: "Export a pack from PackFlow",
+    },
+    zh: {
+      title: "外贸服装英文工艺包要注意什么？",
+      description:
+        "给海外买家/工厂的英文工艺包：标签、单位、中英习惯与核对要点。",
+      definition:
+        "适合出口的英文工艺包使用清晰的英文部位与 POM 名称，标明厘米（或约定单位），并保证图面与 BOM、工艺说明一致，方便海外买家与工厂阅读。",
+      audience: "外贸跟单、对接美欧买家的品牌方。",
+      sections: [
+        {
+          heading: "语言与命名",
+          bullets: [
+            "表格优先用常见服装英语（Collar、Placket、POM 名）",
+            "国内工厂需要时可保留中文——很多团队做中英对照",
+            "内部代号若无注释，海外方看不懂",
+          ],
+        },
+        {
+          heading: "单位与合身口径",
+          bullets: [
+            "写清 cm 还是 inch",
+            "尺码表旁标明基准码（如 M / 38）",
+            "背面图若仅示意、非打版依据，请注明",
+          ],
+        },
+        {
+          heading: "和 PackFlow 的关系",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} 可导出偏英文标签的工艺包，也支持你先用中文起草。发给买家前务必人工核对译文。`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "机翻够用吗？",
+          answer:
+            "内部草稿可以；发给买家/工厂前要核对面料与针法用词，译错会买错料。",
+        },
+        {
+          question: "一开始就要全套跳码吗？",
+          answer:
+            "多数先打基准码样。买家已给规则或样衣通过后再附跳码。",
+        },
+      ],
+      ctaLabel: "从 PackFlow 导出工艺包",
+    },
+  },
+  {
+    slug: "excel-vs-tech-pack-software",
+    publishedAt: PUB,
+    updatedAt: PUB,
+    series: "compare",
+    relatedSlugs: [
+      "what-is-tech-pack",
+      "ai-tech-pack-tools",
+      "how-to-make-tech-pack",
+      "tech-pack-checklist",
+    ],
+    en: {
+      title: "Excel tech packs vs dedicated tech pack tools",
+      description:
+        "When spreadsheets are enough for apparel tech packs — and when a studio with drawings + tables linked works better.",
+      definition:
+        "Excel can store BOM and size charts, but dedicated tech pack tools keep drawings, annotations, and tables in one revision — reducing mismatched files when factories sample.",
+      audience: "Teams choosing between spreadsheet packs and product studios.",
+      sections: [
+        {
+          heading: "Where Excel still wins",
+          bullets: [
+            "Purchasing already lives in sheets",
+            "Very simple styles with one photo and short notes",
+            "Buyers who only accept a specific spreadsheet template",
+          ],
+        },
+        {
+          heading: "Where Excel gets painful",
+          bullets: [
+            "Drawings in chat, tables in Drive, versions disagree",
+            "Callouts that do not link to ops rows",
+            "Hard to show AI-assisted views or region edits next to data",
+          ],
+        },
+        {
+          heading: "A practical split",
+          paragraphs: [
+            "Many teams draft the visual pack in a studio, then export Excel/PDF for purchasing or factory SOPs. PackFlow targets the linked drawing + tables step — not replacing every ERP sheet.",
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "Must I abandon Excel?",
+          answer:
+            "No. Keep Excel for purchasing if needed; keep one visual source of truth for sampling.",
+        },
+        {
+          question: "What should I migrate first?",
+          answer:
+            "Styles with heavy email confusion around images and sizes — highest pain, clearest win.",
+        },
+      ],
+      ctaLabel: "Try a linked pack in PackFlow",
+    },
+    zh: {
+      title: "Excel 做工艺包 vs 专用工具",
+      description:
+        "表格什么时候够用，什么时候更适合「图+表一体」的工艺包工作室。",
+      definition:
+        "Excel 能存 BOM 与尺码表；专用工艺包工具把图纸、标注与表格放在同一版本里，减少工厂打样时文件对不上。",
+      audience: "在表格包和产品工作室之间做选择的团队。",
+      sections: [
+        {
+          heading: "Excel 仍然合适的时候",
+          bullets: [
+            "采购流程已经在表格里",
+            "极简款：一张图 + 很短说明",
+            "买家只收指定 Excel 模板",
+          ],
+        },
+        {
+          heading: "Excel 容易痛苦的地方",
+          bullets: [
+            "图在聊天、表在网盘，版本对不齐",
+            "引出与工艺行对不上",
+            "难把 AI 补视角/局部修改与数据放一起看",
+          ],
+        },
+        {
+          heading: "务实分工",
+          paragraphs: [
+            "很多团队在工作室做「可视工艺包」，再导出 Excel/PDF 给采购或工厂。PackFlow 针对图+表联动这一步，不是替代所有 ERP 表格。",
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "必须丢掉 Excel 吗？",
+          answer:
+            "不必。采购可继续用表；打样保留一个可视的「当前真相」来源。",
+        },
+        {
+          question: "先迁哪类款？",
+          answer:
+            "图和尺寸邮件扯皮最多的款——痛点最大、收益最明显。",
+        },
+      ],
+      ctaLabel: "在 PackFlow 试图+表一体",
+    },
+  },
+  {
+    slug: "ai-tech-pack-tools",
+    publishedAt: PUB,
+    updatedAt: PUB,
+    series: "compare",
+    relatedSlugs: [
+      "what-is-tech-pack",
+      "how-to-make-tech-pack",
+      "how-to-annotate-garment",
+      "excel-vs-tech-pack-software",
+    ],
+    en: {
+      title: "Are AI tech pack tools reliable? Where they help",
+      description:
+        "Honest scope for AI in apparel tech packs: drafts, views, and tables — plus what still needs humans.",
+      definition:
+        "AI tech pack tools can draft annotations, BOM/ops/size suggestions, and extra views from style photos; humans must confirm the target garment, fit-critical measures, and factory-facing wording before sampling.",
+      audience: "Teams evaluating AI assist for tech packs without over-trusting automation.",
+      sections: [
+        {
+          heading: "High-value AI jobs",
+          bullets: [
+            "First-pass part suggestions on a clear front image",
+            "Draft BOM / ops / remarks to edit, not to ship blindly",
+            "Extra color views or line art after the garment is confirmed",
+          ],
+        },
+        {
+          heading: "Keep humans in the loop",
+          bullets: [
+            "Multi-garment photos: confirm which piece is in scope",
+            "Critical POM and stretch grades",
+            "Buyer-facing English terms and material codes",
+          ],
+        },
+        {
+          heading: "How PackFlow positions AI",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} lets you annotate manually anytime (including as a guest). AI runs after sign-in with monthly credits; cancel or skip when you prefer to work by hand. Treat AI as a draft accelerator inside a real tech pack studio.`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "Will AI send a pack to the factory for me?",
+          answer:
+            "You should still review and export. AI does not own factory liability.",
+        },
+        {
+          question: "What image works best?",
+          answer:
+            "Sharp front views, long edge around 2000px or less, single target garment when possible.",
+        },
+      ],
+      ctaLabel: "Try AI assist in PackFlow",
+    },
+    zh: {
+      title: "AI 做工艺包靠谱吗？适合哪些环节？",
+      description:
+        "如实讲清 AI 在工艺包里能加速什么、哪里必须人工把关。",
+      definition:
+        "AI 工艺包工具可从款式图草稿标注、物料/工艺/尺码建议与补视角；发样前仍须人工确认目标单款、合身关键尺寸与给工厂的措辞。",
+      audience: "想用 AI 加速、又不想过度信任自动化的团队。",
+      sections: [
+        {
+          heading: "AI 更有价值的环节",
+          bullets: [
+            "清晰正面图上的部位初稿",
+            "BOM / 工艺 / 评语草稿（可改，不要盲发）",
+            "确认单款后再补彩图视角或线稿",
+          ],
+        },
+        {
+          heading: "必须人看的地方",
+          bullets: [
+            "一图多件：先确认做哪一件",
+            "关键 POM 与弹力跳码",
+            "给买家的英文用词与物料编码",
+          ],
+        },
+        {
+          heading: "PackFlow 怎么定位 AI",
+          paragraphs: [
+            `${BRAND_SHORT_NAME} 可随时手动标注（含访客）。登录后按月额度用 AI；想手做可跳过或取消。把 AI 当作工作室里的草稿加速器，而不是自动发包机器人。`,
+          ],
+        },
+      ],
+      faq: [
+        {
+          question: "AI 会直接发给工厂吗？",
+          answer:
+            "仍需你核对并导出。工厂责任不在 AI。",
+        },
+        {
+          question: "什么样的图最好用？",
+          answer:
+            "清晰正面、长边约 2000px 以内，尽量一张图一个目标款。",
+        },
+      ],
+      ctaLabel: "在 PackFlow 试用 AI",
     },
   },
 ];

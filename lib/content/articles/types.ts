@@ -32,7 +32,7 @@ export type ArticleRecord = {
   /** ISO date */
   publishedAt: string;
   updatedAt: string;
-  series: "fundamentals" | "howto";
+  series: "fundamentals" | "howto" | "roles" | "compare";
   relatedSlugs: string[];
   en: ArticleLocaleCopy;
   zh: ArticleLocaleCopy;
@@ -46,6 +46,8 @@ export type ArticlesHubCopy = {
   heroLead: string;
   seriesFundamentals: string;
   seriesHowto: string;
+  seriesRoles: string;
+  seriesCompare: string;
   navAria: string;
   navHome: string;
   navGuide: string;
@@ -65,13 +67,15 @@ export function getArticlesHubCopy(locale?: Locale | string | null): ArticlesHub
   if (en) {
     return {
       pageTitle: `${BRAND_SHORT_NAME} Articles — Tech Pack Guides`,
-      pageDescription: `Practical apparel tech-pack guides from ${BRAND_SHORT_NAME}: definitions, checklists, annotation, and size charts for factories and merchandisers.`,
+      pageDescription: `Practical apparel tech-pack guides from ${BRAND_SHORT_NAME}: definitions, how-tos, roles, and tool comparisons for factories and merchandisers.`,
       eyebrow: "Articles · Tech pack knowledge",
       heroTitle: "Apparel tech pack guides",
       heroLead:
         "Clear definitions and how-tos for tech packs (工艺包), BOM, POM, and annotation — written for search and AI assistants, then linked back to the studio.",
       seriesFundamentals: "Fundamentals",
       seriesHowto: "How-to",
+      seriesRoles: "By role",
+      seriesCompare: "Tools & comparisons",
       navAria: "Page navigation",
       navHome: "Home",
       navGuide: "Product FAQ",
@@ -88,13 +92,15 @@ export function getArticlesHubCopy(locale?: Locale | string | null): ArticlesHub
   }
   return {
     pageTitle: `${BRAND_SHORT_NAME} 专题文章 — 工艺包知识`,
-    pageDescription: `${BRAND_SHORT_NAME} 服装工艺包（Tech Pack）专题：定义、清单、标注与尺码表，面向版师、跟单与外贸沟通。`,
+    pageDescription: `${BRAND_SHORT_NAME} 服装工艺包（Tech Pack）专题：定义、上手、角色场景与工具对比，面向版师、跟单与外贸沟通。`,
     eyebrow: "专题文章 · 工艺包知识",
     heroTitle: "服装工艺包专题",
     heroLead:
       "用可引用的定义与步骤讲清工艺包、BOM、POM 与标注——方便搜索与 AI 引用，并链回工作室动手做。",
     seriesFundamentals: "基础认知",
     seriesHowto: "怎么做",
+    seriesRoles: "按角色",
+    seriesCompare: "工具与对比",
     navAria: "页面导航",
     navHome: "回首页",
     navGuide: "功能介绍 / FAQ",
@@ -126,5 +132,15 @@ export function seriesLabel(
   locale?: Locale | string | null,
 ): string {
   const hub = getArticlesHubCopy(locale);
-  return series === "howto" ? hub.seriesHowto : hub.seriesFundamentals;
+  switch (series) {
+    case "howto":
+      return hub.seriesHowto;
+    case "roles":
+      return hub.seriesRoles;
+    case "compare":
+      return hub.seriesCompare;
+    case "fundamentals":
+    default:
+      return hub.seriesFundamentals;
+  }
 }
