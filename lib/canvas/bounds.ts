@@ -89,10 +89,73 @@ export function annotationBounds(ann: Annotation): RectBounds {
   };
 }
 
+function artboardDisplaySize(
+  fit: { width: number; height: number },
+  imageScale?: { x: number; y: number } | null,
+) {
+  const sx = Math.abs(imageScale?.x ?? 1) || 1;
+  const sy = Math.abs(imageScale?.y ?? 1) || 1;
+  return {
+    width: fit.width * sx,
+    height: fit.height * sy,
+  };
+}
+
+export type StageBounds = {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+/**
+ * 内容离舞台边缘至少还剩这么多「安全边」时，沿用上一次原点，
+ * 避免拖图 1px 就改 offset → 整画布平移再补偿 → 闪一下。
+ */
+export const STAGE_STICKY_EDGE = 120;
+
+/**
+ * 按内容包围盒扩展舞台；左/上为负时增大 offset，避免 Konva Stage 裁切。
+ * 调用方需在 offset 变化时补偿视口 pan，否则拖图会「弹回」。
+ * 传入 sticky 时：若内容仍落在旧舞台安全区内，保持旧 offset（减少闪动）。
+ */
+export function stageBoundsFromContent(
+  content: RectBounds,
+  sticky?: StageBounds | null,
+): StageBounds {
+  const pad = STUDIO_CONTENT_PAD;
+  const natural: StageBounds = {
+    width: Math.max(MIN_STUDIO_W, content.maxX - content.minX + pad * 2),
+    height: Math.max(MIN_STUDIO_H, content.maxY - content.minY + pad * 2),
+    offsetX: pad - content.minX,
+    offsetY: pad - content.minY,
+  };
+
+  if (!sticky) return natural;
+
+  const left = content.minX + sticky.offsetX;
+  const top = content.minY + sticky.offsetY;
+  const right = sticky.width - (content.maxX + sticky.offsetX);
+  const bottom = sticky.height - (content.maxY + sticky.offsetY);
+  const edge = STAGE_STICKY_EDGE;
+
+  if (left >= edge && top >= edge && right >= edge && bottom >= edge) {
+    return {
+      width: Math.max(sticky.width, natural.width),
+      height: Math.max(sticky.height, natural.height),
+      offsetX: sticky.offsetX,
+      offsetY: sticky.offsetY,
+    };
+  }
+
+  return natural;
+}
+
 export function computeMultiStudioStageBounds(input: {
   slots: ArtboardSlot[];
   artboards: Artboard[];
-}): { width: number; height: number; offsetX: number; offsetY: number } {
+  sticky?: StageBounds | null;
+}): StageBounds {
   let content: RectBounds = {
     minX: 0,
     minY: 0,
@@ -103,13 +166,15 @@ export function computeMultiStudioStageBounds(input: {
   for (const slot of input.slots) {
     const ab = input.artboards.find((a) => a.id === slot.id);
     if (!ab) continue;
-    const ox = slot.origin.x + slot.imageOffset.x;
-    const oy = slot.origin.y + slot.imageOffset.y;
+    const display = artboardDisplaySize(slot.imageFit, ab.imageScale);
+    const offset = ab.imageOffset ?? slot.imageOffset;
+    const ox = slot.origin.x + offset.x;
+    const oy = slot.origin.y + offset.y;
     content = mergeBounds(content, {
       minX: ox + slot.imageFit.x,
       minY: oy + slot.imageFit.y,
-      maxX: ox + slot.imageFit.x + slot.imageFit.width,
-      maxY: oy + slot.imageFit.y + slot.imageFit.height,
+      maxX: ox + slot.imageFit.x + display.width,
+      maxY: oy + slot.imageFit.y + display.height,
     });
     for (const ann of ab.annotations) {
       const b = annotationBounds(ann);
@@ -122,20 +187,16 @@ export function computeMultiStudioStageBounds(input: {
     }
   }
 
-  const pad = STUDIO_CONTENT_PAD;
-  return {
-    width: Math.max(MIN_STUDIO_W, content.maxX + pad),
-    height: Math.max(MIN_STUDIO_H, content.maxY + pad),
-    offsetX: pad,
-    offsetY: pad,
-  };
+  return stageBoundsFromContent(content, input.sticky);
 }
 
 export function computeStudioStageBounds(input: {
   imageFit?: { x: number; y: number; width: number; height: number } | null;
   imageOffset?: { x: number; y: number };
+  imageScale?: { x: number; y: number } | null;
   annotations: Annotation[];
-}): { width: number; height: number; offsetX: number; offsetY: number } {
+  sticky?: StageBounds | null;
+}): StageBounds {
   let content: RectBounds = {
     minX: 0,
     minY: 0,
@@ -146,11 +207,12 @@ export function computeStudioStageBounds(input: {
   if (input.imageFit) {
     const ox = input.imageOffset?.x ?? 0;
     const oy = input.imageOffset?.y ?? 0;
+    const display = artboardDisplaySize(input.imageFit, input.imageScale);
     content = mergeBounds(content, {
       minX: input.imageFit.x + ox,
       minY: input.imageFit.y + oy,
-      maxX: input.imageFit.x + ox + input.imageFit.width,
-      maxY: input.imageFit.y + oy + input.imageFit.height,
+      maxX: input.imageFit.x + ox + display.width,
+      maxY: input.imageFit.y + oy + display.height,
     });
   }
 
@@ -158,15 +220,7 @@ export function computeStudioStageBounds(input: {
     content = mergeBounds(content, annotationBounds(ann));
   }
 
-  const pad = STUDIO_CONTENT_PAD;
-
-  // 固定内容原点偏移，不随拖动补偿 minX/minY（否则图片会被拉回中心）
-  return {
-    width: Math.max(MIN_STUDIO_W, content.maxX + pad),
-    height: Math.max(MIN_STUDIO_H, content.maxY + pad),
-    offsetX: pad,
-    offsetY: pad,
-  };
+  return stageBoundsFromContent(content, input.sticky);
 }
 
 /** 将 AI 返回的 1000×750 坐标映射到当前款式图位置 */

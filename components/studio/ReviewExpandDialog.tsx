@@ -1,6 +1,7 @@
 "use client";
 
 import DataExpandShell from "@/components/studio/DataExpandShell";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 
 type ReviewExpandDialogProps = {
@@ -16,17 +17,18 @@ export default function ReviewExpandDialog({
   value,
   onChange,
 }: ReviewExpandDialogProps) {
+  const { t } = useLocale();
   const text = value ?? "";
 
   return (
     <DataExpandShell
       open={open}
       onClose={onClose}
-      title="款式评语"
-      subtitle={`面向版师/车版/设计师：款式特点、面料建议、工艺建议、注意事项（≤${STYLE_REVIEW_MAX}字）。修改即时保存。`}
+      title={t("panel.reviewTitle")}
+      subtitle={t("panel.reviewSubtitle", { max: STYLE_REVIEW_MAX })}
       footerLeft={
         <span className="text-[11px] text-slate-400">
-          {text.length}/{STYLE_REVIEW_MAX} 字
+          {t("panel.charCount", { n: text.length, max: STYLE_REVIEW_MAX })}
         </span>
       }
     >
@@ -35,7 +37,7 @@ export default function ReviewExpandDialog({
         onChange={(e) => onChange(e.target.value.slice(0, STYLE_REVIEW_MAX))}
         rows={22}
         maxLength={STYLE_REVIEW_MAX}
-        placeholder={`【款式特点】…\n【面料建议】…\n【工艺建议】…\n【注意事项】…`}
+        placeholder={t("panel.reviewPh")}
         className="min-h-[min(60vh,520px)] w-full resize-y rounded-lg border border-slate-200 px-3 py-3 text-[13px] leading-relaxed text-slate-700 outline-none focus:border-blue-400"
       />
     </DataExpandShell>

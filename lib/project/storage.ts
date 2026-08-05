@@ -1,6 +1,7 @@
 import type { Artboard, TechPackProject } from "@/types/project";
 import { createDefaultCanvasData } from "@/lib/project/hotspots";
 import { migrateProject } from "@/lib/project/hotspots";
+import { sortProjectsByUpdatedAtDesc } from "@/lib/project/library-display";
 import {
   clearViewGenRecords,
   getViewGenRecordsStorageBytes,
@@ -337,11 +338,9 @@ export async function getProject(id: string): Promise<TechPackProject | null> {
 
 /** 仅本机列表（不含云端合并，供混合仓使用） */
 export async function listLocalProjectsOnly(): Promise<TechPackProject[]> {
-  return Object.values(readAll())
-    .map(migrateProject)
-    .sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+  return sortProjectsByUpdatedAtDesc(
+    Object.values(readAll()).map(migrateProject),
+  );
 }
 
 /** List projects for UI; images may remain as idb: refs (no hydrate). */
@@ -349,7 +348,7 @@ export async function listProjects(): Promise<TechPackProject[]> {
   const local = await listLocalProjectsOnly();
   try {
     const { mergeLocalWithCloud } = await import("@/lib/project/cloud-sync");
-    return await mergeLocalWithCloud(local);
+    return sortProjectsByUpdatedAtDesc(await mergeLocalWithCloud(local));
   } catch {
     return local;
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import DataExpandShell from "@/components/studio/DataExpandShell";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import { generateProcessId } from "@/lib/process/ids";
 import type { ProcessItem } from "@/types/process";
 
@@ -24,6 +25,8 @@ export default function ProcessExpandDialog({
   items,
   onChange,
 }: ProcessExpandDialogProps) {
+  const { t } = useLocale();
+
   const update = (index: number, patch: Partial<ProcessItem>) => {
     const next = [...items];
     next[index] = { ...next[index], ...patch };
@@ -42,15 +45,15 @@ export default function ProcessExpandDialog({
     <DataExpandShell
       open={open}
       onClose={onClose}
-      title="工艺明细"
-      subtitle="大面板编辑工艺条目，修改即时保存；点「完成」关闭面板。"
+      title={t("panel.processTitle")}
+      subtitle={t("panel.processSubtitle")}
       footerLeft={
         <button
           type="button"
           onClick={add}
           className="rounded border border-dashed border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 hover:border-slate-400"
         >
-          + 添加工艺行
+          {t("panel.addProcess")}
         </button>
       }
     >
@@ -67,14 +70,14 @@ export default function ProcessExpandDialog({
               <input
                 value={item.part}
                 onChange={(e) => update(i, { part: e.target.value })}
-                placeholder="部位名称"
+                placeholder={t("panel.partName")}
                 className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand"
               />
               <button
                 type="button"
                 onClick={() => remove(i)}
                 className="shrink-0 rounded px-2 py-1 text-slate-400 hover:bg-white hover:text-red-500"
-                title="删除"
+                title={t("common.delete")}
               >
                 ×
               </button>
@@ -82,7 +85,7 @@ export default function ProcessExpandDialog({
             <textarea
               value={item.process}
               onChange={(e) => update(i, { process: e.target.value })}
-              placeholder="工艺描述"
+              placeholder={t("panel.processDesc")}
               rows={3}
               className="mb-2 w-full resize-y rounded border border-slate-200 bg-white px-2.5 py-2 text-[13px] leading-relaxed text-slate-700 outline-none focus:border-brand"
             />
@@ -90,13 +93,13 @@ export default function ProcessExpandDialog({
               <input
                 value={item.stitch ?? ""}
                 onChange={(e) => update(i, { stitch: e.target.value })}
-                placeholder="针法/线迹"
+                placeholder={t("panel.stitch")}
                 className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-brand"
               />
               <input
                 value={item.seam_allowance ?? ""}
                 onChange={(e) => update(i, { seam_allowance: e.target.value })}
-                placeholder="缝份"
+                placeholder={t("panel.seam")}
                 className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-brand"
               />
             </div>
@@ -104,7 +107,7 @@ export default function ProcessExpandDialog({
         ))}
         {items.length === 0 && (
           <p className="py-10 text-center text-xs text-slate-400">
-            暂无工艺条目，可点击下方添加或使用 AI 一键标注
+            {t("panel.processEmpty")}
           </p>
         )}
       </div>

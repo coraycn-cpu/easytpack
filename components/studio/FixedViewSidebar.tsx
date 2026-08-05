@@ -6,14 +6,13 @@ import CompliancePanel from "@/components/studio/CompliancePanel";
 import type { ComplianceIssue } from "@/lib/project/compliance";
 import {
   VIEW_IMAGE_PRESETS,
-  VIEW_IMAGE_AI_GUIDE,
-  SIDEBAR_AI_SOURCE_HINT,
   LINE_ART_USE_OVERLAY_HINT,
   type ViewImageKind,
 } from "@/lib/studio/view-types";
 import { resolveViewKindFromCustomPrompt } from "@/lib/studio/resolve-view-kind";
 import type { PhotoType } from "@/types/project";
 import type { WorkflowStatus } from "@/types/project";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 type FixedViewSidebarProps = {
   onNewStyle?: () => void;
@@ -38,6 +37,12 @@ type FixedViewSidebarProps = {
   exportHref: string;
 };
 
+const VIEW_LABEL_KEYS: Record<string, string> = {
+  back: "studio.viewBack",
+  collar: "studio.viewCollar",
+  cuff: "studio.viewCuff",
+};
+
 export default function FixedViewSidebar({
   onNewStyle,
   onReplaceImage,
@@ -58,6 +63,7 @@ export default function FixedViewSidebar({
   onWorkflowChange,
   exportHref,
 }: FixedViewSidebarProps) {
+  const { t, locale } = useLocale();
   const [customPrompt, setCustomPrompt] = useState("");
   const [complianceExpanded, setComplianceExpanded] = useState(false);
 
@@ -70,7 +76,11 @@ export default function FixedViewSidebar({
     if (!prompt) return;
     const mapped = resolveViewKindFromCustomPrompt(prompt);
     if (mapped && "blocked" in mapped) {
-      onLineArtHint?.(LINE_ART_USE_OVERLAY_HINT);
+      onLineArtHint?.(
+        locale === "en"
+          ? t("studio.lineArtOverlayHint")
+          : LINE_ART_USE_OVERLAY_HINT,
+      );
       return;
     }
     // 「生成正面平铺图」等映射到正式 kind，避免 custom 走偏
@@ -92,21 +102,23 @@ export default function FixedViewSidebar({
               className="pf-btn-primary w-full gap-1.5 px-2.5 py-2 text-xs"
             >
               <span className="text-sm leading-none">+</span>
-              新建款式
+              {t("studio.newStyle")}
             </button>
           </div>
         )}
 
         <div className="border-b border-brand-light bg-brand-soft/60 px-3 py-2">
-          <p className="text-xs font-semibold text-foreground">AI 生成款式图</p>
+          <p className="text-xs font-semibold text-foreground">
+            {t("studio.aiGenViews")}
+          </p>
           <p className="mt-0.5 text-[9px] leading-snug text-brand-dark/80">
-            {VIEW_IMAGE_AI_GUIDE}
+            {t("studio.viewAiGuide")}
           </p>
           <p className="mt-0.5 text-[9px] font-medium text-brand-dark/90">
-            成功生成一张约消耗 5 点 AI
+            {t("studio.aiCostHint")}
           </p>
           <p className="mt-1 text-[9px] leading-snug text-muted">
-            {SIDEBAR_AI_SOURCE_HINT}
+            {t("studio.sidebarSourceHint")}
           </p>
         </div>
 
@@ -117,22 +129,24 @@ export default function FixedViewSidebar({
               type="button"
               disabled={viewGenerating}
               onClick={() => onGenerateView(preset.kind)}
-              className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-2.5 py-2 text-left text-xs font-medium text-brand-dark transition hover:bg-brand-light/50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-brand-light bg-brand-soft px-2.5 py-2 text-left text-xs font-medium text-brand-dark transition hover:bg-brand-soft/50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="text-sm">{preset.icon}</span>
-              {viewGenerating ? "生成中…" : preset.label}
+              {viewGenerating
+                ? t("studio.generating")
+                : t(VIEW_LABEL_KEYS[preset.kind] ?? "studio.viewBack")}
             </button>
           ))}
 
           <div className="rounded-[var(--radius-sm)] border border-border bg-background p-2">
             <label className="mb-1 flex items-center gap-1 text-[10px] font-medium text-muted">
               <span className="text-sm leading-none text-brand">✦</span>
-              自定义视角（提示词）
+              {t("studio.customView")}
             </label>
             <textarea
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="如：45°斜侧、口袋细节（线稿请用彩图右侧按钮）"
+              placeholder={t("studio.customViewPh")}
               rows={2}
               disabled={viewGenerating}
               className="pf-input resize-none px-2 py-1.5 text-[11px]"
@@ -143,7 +157,9 @@ export default function FixedViewSidebar({
               onClick={handleCustomGenerate}
               className="pf-btn-primary mt-1.5 w-full px-2 py-1.5 text-[11px]"
             >
-              {viewGenerating ? "生成中…" : "生成自定义视角"}
+              {viewGenerating
+                ? t("studio.generating")
+                : t("studio.genCustomView")}
             </button>
           </div>
         </div>
@@ -151,7 +167,7 @@ export default function FixedViewSidebar({
         <div className="border-t border-border p-2.5">
           <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-2 text-xs font-medium text-muted transition hover:border-brand-light hover:bg-brand-soft hover:text-brand">
             <span>🖼</span>
-            更换主图
+            {t("studio.replaceMainImage")}
             <input
               type="file"
               accept="image/*"
@@ -172,11 +188,11 @@ export default function FixedViewSidebar({
         <div className="border-b border-border bg-background px-2.5 py-2">
           <div className="mb-1 flex items-center gap-1">
             <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-              质量检验
+              {t("studio.qualityCheck")}
             </p>
             {issueCount > 0 && (
               <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
-                {issueCount} 项
+                {t("studio.issueCount", { n: issueCount })}
               </span>
             )}
             {showComplianceToggle && (
@@ -185,7 +201,9 @@ export default function FixedViewSidebar({
                 onClick={() => setComplianceExpanded((v) => !v)}
                 className="shrink-0 text-[9px] text-muted hover:text-foreground"
               >
-                {complianceExpanded ? "收起" : "展开"}
+                {complianceExpanded
+                  ? t("studio.collapse")
+                  : t("studio.expand")}
               </button>
             )}
           </div>
@@ -208,26 +226,30 @@ export default function FixedViewSidebar({
             {projectTitle}
           </h1>
           <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted">
-            {category ?? "未分类"}
-            {targetGarmentLabel ? ` · 目标款：${targetGarmentLabel}` : ""} · {workflowLabel} ·{" "}
-            {progress}%
+            {category ?? t("studio.uncategorized")}
+            {targetGarmentLabel
+              ? ` · ${t("studio.targetGarment", { label: targetGarmentLabel })}`
+              : ""}{" "}
+            · {workflowLabel} · {progress}%
           </p>
 
           <div className="mt-2 space-y-1.5">
             <select
               value={workflowStatus}
-              onChange={(e) => onWorkflowChange(e.target.value as WorkflowStatus)}
+              onChange={(e) =>
+                onWorkflowChange(e.target.value as WorkflowStatus)
+              }
               className="pf-input px-2 py-1.5 text-xs"
             >
-              <option value="draft">草稿</option>
-              <option value="in_review">待版师审核</option>
-              <option value="finalized">已定稿</option>
+              <option value="draft">{t("studio.statusDraft")}</option>
+              <option value="in_review">{t("studio.statusReview")}</option>
+              <option value="finalized">{t("studio.statusFinal")}</option>
             </select>
             <Link
               href={exportHref}
               className="pf-btn-primary w-full px-2 py-2 text-xs"
             >
-              导出给版师 →
+              {t("studio.exportToPattern")}
             </Link>
           </div>
         </div>

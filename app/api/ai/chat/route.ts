@@ -6,6 +6,7 @@ import {
 import type { ChatProjectContext } from "@/lib/ai/chat-context";
 import { buildChatProjectContext } from "@/lib/ai/chat-context";
 import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import { normalizeLocale } from "@/lib/i18n/locale";
 import type { TechPackProject } from "@/types/project";
 
 function sanitizeImages(raw: unknown): ChatImageAttachment[] | undefined {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
           : [],
         context,
         images: sanitizeImages(body.images),
+        locale: normalizeLocale(body.locale),
         imageDataUrl:
           typeof body.imageDataUrl === "string" &&
           body.imageDataUrl.startsWith("data:")

@@ -1,3 +1,8 @@
+import {
+  INVITE_POINTS_CAP,
+  INVITE_REWARD_POINTS,
+} from "@/lib/invite/constants";
+
 /**
  * 未登录门槛 + 注册引导文案（统一口径，避免各处说法不一致）
  */
@@ -5,7 +10,7 @@
 export const AI_LOGIN_REQUIRED_CODE = "AI_LOGIN_REQUIRED";
 
 /** 默认免费档；可被环境变量覆盖（见 freeMonthlyAiGift） */
-export const DEFAULT_FREE_MONTHLY_AI_UNITS = 200;
+export const DEFAULT_FREE_MONTHLY_AI_UNITS = 50;
 
 /**
  * 营销/界面展示用的「每月免费点数」。
@@ -32,6 +37,14 @@ export const LOGIN_CTA_LABEL = "已有账号？登录";
 export const AI_LOGIN_REQUIRED_MESSAGE =
   `使用 AI 需要先注册。现在注册即送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI 额度，还能把稿存到云端、换设备继续。你仍可先在画布上手动标注。`;
 
+/** UI 展示用：按语言返回未登录 AI 提示（服务端仍可用中文常量） */
+export function aiLoginRequiredMessage(locale?: string): string {
+  if (locale === "en") {
+    return `AI requires sign-up. Register for ${FREE_MONTHLY_AI_GIFT} AI pts/mo + cloud sync. You can still annotate manually on the canvas.`;
+  }
+  return AI_LOGIN_REQUIRED_MESSAGE;
+}
+
 export const CLOUD_SAVE_LOGIN_MESSAGE =
   `把稿存到云端需要先注册。注册免费，并送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI 额度；本机浏览器里仍会自动保存，可继续手动标注。`;
 
@@ -42,8 +55,9 @@ export const REGISTER_BENEFITS_HEADLINE = `注册免费，每月送 ${FREE_MONTH
 
 export const REGISTER_BENEFITS_LINES = [
   `每月 ${FREE_MONTHLY_AI_GIFT} 点 AI：一键标注、生图、补全都可用（生图成功一次约 5 点）`,
+  `${FREE_MONTHLY_AI_GIFT} 点大约够 AI 智能标注生成 4～6 张工艺单；手动标注不限次数`,
   "云端存档：换电脑 / 换浏览器也能打开旧款",
-  "邀请好友双方再各得 50 分（加进每月 AI 上限）",
+  `邀请好友双方再各得 ${INVITE_REWARD_POINTS} 分（加进每月 AI 上限，邀请积分上限 ${INVITE_POINTS_CAP}）`,
 ] as const;
 
 export const GUEST_LIMIT_LINES = [
@@ -54,6 +68,9 @@ export const GUEST_LIMIT_LINES = [
 /** 画布顶栏旁短提示（并入顶栏，不再单独占一行） */
 export const STUDIO_GUEST_BAR_TEXT =
   `可手动标注，本机已自动保存。注册送每月 ${FREE_MONTHLY_AI_GIFT} 点 AI + 云端存档。`;
+
+/** 首页用量说明（白话） */
+export const HOME_AI_QUOTA_HINT = `${FREE_MONTHLY_AI_GIFT} 点大概可以调用 AI 智能标注生成 4～6 张工艺单，手动标注无限使用。`;
 
 export function buildLoginHref(opts?: {
   next?: string;

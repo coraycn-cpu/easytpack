@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   Stage,
@@ -32,6 +39,7 @@ import {
   computeImagePlacement,
   annotationToLocalCoords,
   offsetAnnotations,
+  type StageBounds,
 } from "@/lib/canvas/bounds";
 import { computeImageFit } from "@/lib/canvas/fit";
 import { normalizeAnnotations } from "@/lib/canvas/migrate";
@@ -234,8 +242,32 @@ export default function AnnotationCanvas({
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFit, setImageFit] = useState({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
   const [artboardImages, setArtboardImages] = useState<
-    Map<string, { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }>
+    Map<
+      string,
+      {
+        img: HTMLImageElement;
+        fit: ReturnType<typeof computeImagePlacement>;
+        sourceUrl: string;
+      }
+    >
   >(new Map());
+  const artboardImagesRef = useRef(artboardImages);
+  artboardImagesRef.current = artboardImages;
+  const multiArtboardsRef = useRef(multiArtboards);
+  multiArtboardsRef.current = multiArtboards;
+
+  const artboardImageUrlsKey = useMemo(() => {
+    if (!multiArtboards?.length) return "";
+    return multiArtboards
+      .map((a) => {
+        const url = a.imageDataUrl ?? "";
+        const tip = url
+          ? `${url.length}:${url.slice(0, 32)}:${url.slice(-24)}`
+          : "0";
+        return `${a.id}:${tip}`;
+      })
+      .join("|");
+  }, [multiArtboards]);
   const [tool, setTool] = useState<CanvasTool>("select");
   const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -318,12 +350,14 @@ export default function AnnotationCanvas({
   } | null>(null);
   const [freehandPoints, setFreehandPoints] = useState<number[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
-  /** 拖动款式图过程中标注层临时跟随位移（松手后写入持久化坐标） */
-  const [imageDragPreview, setImageDragPreview] = useState<{
-    artboardId: string;
-    dx: number;
-    dy: number;
-  } | null>(null);
+  /** 拖动款式图时用 Konva 直接移动标注层，避免每帧 setState 重绘整画布 */
+  const annFollowGroupRefs = useRef<Record<string, Konva.Group | null>>({});
+  const syncAnnFollowGroup = (artboardId: string, x: number, y: number) => {
+    const g = annFollowGroupRefs.current[artboardId];
+    if (!g) return;
+    g.position({ x, y });
+    g.getLayer()?.batchDraw();
+  };
 
   const draftRectRef = useRef(draftRect);
   const draftLineRef = useRef(draftLine);
@@ -406,16 +440,26 @@ export default function AnnotationCanvas({
   }, [imageUrl, loadImage, multiMode]);
 
   useEffect(() => {
-    if (!multiMode || !multiArtboards) return;
+    if (!multiMode) return;
+    const boards = multiArtboardsRef.current;
+    if (!boards) {
+      setArtboardImages(new Map());
+      return;
+    }
     let cancelled = false;
-    const next = new Map<
-      string,
-      { img: HTMLImageElement; fit: ReturnType<typeof computeImagePlacement> }
-    >();
 
     const loadAll = async () => {
-      for (const ab of multiArtboards) {
+      const prev = artboardImagesRef.current;
+      const next = new Map(prev);
+      const keepIds = new Set<string>();
+
+      for (const ab of boards) {
         if (!ab.imageDataUrl) continue;
+        keepIds.add(ab.id);
+        const existing = next.get(ab.id);
+        if (existing && existing.sourceUrl === ab.imageDataUrl) {
+          continue;
+        }
         await new Promise<void>((resolve) => {
           const img = new window.Image();
           img.crossOrigin = "anonymous";
@@ -424,6 +468,7 @@ export default function AnnotationCanvas({
             next.set(ab.id, {
               img,
               fit: computeImagePlacement(img.naturalWidth, img.naturalHeight),
+              sourceUrl: ab.imageDataUrl!,
             });
             resolve();
           };
@@ -431,14 +476,19 @@ export default function AnnotationCanvas({
           img.src = ab.imageDataUrl!;
         });
       }
+
+      for (const id of [...next.keys()]) {
+        if (!keepIds.has(id)) next.delete(id);
+      }
+
       if (!cancelled) setArtboardImages(new Map(next));
     };
 
-    loadAll();
+    void loadAll();
     return () => {
       cancelled = true;
     };
-  }, [multiMode, multiArtboards]);
+  }, [multiMode, artboardImageUrlsKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -489,18 +539,31 @@ export default function AnnotationCanvas({
     onAnnotationsChange(next);
   };
 
+  const stickyStageRef = useRef<StageBounds | null>(null);
+  const stickyResetKey =
+    multiArtboards?.map((a) => a.id).join("|") || imageUrl || "";
+  const stickyResetKeyRef = useRef(stickyResetKey);
+  if (stickyResetKeyRef.current !== stickyResetKey) {
+    stickyResetKeyRef.current = stickyResetKey;
+    stickyStageRef.current = null;
+  }
   const studioBounds = fixedChrome
     ? multiMode && artboardSlots && multiArtboards
       ? computeMultiStudioStageBounds({
           slots: artboardSlots,
           artboards: multiArtboards,
+          sticky: stickyStageRef.current,
         })
       : computeStudioStageBounds({
           imageFit: image ? imageFit : null,
           imageOffset,
           annotations: normalizedAnnotations,
+          sticky: stickyStageRef.current,
         })
     : null;
+  if (studioBounds) {
+    stickyStageRef.current = studioBounds;
+  }
 
   const logicalW = fixedChrome ? studioBounds!.width : CANVAS_W;
   const logicalH = fixedChrome
@@ -510,6 +573,38 @@ export default function AnnotationCanvas({
       : CANVAS_H;
   const contentOffsetX = fixedChrome ? studioBounds!.offsetX : 0;
   const contentOffsetY = fixedChrome ? studioBounds!.offsetY : 0;
+
+  /** 舞台 offset 随内容左/上扩展时，补偿视口 pan，避免拖图「弹回」；layout 阶段同步，避免先闪一帧 */
+  const contentOffsetPrevRef = useRef({ x: contentOffsetX, y: contentOffsetY });
+  const viewportRefForOffset = useRef(viewport);
+  const onViewportChangeRefForOffset = useRef(onViewportChange);
+  useEffect(() => {
+    viewportRefForOffset.current = viewport;
+  }, [viewport]);
+  useEffect(() => {
+    onViewportChangeRefForOffset.current = onViewportChange;
+  }, [onViewportChange]);
+  useLayoutEffect(() => {
+    if (!fixedChrome) {
+      contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+      return;
+    }
+    const prev = contentOffsetPrevRef.current;
+    const dOx = contentOffsetX - prev.x;
+    const dOy = contentOffsetY - prev.y;
+    contentOffsetPrevRef.current = { x: contentOffsetX, y: contentOffsetY };
+    if (dOx === 0 && dOy === 0) return;
+    const vp = viewportRefForOffset.current;
+    const change = onViewportChangeRefForOffset.current;
+    if (!vp || !change) return;
+    const s = vp.scale || 1;
+    change({
+      panX: vp.panX - dOx * s,
+      panY: vp.panY - dOy * s,
+      scale: vp.scale,
+    });
+  }, [contentOffsetX, contentOffsetY, fixedChrome]);
+
   const transparentStage = fixedChrome || splitOnCanvas;
   const baseFit = fixedChrome
     ? 1
@@ -1756,17 +1851,13 @@ export default function AnnotationCanvas({
                         onDragStart={(e) => {
                           e.cancelBubble = true;
                           if (isActive) {
-                            setImageDragPreview({ artboardId: ab.id, dx: 0, dy: 0 });
+                            syncAnnFollowGroup(ab.id, 0, 0);
                           }
                         }}
                         onDragMove={(e) => {
                           if (!isActive) return;
                           e.cancelBubble = true;
-                          setImageDragPreview({
-                            artboardId: ab.id,
-                            dx: e.target.x(),
-                            dy: e.target.y(),
-                          });
+                          syncAnnFollowGroup(ab.id, e.target.x(), e.target.y());
                         }}
                         onDragEnd={(e) => {
                           if (!isActive) return;
@@ -1774,7 +1865,7 @@ export default function AnnotationCanvas({
                           const dx = e.target.x();
                           const dy = e.target.y();
                           e.target.position({ x: 0, y: 0 });
-                          setImageDragPreview(null);
+                          syncAnnFollowGroup(ab.id, 0, 0);
                           commitImageDrag(dx, dy, abOffset, abAnns);
                         }}
                       >
@@ -1836,12 +1927,11 @@ export default function AnnotationCanvas({
                         )}
                       </Group>
                       <Group
-                        x={
-                          imageDragPreview?.artboardId === ab.id ? imageDragPreview.dx : 0
-                        }
-                        y={
-                          imageDragPreview?.artboardId === ab.id ? imageDragPreview.dy : 0
-                        }
+                        ref={(node) => {
+                          annFollowGroupRefs.current[ab.id] = node;
+                        }}
+                        x={0}
+                        y={0}
                       >
                       {abAnns.map((ann) =>
                         renderAnnotation(
@@ -1966,22 +2056,18 @@ export default function AnnotationCanvas({
                   draggable={tool === "select" && imageSelected && !isPanActive}
                   onDragStart={(e) => {
                     e.cancelBubble = true;
-                    setImageDragPreview({ artboardId: "__single__", dx: 0, dy: 0 });
+                    syncAnnFollowGroup("__single__", 0, 0);
                   }}
                   onDragMove={(e) => {
                     e.cancelBubble = true;
-                    setImageDragPreview({
-                      artboardId: "__single__",
-                      dx: e.target.x(),
-                      dy: e.target.y(),
-                    });
+                    syncAnnFollowGroup("__single__", e.target.x(), e.target.y());
                   }}
                   onDragEnd={(e) => {
                     e.cancelBubble = true;
                     const dx = e.target.x();
                     const dy = e.target.y();
                     e.target.position({ x: 0, y: 0 });
-                    setImageDragPreview(null);
+                    syncAnnFollowGroup("__single__", 0, 0);
                     commitImageDrag(dx, dy, imageOffset, normalizedAnnotations);
                   }}
                 >
@@ -2009,12 +2095,11 @@ export default function AnnotationCanvas({
                   />
                 </Group>
                 <Group
-                  x={
-                    imageDragPreview?.artboardId === "__single__" ? imageDragPreview.dx : 0
-                  }
-                  y={
-                    imageDragPreview?.artboardId === "__single__" ? imageDragPreview.dy : 0
-                  }
+                  ref={(node) => {
+                    annFollowGroupRefs.current.__single__ = node;
+                  }}
+                  x={0}
+                  y={0}
                 >
                 {normalizedAnnotations.map((ann) =>
                   renderAnnotation(

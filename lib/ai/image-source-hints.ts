@@ -4,6 +4,7 @@ import {
   MODEL_REFERENCE_NAME,
 } from "@/lib/studio/reference-artboard";
 import type { AiLoadingPresetId } from "@/lib/ai/loading-presets";
+import type { Locale } from "@/lib/i18n/locale";
 import type { TechPackProject } from "@/types/project";
 
 export type AiImageSourceKind =
@@ -55,11 +56,13 @@ type SourceResolveOptions = {
     AiImageContext,
     "sourceArtboardId" | "preferIntake" | "taskLabel" | "userNote"
   > | null;
+  locale?: Locale;
 };
 
-function artboardLabel(name: string): string {
+function artboardLabel(name: string, locale: Locale = "zh"): string {
   const n = name.trim();
-  return n || "画板";
+  if (n) return n;
+  return locale === "en" ? "Board" : "画板";
 }
 
 function isReferenceArtboardName(name: string): boolean {
@@ -70,7 +73,15 @@ function isReferenceArtboardName(name: string): boolean {
   );
 }
 
-function describeIntakeOriginal(intake: ProjectSlice["intake"]): string {
+function describeIntakeOriginal(
+  intake: ProjectSlice["intake"],
+  locale: Locale = "zh",
+): string {
+  if (locale === "en") {
+    if (intake.photoType === "model") return "Original ref (on-model)";
+    if (intake.photoType === "collage") return "Original ref (collage)";
+    return "Original upload";
+  }
   if (intake.photoType === "model") return "原参考图（模特穿着）";
   if (intake.photoType === "collage") return "原参考图（拼贴）";
   return "原上传参考图";
@@ -80,22 +91,36 @@ function appendTaskAndNote(
   hint: string,
   taskLabel?: string,
   userNote?: string,
+  locale: Locale = "zh",
 ): string {
   let next = hint;
   if (taskLabel?.trim()) {
-    next = `${next} · 任务：${taskLabel.trim()}`;
+    next =
+      locale === "en"
+        ? `${next} · Task: ${taskLabel.trim()}`
+        : `${next} · 任务：${taskLabel.trim()}`;
   }
   const note = userNote?.trim();
   if (note) {
     const short = note.length > 40 ? `${note.slice(0, 40)}…` : note;
-    next = `${next} · 修正/自定义：${short}`;
+    next =
+      locale === "en"
+        ? `${next} · Note: ${short}`
+        : `${next} · 修正/自定义：${short}`;
   }
   return next;
+}
+
+function basedOn(label: string, locale: Locale): string {
+  return locale === "en"
+    ? `This AI uses: ${label}`
+    : `本次 AI 基于：${label}`;
 }
 
 export function describeArtboardById(
   project: ProjectSlice,
   artboardId?: string,
+  locale: Locale = "zh",
 ): { kind: AiImageSourceKind; label: string; artboardId?: string } {
   const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
   const ab = artboardId
@@ -103,30 +128,44 @@ export function describeArtboardById(
     : undefined;
 
   if (!ab) {
-    return { kind: "intake_original", label: describeIntakeOriginal(project.intake) };
+    return {
+      kind: "intake_original",
+      label: describeIntakeOriginal(project.intake, locale),
+    };
   }
 
   if (isReferenceArtboardName(ab.name)) {
     return {
       kind: "intake_original",
-      label: artboardLabel(ab.name),
+      label: artboardLabel(ab.name, locale),
       artboardId: ab.id,
     };
   }
 
+  const name = artboardLabel(ab.name, locale);
   if (ab.id === primaryId) {
     const flat =
       ab.viewImageMeta?.kind === "flat_front" || project.intake.flatFrontGenerated;
     return {
       kind: "primary_artboard",
-      label: flat ? `主款平铺「${artboardLabel(ab.name)}」` : `主款「${artboardLabel(ab.name)}」`,
+      label:
+        locale === "en"
+          ? flat
+            ? `Main flat “${name}”`
+            : `Main “${name}”`
+          : flat
+            ? `主款平铺「${name}」`
+            : `主款「${name}」`,
       artboardId: ab.id,
     };
   }
 
   return {
     kind: "active_artboard",
-    label: `当前画板「${artboardLabel(ab.name)}」`,
+    label:
+      locale === "en"
+        ? `Active board “${name}”`
+        : `当前画板「${name}」`,
     artboardId: ab.id,
   };
 }
@@ -144,6 +183,12 @@ function previewUrlForArtboard(
 export const FULL_COLLECT_SOURCE_HINT =
   "本次 AI 基于：工艺/尺寸用主款画板；物料用原参考图";
 
+export function fullCollectSourceHint(locale: Locale = "zh"): string {
+  return locale === "en"
+    ? "This AI uses: main board for ops/sizes; original upload for BOM"
+    : FULL_COLLECT_SOURCE_HINT;
+}
+
 /**
  * 各 AI 功能使用的图片来源。
  * 若传入 context.sourceArtboardId / preferIntake，则与真实 API 入参对齐，覆盖默认策略。
@@ -153,6 +198,7 @@ export function getAiActionImageSource(
   project: ProjectSlice,
   activeArtboardId?: string,
   context?: SourceResolveOptions["context"],
+  locale: Locale = "zh",
 ): AiImageSourceResult {
   const primaryId = getPrimaryArtboardId(project.canvas_data.artboards);
   const effectiveActive = activeArtboardId ?? primaryId;
@@ -160,19 +206,24 @@ export function getAiActionImageSource(
   const userNote = context?.userNote;
 
   if (context?.preferIntake) {
-    const label = describeIntakeOriginal(project.intake);
+    const label = describeIntakeOriginal(project.intake, locale);
     const isFlat =
       action === "flat-front-regen" ||
-      Boolean(taskLabel && /平铺/.test(taskLabel));
+      Boolean(taskLabel && /平铺|flat/i.test(taskLabel));
     return {
       kind: "intake_original",
       label,
       hint: appendTaskAndNote(
         isFlat
-          ? `本次 AI 基于：${label}（生成/重生成主款平铺）`
-          : `本次 AI 基于：${label}（看面料/细节，非当前画板）`,
+          ? locale === "en"
+            ? `${basedOn(label, locale)} (gen/regen main flat)`
+            : `本次 AI 基于：${label}（生成/重生成主款平铺）`
+          : locale === "en"
+            ? `${basedOn(label, locale)} (fabric/detail — not active board)`
+            : `本次 AI 基于：${label}（看面料/细节，非当前画板）`,
         taskLabel,
         userNote,
+        locale,
       ),
       previewUrl: project.intake.imageDataUrl,
       taskLabel,
@@ -181,14 +232,20 @@ export function getAiActionImageSource(
   }
 
   if (context?.sourceArtboardId) {
-    const src = describeArtboardById(project, context.sourceArtboardId);
+    const src = describeArtboardById(
+      project,
+      context.sourceArtboardId,
+      locale,
+    );
     const primaryIdNow = getPrimaryArtboardId(project.canvas_data.artboards);
     const sameAsPrimary = context.sourceArtboardId === primaryIdNow;
     let baseHint: string;
     if (action === "view-image") {
       baseHint = sameAsPrimary
-        ? `本次 AI 基于：${src.label}`
-        : `本次 AI 基于：${src.label}（非主款，生图参考当前选中彩图）`;
+        ? basedOn(src.label, locale)
+        : locale === "en"
+          ? `${basedOn(src.label, locale)} (not main — uses active color board)`
+          : `本次 AI 基于：${src.label}（非主款，生图参考当前选中彩图）`;
     } else if (
       action === "annotate-process" ||
       action === "region-annotate" ||
@@ -196,14 +253,16 @@ export function getAiActionImageSource(
       action === "fill-size"
     ) {
       baseHint = sameAsPrimary
-        ? `本次 AI 基于：${src.label}`
-        : `本次 AI 基于：${src.label}（与主款/原图可能不同，请注意切换画板）`;
+        ? basedOn(src.label, locale)
+        : locale === "en"
+          ? `${basedOn(src.label, locale)} (may differ from main/upload — check board)`
+          : `本次 AI 基于：${src.label}（与主款/原图可能不同，请注意切换画板）`;
     } else {
-      baseHint = `本次 AI 基于：${src.label}`;
+      baseHint = basedOn(src.label, locale);
     }
     return {
       ...src,
-      hint: appendTaskAndNote(baseHint, taskLabel, userNote),
+      hint: appendTaskAndNote(baseHint, taskLabel, userNote, locale),
       previewUrl: previewUrlForArtboard(project, context.sourceArtboardId),
       taskLabel,
       userNote,
@@ -213,14 +272,17 @@ export function getAiActionImageSource(
   switch (action) {
     case "fill-bom":
     case "enhance": {
-      const label = describeIntakeOriginal(project.intake);
+      const label = describeIntakeOriginal(project.intake, locale);
       return {
         kind: "intake_original",
         label,
         hint: appendTaskAndNote(
-          `本次 AI 基于：${label}（看面料/细节，非当前画板）`,
+          locale === "en"
+            ? `${basedOn(label, locale)} (fabric/detail — not active board)`
+            : `本次 AI 基于：${label}（看面料/细节，非当前画板）`,
           taskLabel,
           userNote,
+          locale,
         ),
         previewUrl: project.intake.imageDataUrl,
         taskLabel,
@@ -228,35 +290,44 @@ export function getAiActionImageSource(
       };
     }
     case "explain": {
-      const src = describeArtboardById(project, primaryId);
+      const src = describeArtboardById(project, primaryId, locale);
       return {
         ...src,
-        hint: appendTaskAndNote(`本次 AI 基于：${src.label}`, taskLabel, userNote),
+        hint: appendTaskAndNote(
+          basedOn(src.label, locale),
+          taskLabel,
+          userNote,
+          locale,
+        ),
         previewUrl: previewUrlForArtboard(project, primaryId),
         taskLabel,
         userNote,
       };
     }
     case "full-collect": {
-      const src = describeArtboardById(project, primaryId);
+      const src = describeArtboardById(project, primaryId, locale);
       return {
         ...src,
-        // 与 runFullTechPackAnnotation / 分项 AI 一致：工艺·尺寸·评语用主款；物料用原图
-        hint: appendTaskAndNote(FULL_COLLECT_SOURCE_HINT, taskLabel, userNote),
+        hint: appendTaskAndNote(
+          fullCollectSourceHint(locale),
+          taskLabel,
+          userNote,
+          locale,
+        ),
         previewUrl: previewUrlForArtboard(project, primaryId),
         taskLabel,
         userNote,
       };
     }
     case "view-image": {
-      // 无 context 时退回主款（兼容旧调用）；有生图时应始终传入 sourceArtboardId
-      const src = describeArtboardById(project, primaryId);
+      const src = describeArtboardById(project, primaryId, locale);
       return {
         ...src,
         hint: appendTaskAndNote(
-          `本次 AI 基于：${src.label}`,
+          basedOn(src.label, locale),
           taskLabel,
           userNote,
+          locale,
         ),
         previewUrl: previewUrlForArtboard(project, primaryId),
         taskLabel,
@@ -264,29 +335,38 @@ export function getAiActionImageSource(
       };
     }
     case "flat-front-regen": {
-      // 有指定画板（修正当前平铺）时跟画板；否则首次生成用 intake
       if (context?.sourceArtboardId && !context.preferIntake) {
-        const src = describeArtboardById(project, context.sourceArtboardId);
+        const src = describeArtboardById(
+          project,
+          context.sourceArtboardId,
+          locale,
+        );
         return {
           ...src,
           hint: appendTaskAndNote(
-            `本次 AI 基于：${src.label}（在当前平铺上修正）`,
+            locale === "en"
+              ? `${basedOn(src.label, locale)} (correct current flat)`
+              : `本次 AI 基于：${src.label}（在当前平铺上修正）`,
             taskLabel,
             userNote,
+            locale,
           ),
           previewUrl: previewUrlForArtboard(project, context.sourceArtboardId),
           taskLabel,
           userNote,
         };
       }
-      const label = describeIntakeOriginal(project.intake);
+      const label = describeIntakeOriginal(project.intake, locale);
       return {
         kind: "intake_original",
         label,
         hint: appendTaskAndNote(
-          `本次 AI 基于：${label}（生成/重生成主款平铺）`,
+          locale === "en"
+            ? `${basedOn(label, locale)} (gen/regen main flat)`
+            : `本次 AI 基于：${label}（生成/重生成主款平铺）`,
           taskLabel,
           userNote,
+          locale,
         ),
         previewUrl: project.intake.imageDataUrl,
         taskLabel,
@@ -297,16 +377,19 @@ export function getAiActionImageSource(
     case "region-annotate":
     case "size-dimension":
     case "fill-size": {
-      const src = describeArtboardById(project, effectiveActive);
+      const src = describeArtboardById(project, effectiveActive, locale);
       const sameAsPrimary = effectiveActive === primaryId;
       return {
         ...src,
         hint: appendTaskAndNote(
           sameAsPrimary
-            ? `本次 AI 基于：${src.label}`
-            : `本次 AI 基于：${src.label}（与主款/原图可能不同，请注意切换画板）`,
+            ? basedOn(src.label, locale)
+            : locale === "en"
+              ? `${basedOn(src.label, locale)} (may differ from main/upload — check board)`
+              : `本次 AI 基于：${src.label}（与主款/原图可能不同，请注意切换画板）`,
           taskLabel,
           userNote,
+          locale,
         ),
         previewUrl: previewUrlForArtboard(project, effectiveActive),
         taskLabel,
@@ -314,10 +397,15 @@ export function getAiActionImageSource(
       };
     }
     default: {
-      const src = describeArtboardById(project, effectiveActive);
+      const src = describeArtboardById(project, effectiveActive, locale);
       return {
         ...src,
-        hint: appendTaskAndNote(`本次 AI 基于：${src.label}`, taskLabel, userNote),
+        hint: appendTaskAndNote(
+          basedOn(src.label, locale),
+          taskLabel,
+          userNote,
+          locale,
+        ),
         previewUrl: previewUrlForArtboard(project, effectiveActive),
         taskLabel,
         userNote,
@@ -391,6 +479,7 @@ export function resolveAiImageSourceFromContext(
   project: ProjectSlice,
   context: AiImageContext | null | undefined,
   activeArtboardId?: string,
+  locale: Locale = "zh",
 ): AiImageSourceResult | null {
   if (!context) return null;
   return getAiActionImageSource(
@@ -398,6 +487,7 @@ export function resolveAiImageSourceFromContext(
     project,
     activeArtboardId,
     context,
+    locale,
   );
 }
 

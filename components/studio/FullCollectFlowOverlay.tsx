@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FULL_COLLECT_SOURCE_HINT } from "@/lib/ai/image-source-hints";
+import { fullCollectSourceHint } from "@/lib/ai/image-source-hints";
 import {
   fetchFullCollectQuestionnaire,
   FULL_COLLECT_MAX_QUESTIONS,
@@ -20,11 +20,13 @@ import {
   gateAiLogin,
 } from "@/lib/ai/client-login-gate";
 import { AI_UNITS_FULL_COLLECT_ESTIMATE } from "@/lib/ai/quota-units";
+import type { Locale } from "@/lib/i18n/locale";
 
 type Phase = "preparing" | "asking" | "size" | "drafting";
 
 type FullCollectFlowOverlayProps = {
   project: TechPackProject;
+  locale: Locale;
   onProjectPatch: (project: TechPackProject) => void;
   onComplete: (project: TechPackProject, summary: string) => void;
   onError?: (message: string) => void;
@@ -169,6 +171,7 @@ function LoadingBody({
 
 export default function FullCollectFlowOverlay({
   project,
+  locale,
   onProjectPatch,
   onComplete,
   onError,
@@ -245,6 +248,7 @@ export default function FullCollectFlowOverlay({
           answers: answersWithSize,
           regionStandard,
           sampleSize,
+          locale,
         });
         if (cancelledRef.current) return;
         const updated: TechPackProject = {
@@ -264,7 +268,7 @@ export default function FullCollectFlowOverlay({
         setPhase("asking");
       }
     },
-    [fail, onComplete, onProjectPatch, project, sizeStandard],
+    [fail, locale, onComplete, onProjectPatch, project, sizeStandard],
   );
 
   useEffect(() => {
@@ -296,6 +300,7 @@ export default function FullCollectFlowOverlay({
             body: JSON.stringify({
               description: project.intake.description,
               imageDataUrl: project.intake.imageDataUrl,
+              locale,
             }),
           });
           const intent = await res.json();
@@ -321,7 +326,7 @@ export default function FullCollectFlowOverlay({
           if (!nextProject.intake.aiIntentAnalysis || !nextProject.intake.detectedCategory) {
             throw new Error("缺少款式分析结果，请先完成识图");
           }
-          const data = await fetchFullCollectQuestionnaire(nextProject);
+          const data = await fetchFullCollectQuestionnaire(nextProject, locale);
           qs = data.questions;
           nextIntro = data.intro;
           nextProject = {
@@ -354,7 +359,7 @@ export default function FullCollectFlowOverlay({
         fail(e instanceof Error ? e.message : "准备问题失败");
       }
     })();
-  }, [fail, onProjectPatch, project, router]);
+  }, [fail, locale, onProjectPatch, project, router]);
 
   const current = questions[index];
   const total = questions.length;
@@ -461,7 +466,7 @@ export default function FullCollectFlowOverlay({
         title="AI 正在准备补充问题"
         subtitle={`约 10–20 秒 · 整次一键标注大约 ${AI_UNITS_FULL_COLLECT_ESTIMATE} 点 AI`}
         imagePreview={previewUrl}
-        imageSourceHint={FULL_COLLECT_SOURCE_HINT}
+        imageSourceHint={fullCollectSourceHint(locale)}
         footerTip="问题尽量简短，方便你快速回答"
         onCancel={onCancel ? handleCancel : undefined}
         cancelLabel="关闭，先手动标注"
@@ -486,7 +491,7 @@ export default function FullCollectFlowOverlay({
         title="AI 正在生成工艺包初稿"
         subtitle="通常需要 30–60 秒"
         imagePreview={previewUrl}
-        imageSourceHint={FULL_COLLECT_SOURCE_HINT}
+        imageSourceHint={fullCollectSourceHint(locale)}
         footerTip="工艺/尺寸用主款；物料用原参考图"
         onCancel={onCancel ? handleCancel : undefined}
         cancelLabel="关闭回画布（后台可能仍在跑，可稍后刷新）"
@@ -507,7 +512,7 @@ export default function FullCollectFlowOverlay({
         title="确认尺码标准"
         subtitle="用于 AI 估算尺寸与尺寸线"
         imagePreview={previewUrl}
-        imageSourceHint={FULL_COLLECT_SOURCE_HINT}
+        imageSourceHint={fullCollectSourceHint(locale)}
         lockedTip={false}
         footerTip={`补充问题已完成（${Math.min(total, FULL_COLLECT_MAX_QUESTIONS)}/${FULL_COLLECT_MAX_QUESTIONS}）`}
         onCancel={onCancel ? handleCancel : undefined}
@@ -556,7 +561,7 @@ export default function FullCollectFlowOverlay({
       title="补充确认"
       subtitle={`第 ${index + 1} / ${total} 题（最多 ${FULL_COLLECT_MAX_QUESTIONS} 题）`}
       imagePreview={previewUrl}
-      imageSourceHint={FULL_COLLECT_SOURCE_HINT}
+      imageSourceHint={fullCollectSourceHint(locale)}
       lockedTip={false}
       footerTip={intro || "快速点选即可，答完后生成工艺包初稿"}
       onCancel={onCancel ? handleCancel : undefined}

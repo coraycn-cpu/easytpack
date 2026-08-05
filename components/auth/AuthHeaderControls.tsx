@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   createClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import {
   FREE_MONTHLY_AI_GIFT,
-  REGISTER_CTA_LABEL,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
 
@@ -19,6 +19,7 @@ type AuthUserBrief = {
 
 /** 顶栏：未登录显示「登录」；已登录显示邮箱 + 退出 */
 export default function AuthHeaderControls() {
+  const { t } = useLocale();
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -84,7 +85,7 @@ export default function AuthHeaderControls() {
           className="inline-block h-3 w-3 animate-spin rounded-full border border-zinc-300 border-t-zinc-500"
           aria-hidden
         />
-        检查登录…
+        {t("auth.checkingLogin")}
       </span>
     );
   }
@@ -93,9 +94,9 @@ export default function AuthHeaderControls() {
     return (
       <span
         className="hidden text-[11px] text-zinc-400 sm:inline"
-        title="还没配置云端账号，可先本机使用"
+        title={t("auth.localModeTitle")}
       >
-        本机模式
+        {t("auth.localModeShort")}
       </span>
     );
   }
@@ -106,15 +107,15 @@ export default function AuthHeaderControls() {
         <Link
           href="/account"
           className="hidden max-w-[10rem] truncate text-[11px] text-zinc-500 hover:text-zinc-800 sm:inline"
-          title="打开用户中心"
+          title={t("auth.openAccount")}
         >
-          {user.email ?? "已登录"}
+          {user.email ?? t("auth.signedIn")}
         </Link>
         <Link
           href="/account"
           className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 sm:hidden"
         >
-          账号
+          {t("common.account")}
         </Link>
         <button
           type="button"
@@ -122,7 +123,7 @@ export default function AuthHeaderControls() {
           onClick={() => void handleSignOut()}
           className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
         >
-          {busy ? "退出中…" : "退出"}
+          {busy ? t("auth.signingOut") : t("common.logout")}
         </button>
       </div>
     );
@@ -134,14 +135,14 @@ export default function AuthHeaderControls() {
         href={buildLoginHref({ mode: "login", next: "/" })}
         className="pf-btn-secondary px-2.5 py-1 text-xs"
       >
-        登录
+        {t("common.login")}
       </Link>
       <Link
         href={buildLoginHref({ mode: "register", next: "/" })}
         className="pf-btn-primary px-2.5 py-1 text-xs"
-        title={`注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
+        title={t("auth.registerTitle", { n: FREE_MONTHLY_AI_GIFT })}
       >
-        {REGISTER_CTA_LABEL}
+        {t("common.register")}
       </Link>
     </div>
   );

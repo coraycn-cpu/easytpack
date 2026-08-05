@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   memberDisplayName,
   parseUserPlan,
@@ -40,6 +41,7 @@ export default function StudioAccountChip({
   onTip,
   onOpenChange,
 }: StudioAccountChipProps) {
+  const { t } = useLocale();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<AccountSummary | null>(null);
@@ -47,8 +49,8 @@ export default function StudioAccountChip({
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
 
-  const name = memberDisplayName(email);
-  const level = planLabel(summary?.plan ?? "free");
+  const name = memberDisplayName(email, t("account.member"));
+  const level = planLabel(summary?.plan ?? "free", t);
 
   const setMenuOpen = useCallback(
     (next: boolean | ((prev: boolean) => boolean)) => {
@@ -149,7 +151,7 @@ export default function StudioAccountChip({
   const quotaCompact = loading
     ? "AI …"
     : summary?.paused
-      ? "AI 暂停"
+      ? t("account.aiPausedShort")
       : summary
         ? `AI ${summary.used}/${summary.limit}`
         : "AI —";
@@ -160,9 +162,9 @@ export default function StudioAccountChip({
     const url = buildInviteRegisterUrl(inviteCode);
     try {
       await navigator.clipboard.writeText(url);
-      onTip?.("邀请链接已复制，发给好友注册即可");
+      onTip?.(t("account.inviteCopied"));
     } catch {
-      onTip?.(`请手动复制：${url}`);
+      onTip?.(t("account.copyManual", { url }));
     } finally {
       setCopyBusy(false);
     }
@@ -179,8 +181,11 @@ export default function StudioAccountChip({
         className="flex max-w-[16rem] items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-1 text-left hover:bg-brand-soft sm:max-w-[20rem]"
         title={
           summary && !summary.paused
-            ? `本月 AI 已用 ${summary.used} / 上限 ${summary.limit} 点`
-            : "账号与常用入口"
+            ? t("account.quotaTitle", {
+                used: summary.used,
+                limit: summary.limit,
+              })
+            : t("account.accountMenuTitle")
         }
         aria-expanded={open}
       >
@@ -217,65 +222,72 @@ export default function StudioAccountChip({
 
           <dl className="space-y-2 border-b border-slate-100 px-3 py-2.5 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">级别</dt>
+              <dt className="text-slate-400">{t("account.level")}</dt>
               <dd className="font-medium text-slate-700">{level}</dd>
             </div>
             <div className="flex items-start justify-between gap-2">
-              <dt className="shrink-0 text-slate-400">AI 点（本月）</dt>
+              <dt className="shrink-0 text-slate-400">
+                {t("account.aiPointsMonth")}
+              </dt>
               <dd className="text-right font-medium tabular-nums text-slate-700">
                 {loading
-                  ? "读取中…"
+                  ? t("account.reading")
                   : summary?.paused
-                    ? "本月已暂停"
+                    ? t("account.monthPaused")
                     : summary
-                      ? `已用 ${summary.used} / 上限 ${summary.limit}`
-                      : "暂无法读取"}
+                      ? t("account.usedOfLimit", {
+                          used: summary.used,
+                          limit: summary.limit,
+                        })
+                      : t("account.cannotRead")}
               </dd>
             </div>
             {summary && !summary.paused && remaining !== null ? (
               <p className="text-[10px] text-slate-400">
-                还剩 {remaining} 点 · 生图成功一次约 5 点
+                {t("account.remainingHint", { n: remaining })}
               </p>
             ) : null}
             <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">团队</dt>
-              <dd className="font-medium text-slate-700">个人</dd>
+              <dt className="text-slate-400">{t("account.teamLabel")}</dt>
+              <dd className="font-medium text-slate-700">
+                {t("account.teamPersonal")}
+              </dd>
             </div>
           </dl>
 
           <div className="border-b border-slate-100 py-1">
             <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              常用入口
+              {t("account.quickLinks")}
             </p>
             <Link
               href="/account"
               className={navItem}
               onClick={() => setMenuOpen(false)}
             >
-              用户中心
+              {t("common.account")}
             </Link>
             <Link
               href="/projects"
               className={navItem}
               onClick={() => setMenuOpen(false)}
             >
-              我的项目
+              {t("account.myProjects")}
             </Link>
             <Link
               href="/"
               className={navItem}
               onClick={() => setMenuOpen(false)}
             >
-              回首页
+              {t("account.backHome")}
             </Link>
           </div>
 
           <div className="border-b border-slate-100 px-3 py-2.5">
             <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              邀请好友
+              {t("account.invite")}
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              复制注册链接发给好友，双方邀请分会加进每月 AI 上限。
+              {t("account.inviteHint")}
             </p>
             <button
               type="button"
@@ -284,10 +296,10 @@ export default function StudioAccountChip({
               className="mt-2 w-full rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {copyBusy
-                ? "复制中…"
+                ? t("account.copying")
                 : inviteCode
-                  ? "一键复制邀请链接"
-                  : "邀请链接加载中…"}
+                  ? t("account.copyInvite")
+                  : t("account.inviteLoading")}
             </button>
           </div>
 
@@ -300,7 +312,7 @@ export default function StudioAccountChip({
             }}
             className="w-full px-3 py-2.5 text-left text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           >
-            退出登录
+            {t("account.logout")}
           </button>
         </div>
       ) : null}

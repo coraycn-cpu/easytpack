@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import StudioAiDock from "@/components/studio/StudioAiDock";
 import AiAnalysisOverlay from "@/components/ui/AiAnalysisOverlay";
 import FixedViewSidebar from "@/components/studio/FixedViewSidebar";
@@ -17,6 +18,7 @@ import DraggableFloatPanel from "@/components/studio/DraggableFloatPanel";
 import GarmentPickerStep from "@/components/studio/GarmentPickerStep";
 import FlatFrontPromptStep from "@/components/studio/FlatFrontPromptStep";
 import { buildLoginHref } from "@/lib/ai/login-gate";
+import { confirmAiMenuIfNeeded } from "@/lib/ai/confirm-existing";
 import {
   applyIntentToIntake,
   confirmTargetGarment,
@@ -35,7 +37,11 @@ import {
 } from "@/lib/canvas/region-edit";
 import RegionEditDialog from "@/components/canvas/RegionEditDialog";
 import { isModelPhoto } from "@/lib/ai/garment-scope";
-import { resolveImageDataUrlForAi } from "@/lib/ai/image-for-request";
+import {
+  resolveImageDataUrlForAi,
+  resolveImageDataUrlForAiDetailed,
+  resolveAiImageFailureMessage,
+} from "@/lib/ai/image-for-request";
 import { resolveGarmentImageForAi } from "@/lib/ai/resolve-garment-image";
 import { STYLE_REVIEW_MAX } from "@/types/process";
 import {
@@ -95,10 +101,11 @@ import {
 import { generateProcessId } from "@/lib/process/ids";
 import { checkCompliance, canFinalize, type ComplianceIssue } from "@/lib/project/compliance";
 import { createArtboard } from "@/lib/project/hotspots";
-import { calcProgress, WORKFLOW_LABELS } from "@/lib/project/progress";
+import { calcProgress, getWorkflowLabel } from "@/lib/project/progress";
 import { getProject, saveProject } from "@/lib/project/storage";
 import {
-  AI_LOGIN_REQUIRED_MESSAGE,
+  aiLoginRequiredMessage,
+  FREE_MONTHLY_AI_GIFT,
   gateAiLogin,
   messageFromAiResponse,
 } from "@/lib/ai/client-login-gate";
@@ -189,6 +196,7 @@ type Tab = "process" | "bom" | "size" | "review";
 export default function StudioPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [project, setProject] = useState<TechPackProject | null>(null);
   const [activeArtboardId, setActiveArtboardId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("process");
@@ -239,13 +247,13 @@ export default function StudioPage() {
       next: `/project/${id}/studio`,
     });
     if (gate.ok) return true;
-    setAiMessage(gate.message);
+    setAiMessage(aiLoginRequiredMessage(locale));
     setAiTip(
-      `手动标注不受影响。注册免费，每月送 AI 额度，还能云端存档。`,
+      `${t("guest.manualOk")} ${t("guest.registerGift", { n: FREE_MONTHLY_AI_GIFT })}`,
     );
     router.push(gate.href);
     return false;
-  }, [id, router]);
+  }, [id, router, locale, t]);
   const [layout, setLayout] = useState<StudioLayout>(getStudioLayout());
   const [artboardSlots, setArtboardSlots] = useState<ArtboardSlot[]>([]);
   const [canvasBooting, setCanvasBooting] = useState(true);
@@ -312,9 +320,9 @@ export default function StudioPage() {
         void isLoggedInForCloud().then((ok) => {
           if (ok) setFullCollectOpen(true);
           else {
-            setAiMessage(AI_LOGIN_REQUIRED_MESSAGE);
+            setAiMessage(aiLoginRequiredMessage(locale));
             setAiTip(
-              "可先手动标注。注册即送每月 AI 额度，一键标注 / 生图都能用。",
+              `${t("guest.manualOk")} ${t("guest.registerGift", { n: FREE_MONTHLY_AI_GIFT })}`,
             );
           }
         });
@@ -340,13 +348,13 @@ export default function StudioPage() {
         void saveProject(fixed);
       }
       if (!p.canvas_data.artboards.some((a) => a.annotations.length > 0)) {
-        setAiTip("左侧 AI 生成多视角 · 顶部左手动右 AI · 右上角编辑工艺数据");
+        setAiTip(t("studio.tipNav"));
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [id, router]);
+  }, [id, router, locale, t]);
 
   const artboardImageKey = useMemo(
     () =>
@@ -418,6 +426,36 @@ export default function StudioPage() {
   const pendingAiAnalysis = Boolean(project?.intake.pendingAiAnalysis);
   const pendingAiRunningRef = useRef(false);
   const pendingAiAbortRef = useRef<AbortController | null>(null);
+  /** 顶栏 AI 菜单进行中的请求（可点遮罩「取消」中断） */
+  const studioAiAbortRef = useRef<AbortController | null>(null);
+
+  const beginStudioAiFetch = useCallback(() => {
+    studioAiAbortRef.current?.abort();
+    const ac = new AbortController();
+    studioAiAbortRef.current = ac;
+    return ac;
+  }, []);
+
+  const clearStudioAiFetch = useCallback((ac?: AbortController) => {
+    if (!ac || studioAiAbortRef.current === ac) {
+      studioAiAbortRef.current = null;
+    }
+  }, []);
+
+  const isAbortError = (e: unknown) => {
+    if (!e || typeof e !== "object") return false;
+    const name = (e as { name?: string }).name;
+    return name === "AbortError";
+  };
+
+  const cancelStudioAiTask = useCallback(() => {
+    studioAiAbortRef.current?.abort();
+    studioAiAbortRef.current = null;
+    setAiTask(null);
+    setAiImageContext(null);
+    setAiMessage(t("studio.aborted"));
+    setAiTip(t("studio.abortedTip"));
+  }, [t]);
 
   const cancelPendingAiAnalysis = useCallback(() => {
     pendingAiAbortRef.current?.abort();
@@ -439,9 +477,9 @@ export default function StudioPage() {
         window.history.replaceState({}, "", `${url.pathname}${url.search}`);
       }
     }
-    setAiTip("已跳过自动分析。可先手动标注，需要时再点左侧 AI。");
+    setAiTip(t("studio.tipSkipAuto"));
     setAiMessage(null);
-  }, [persist]);
+  }, [persist, t]);
 
   /** 登录后把新建草稿的图+描述送去 AI（仅轻量理解，不自动全量标注） */
   useEffect(() => {
@@ -477,7 +515,7 @@ export default function StudioPage() {
       const abort = new AbortController();
       pendingAiAbortRef.current = abort;
       setAiTask("intake");
-      setAiTip("正在用你上传的图和填写内容理解款式…");
+      setAiTip(t("studio.tipAnalyzingUpload"));
       setAiMessage(null);
 
       try {
@@ -486,7 +524,7 @@ export default function StudioPage() {
           base.intake.imageDataUrl;
         if (abort.signal.aborted || cancelled) return;
         if (!imageForAi?.startsWith("data:")) {
-          setAiMessage("找不到款式图，请重新上传后再试。");
+          setAiMessage(t("studio.tipNoImage"));
           return;
         }
 
@@ -496,14 +534,21 @@ export default function StudioPage() {
           body: JSON.stringify({
             description: base.intake.description,
             imageDataUrl: imageForAi,
+            locale,
           }),
           signal: abort.signal,
         });
         const intent = await res.json();
         if (abort.signal.aborted || cancelled) return;
         if (!res.ok) {
-          setAiMessage(messageFromAiResponse(intent, "AI 分析失败"));
-          setAiTip("可先手动标注；稍后可在左侧再试 AI。");
+          setAiMessage(
+            messageFromAiResponse(
+              intent,
+              t("studio.tipAiAnalyzeFail"),
+              locale,
+            ),
+          );
+          setAiTip(t("studio.tipAiFail"));
           // 清掉 pending，避免反复弹
           const latestFail = projectRef.current ?? base;
           persist({
@@ -544,7 +589,7 @@ export default function StudioPage() {
         if (abort.signal.aborted || cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
         setAiMessage(
-          err instanceof Error ? err.message : "AI 分析失败，请稍后重试",
+          err instanceof Error ? err.message : t("studio.tipAiAnalyzeFail"),
         );
       } finally {
         if (pendingAiAbortRef.current === abort) {
@@ -594,8 +639,10 @@ export default function StudioPage() {
     project?.id,
     intakeImageDataUrl,
     intakeAlreadyAnalyzed,
+    locale,
     pendingAiAnalysis,
     persist,
+    t,
   ]);
 
   const flatFrontRunningRef = useRef(false);
@@ -614,7 +661,9 @@ export default function StudioPage() {
       try {
         const result = await generateFlatFrontForPrimary(baseProject);
         persist(result.project);
-        setAiMessage(`已锁定目标单款 · ${result.message}`);
+        setAiMessage(
+          t("studio.tipLockedGarment", { label: result.message }),
+        );
         if (result.success) {
           setAiTip(
             shouldKeepPhotoReference(result.project.intake.photoType)
@@ -624,7 +673,7 @@ export default function StudioPage() {
         }
         return result.project;
       } catch (e) {
-        setAiMessage(e instanceof Error ? e.message : "平铺正面生成失败");
+        setAiMessage(e instanceof Error ? e.message : t("studio.tipFlatFail"));
         return baseProject;
       } finally {
         setViewGenerating(false);
@@ -632,7 +681,7 @@ export default function StudioPage() {
         flatFrontRunningRef.current = false;
       }
     },
-    [persist],
+    [persist, t],
   );
 
   const flatFrontPromptOpen = Boolean(
@@ -650,9 +699,9 @@ export default function StudioPage() {
       ...project,
       intake: skipFlatFrontGeneration(project.intake),
     });
-    setAiMessage("已进入画布");
-    setAiTip("当前使用原参考图，可稍后在主款画板重新生成平铺正面");
-  }, [project, persist]);
+    setAiMessage(t("studio.tipEntered"));
+    setAiTip(t("studio.tipUseOriginal"));
+  }, [project, persist, t]);
 
   const handleFlatFrontGenerate = useCallback(async () => {
     if (!project) return;
@@ -679,8 +728,8 @@ export default function StudioPage() {
           intake: skipFlatFrontGeneration(updated.intake),
         };
         persist(updated);
-        setAiMessage(`已锁定目标单款：${garment.label}`);
-        setAiTip("当前使用原参考图，可稍后在主款画板重新生成平铺正面");
+        setAiMessage(t("studio.tipLockedGarment", { label: garment.label }));
+        setAiTip(t("studio.tipUseOriginal"));
         if (
           updated.status === "collecting" ||
           (typeof window !== "undefined" &&
@@ -695,7 +744,7 @@ export default function StudioPage() {
       if (needsFlatFrontAfterGarmentPick(updated.intake)) {
         await runFlatFrontGeneration(updated);
       } else {
-        setAiMessage(`已锁定目标单款：${garment.label}`);
+        setAiMessage(t("studio.tipLockedGarment", { label: garment.label }));
       }
       if (
         updated.status === "collecting" ||
@@ -705,7 +754,7 @@ export default function StudioPage() {
         setFullCollectOpen(true);
       }
     },
-    [project, persist, runFlatFrontGeneration],
+    [project, persist, runFlatFrontGeneration, t],
   );
 
   const [newStyleOpen, setNewStyleOpen] = useState(false);
@@ -715,19 +764,27 @@ export default function StudioPage() {
   const handleFullCollect = () => {
     if (aiBusy || !project) return;
     if (!project.intake.imageDataUrl) {
-      setAiMessage("请先上传款式图");
+      setAiMessage(t("studio.needImage"));
       return;
     }
     if (needsGarmentConfirmation(project.intake)) {
-      setAiMessage("请先确认目标单款");
+      setAiMessage(t("studio.needGarment"));
       return;
     }
     void (async () => {
       if (!(await requireAiLogin())) return;
       const { AI_UNITS_FULL_COLLECT_ESTIMATE, fullCollectCostHint } =
         await import("@/lib/ai/quota-units");
+      const { projectHasSectionContent } = await import(
+        "@/lib/ai/confirm-existing"
+      );
+      const hasExisting = projectHasSectionContent(project, "full-collect");
       const ok = window.confirm(
-        `开始「AI 一键标注」？\n\n${fullCollectCostHint()}\n不够额度时会中途失败。\n\n确定继续？`,
+        hasExisting
+          ? t("studio.confirmFullCollectExisting", {
+              hint: fullCollectCostHint(),
+            })
+          : t("studio.confirmFullCollect", { hint: fullCollectCostHint() }),
       );
       if (!ok) return;
       // 额度不够时先拦一层（预估），真正扣费仍以各接口成功为准
@@ -740,7 +797,7 @@ export default function StudioPage() {
             paused?: boolean;
           };
           if (data.paused) {
-            setAiMessage("账号 AI 已暂停，请联系管理员。");
+            setAiMessage(t("studio.tipPaused"));
             return;
           }
           const used = Math.max(0, Math.floor(Number(data.used) || 0));
@@ -1060,6 +1117,7 @@ export default function StudioPage() {
           regionStandard,
           existingPart: selectedAnn.linkedSizePart,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -1116,9 +1174,9 @@ export default function StudioPage() {
       });
       setHighlightedSizePart(part);
       focusTab("size");
-      setAiMessage(`已识别：${part} ${displayText}`);
+      setAiMessage(t("studio.tipDimOk", { part, text: displayText }));
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "尺寸识别失败");
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipDimFail"));
     } finally {
       setAiTask(null);
       setAiImageContext(null);
@@ -1155,19 +1213,27 @@ export default function StudioPage() {
         project,
         aiImageContext,
         activeArtboardId,
+        locale,
       );
     }
     const actionId = aiPresetToActionId(activeAiPreset, {
       isFlatFrontRegen: flatFrontRegenerating,
     });
     if (!actionId) return null;
-    return getAiActionImageSource(actionId, project, activeArtboardId);
+    return getAiActionImageSource(
+      actionId,
+      project,
+      activeArtboardId,
+      undefined,
+      locale,
+    );
   }, [
     project,
     activeAiPreset,
     activeArtboardId,
     flatFrontRegenerating,
     aiImageContext,
+    locale,
   ]);
 
   const handleDeleteArtboard = useCallback(
@@ -1188,9 +1254,9 @@ export default function StudioPage() {
           activeArtboardId: nextActiveId,
         },
       });
-      setAiMessage(`已删除「${target.name}」`);
+      setAiMessage(t("studio.tipDeleteBoard", { name: target.name }));
     },
-    [project, primaryArtboardId, activeArtboardId, persist],
+    [project, primaryArtboardId, activeArtboardId, persist, t],
   );
 
   const updateActiveArtboardAnnotations = useCallback(
@@ -1213,8 +1279,8 @@ export default function StudioPage() {
     if (!project || selectedAnnIds.length === 0) return;
     const ids = new Set(selectedAnnIds);
     updateActiveArtboardAnnotations((anns) => markAnnotationsManual(anns, ids));
-    setAiMessage(`已标记 ${selectedAnnIds.length} 项为手动（红色）`);
-  }, [project, selectedAnnIds, updateActiveArtboardAnnotations]);
+    setAiMessage(t("studio.tipMarkedManual", { n: selectedAnnIds.length }));
+  }, [project, selectedAnnIds, updateActiveArtboardAnnotations, t]);
 
   const handleToggleLockSelected = useCallback(() => {
     if (!project || selectedAnnIds.length === 0 || !activeArtboard) return;
@@ -1224,8 +1290,8 @@ export default function StudioPage() {
     updateActiveArtboardAnnotations((anns) =>
       toggleAnnotationsLock(anns, ids, !allLocked),
     );
-    setAiMessage(allLocked ? "已解锁选中标注" : "已锁定选中标注");
-  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations]);
+    setAiMessage(allLocked ? t("studio.tipUnlocked") : t("studio.tipLockedAnn"));
+  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations, t]);
 
   const handleDeleteSelectedAnnotations = useCallback(() => {
     if (!project || selectedAnnIds.length === 0 || !activeArtboard) return;
@@ -1234,7 +1300,7 @@ export default function StudioPage() {
       (a) => ids.has(a.id) && isAnnotationLocked(a),
     );
     if (locked.length > 0) {
-      setAiMessage("已锁定的标注不可删除，请先解锁");
+      setAiMessage(t("studio.tipLockedNoDelete"));
       return;
     }
     updateActiveArtboardAnnotations((anns) => removeAnnotationsByIds(anns, ids));
@@ -1242,7 +1308,7 @@ export default function StudioPage() {
     setLinkedHighlightAnnIds([]);
     setHighlightedProcessIds([]);
     setHighlightedSizePart("");
-  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations]);
+  }, [project, selectedAnnIds, activeArtboard, updateActiveArtboardAnnotations, t]);
 
   const handlePasteImageToCanvas = useCallback(
     async (rawDataUrl: string) => {
@@ -1253,12 +1319,12 @@ export default function StudioPage() {
 
         if (!activeArtboard.imageDataUrl) {
           updateArtboard(activeArtboard.id, { imageDataUrl });
-          setAiMessage("已贴图到当前画板");
+          setAiMessage(t("studio.tipPasted"));
           return;
         }
 
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
-        const origin = nextArtboardOrigin(slots);
+        const origin = nextArtboardOrigin(slots, project.canvas_data.artboards);
         const name = nextPasteArtboardName(project.canvas_data.artboards);
         const newBoard = createArtboard(name, imageDataUrl);
         newBoard.canvasOrigin = origin;
@@ -1273,12 +1339,12 @@ export default function StudioPage() {
           },
         });
         setActiveArtboardId(newBoard.id);
-        setAiMessage(`已新建「${name}」贴图画板`);
+        setAiMessage(t("studio.tipPasteBoard", { name }));
       } catch (e) {
-        setAiMessage(e instanceof Error ? e.message : "贴图失败");
+        setAiMessage(e instanceof Error ? e.message : t("studio.tipPasteFail"));
       }
     },
-    [aiBusy, project, activeArtboard, updateArtboard, persist],
+    [aiBusy, project, activeArtboard, updateArtboard, persist, t],
   );
 
   const handleCropArtboardImage = useCallback(
@@ -1311,12 +1377,12 @@ export default function StudioPage() {
           imageOffset: { x: 0, y: 0 },
           imageScale: { x: 1, y: 1 },
         });
-        setAiMessage(`已剪裁「${ab.name}」`);
+        setAiMessage(t("studio.tipCropped", { name: ab.name }));
       } catch (e) {
-        setAiMessage(e instanceof Error ? e.message : "剪裁失败");
+        setAiMessage(e instanceof Error ? e.message : t("studio.tipCropFail"));
       }
     },
-    [aiBusy, project, updateArtboard],
+    [aiBusy, project, updateArtboard, t],
   );
 
   const handleRegionEditSelect = useCallback(
@@ -1355,11 +1421,16 @@ export default function StudioPage() {
           displayCrop: crop,
           displaySize,
         });
-        const imageForAi = await resolveImageDataUrlForAi(patchDataUrl);
-        if (!imageForAi) {
-          setAiMessage("选区图过大，请缩小选区后重试");
+        const prepared = await resolveImageDataUrlForAiDetailed(patchDataUrl);
+        if (!prepared.ok) {
+          setAiMessage(
+            prepared.reason === "too_large"
+              ? "选区图过大，请缩小选区后重试"
+              : resolveAiImageFailureMessage(prepared.reason),
+          );
           return;
         }
+        const imageForAi = prepared.dataUrl;
 
         const res = await fetch("/api/ai/view-image", {
           method: "POST",
@@ -1377,6 +1448,7 @@ export default function StudioPage() {
               project.intake.description,
             sourceImageUrl: imageForAi,
             intake: project.intake,
+            locale,
           }),
         });
         const data = await res.json();
@@ -1396,10 +1468,12 @@ export default function StudioPage() {
         }));
         updateArtboard(artboardId, { imageDataUrl: nextUrl });
         setRegionEditPending(null);
-        setAiMessage("选区已重绘（区外与标注未改）");
+        setAiMessage(t("studio.tipRegionRedrawn"));
         setAiTip(COMM_PACK_COPY.annotateAfterAi);
       } catch (e) {
-        setAiMessage(e instanceof Error ? e.message : "选区重绘失败");
+        setAiMessage(
+          e instanceof Error ? e.message : t("studio.tipRegionRedrawFail"),
+        );
       } finally {
         setRegionEditBusy(false);
         setRegeneratingArtboardId(null);
@@ -1410,8 +1484,10 @@ export default function StudioPage() {
       project,
       regionEditPending,
       regionEditBusy,
+      locale,
       updateArtboard,
       requireAiLogin,
+      t,
     ],
   );
 
@@ -1425,9 +1501,9 @@ export default function StudioPage() {
         delete next[artboardId];
         return next;
       });
-      setAiMessage("已恢复选区重绘前的图片");
+      setAiMessage(t("studio.tipRegionRestored"));
     },
-    [imageUndoByArtboard, project, updateArtboard],
+    [imageUndoByArtboard, project, updateArtboard, t],
   );
 
   const sourceImageUrl = useMemo(() => {
@@ -1456,7 +1532,7 @@ export default function StudioPage() {
   }) => {
     if (aiBusy) return;
     if (!project) {
-      setAiMessage("请先上传正面款式图");
+      setAiMessage(t("studio.tipNeedFrontImage"));
       return;
     }
 
@@ -1468,7 +1544,7 @@ export default function StudioPage() {
     const effectiveSourceUrl =
       sourceBoard?.imageDataUrl ?? sourceImageUrl;
     if (!effectiveSourceUrl) {
-      setAiMessage("请先上传正面款式图");
+      setAiMessage(t("studio.tipNeedFrontImage"));
       return;
     }
 
@@ -1503,13 +1579,12 @@ export default function StudioPage() {
     }
     setAiMessage(null);
     try {
-      const imageForAi = await resolveImageDataUrlForAi(effectiveSourceUrl);
-      if (!imageForAi) {
-        setAiMessage(
-          "参考图过大，已尝试自动压缩仍无法发送。请换一张边长约 2000 以内的图再试",
-        );
+      const prepared = await resolveImageDataUrlForAiDetailed(effectiveSourceUrl);
+      if (!prepared.ok) {
+        setAiMessage(resolveAiImageFailureMessage(prepared.reason));
         return;
       }
+      const imageForAi = prepared.dataUrl;
       const { width: sourceWidth, height: sourceHeight } =
         await getImageDimensions(effectiveSourceUrl);
 
@@ -1527,6 +1602,7 @@ export default function StudioPage() {
           sourceWidth,
           sourceHeight,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -1562,8 +1638,8 @@ export default function StudioPage() {
         );
         setAiMessage(
           params.kind === "line_art"
-            ? `线稿生成失败：${err}。画板未改动，请用「修正」重试或检查密钥。`
-            : `${viewLabel}生成失败：${err}。画板未写入占位图，请重试。`,
+            ? t("studio.tipLineArtFail", { err })
+            : t("studio.tipViewFailBoard", { label: viewLabel, err }),
         );
         setAiTip(COMM_PACK_COPY.failedGenHint);
         recordViewImageClientOutcome({
@@ -1666,11 +1742,11 @@ export default function StudioPage() {
           ...project,
           canvas_data: { ...project.canvas_data, artboards },
         });
-        setAiMessage(`已重新生成「${displayName}」`);
+        setAiMessage(t("studio.tipRegenerated", { name: displayName }));
         setAiTip(COMM_PACK_COPY.annotateAfterAi);
       } else {
         const slots = await computeArtboardSlots(project.canvas_data.artboards);
-        const origin = nextArtboardOrigin(slots);
+        const origin = nextArtboardOrigin(slots, project.canvas_data.artboards);
         const newBoard = createArtboard(displayName, imageDataUrl);
         newBoard.canvasOrigin = origin;
         newBoard.viewImageMeta = viewMeta;
@@ -1685,7 +1761,7 @@ export default function StudioPage() {
           },
         });
         setActiveArtboardId(newBoard.id);
-        setAiMessage(`已添加「${newBoard.name}」到画布`);
+        setAiMessage(t("studio.tipAddedToCanvas", { name: newBoard.name }));
         setAiTip(COMM_PACK_COPY.annotateAfterAi);
       }
     } catch (e) {
@@ -1698,15 +1774,15 @@ export default function StudioPage() {
           description: project.intake.description,
           sourceImageUrl: effectiveSourceUrl,
           outcome: "error",
-          synthesisError: e instanceof Error ? e.message : "视角图生成失败",
+          synthesisError: e instanceof Error ? e.message : t("studio.tipViewGenFail"),
         }),
       );
-      setAiMessage(e instanceof Error ? e.message : "视角图生成失败");
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipViewGenFail"));
       recordViewImageClientOutcome({
         projectId: project.id,
         kind: params.kind,
         ok: false,
-        error: e instanceof Error ? e.message : "视角图生成失败",
+        error: e instanceof Error ? e.message : t("studio.tipViewGenFail"),
         category: project.intake.detectedCategory,
         photoType: project.intake.photoType,
         consent: project.consentQualityPool,
@@ -1751,11 +1827,11 @@ export default function StudioPage() {
       (a) => a.id === sourceArtboardId,
     );
     if (!source?.imageDataUrl) {
-      setAiMessage("该画板没有可转换的彩图");
+      setAiMessage(t("studio.tipNoColorForLineArt"));
       return;
     }
     if (source.viewImageMeta?.kind === "line_art") {
-      setAiMessage("当前已是线稿，请使用修正词重新生成");
+      setAiMessage(t("studio.tipAlreadyLineArt"));
       return;
     }
     await runViewImageGeneration({
@@ -1772,7 +1848,7 @@ export default function StudioPage() {
     const target = project.canvas_data.artboards.find((a) => a.id === artboardId);
     const meta = target?.viewImageMeta;
     if (!target || !meta) {
-      setAiMessage("该画板无 AI 生成记录，请从左侧重新生成");
+      setAiMessage(t("studio.tipNoViewGenRecord"));
       return;
     }
 
@@ -1799,12 +1875,16 @@ export default function StudioPage() {
           regenerate: true,
         });
         persist(result.project);
-        setAiMessage(result.success ? "平铺正面已按修正词更新" : result.message);
+        setAiMessage(
+          result.success ? t("studio.tipFlatCorrected") : result.message,
+        );
         if (result.success) {
           setAiTip(COMM_PACK_COPY.annotateAfterAi);
         }
       } catch (e) {
-        setAiMessage(e instanceof Error ? e.message : "平铺正面重新生成失败");
+        setAiMessage(
+          e instanceof Error ? e.message : t("studio.tipFlatRegenFail"),
+        );
       } finally {
         setRegeneratingArtboardId(null);
         setAiImageContext(null);
@@ -1818,7 +1898,7 @@ export default function StudioPage() {
     const lineSourceId =
       meta.kind === "line_art" ? meta.sourceArtboardId : undefined;
     if (meta.kind === "line_art" && !editSourceId && !lineSourceId) {
-      setAiMessage("该线稿缺少可修正的图片，请在彩图右侧重新生成线稿");
+      setAiMessage(t("studio.tipLineArtMissingImage"));
       return;
     }
 
@@ -1845,6 +1925,14 @@ export default function StudioPage() {
   const handleBatchAnnotate = async () => {
     if (aiBusy || !project || !activeArtboard) return;
     if (!(await requireAiLogin())) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "annotate-process",
+        t("studio.confirmRerun", { label: t("ai.annotateProcess") }),
+      )
+    )
+      return;
     focusTab("process");
     setAiImageContext({
       action: "annotate-process",
@@ -1853,6 +1941,7 @@ export default function StudioPage() {
     });
     setAiTask("annotate-process");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: activeArtboard.id,
@@ -1860,12 +1949,14 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/annotate-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
           imageDataUrl,
           processItems: project.process_items,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -1979,8 +2070,10 @@ export default function StudioPage() {
           : "AI 标工艺完成",
       );
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "标工艺失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -1989,6 +2082,14 @@ export default function StudioPage() {
   const handleFillBom = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "fill-bom",
+        t("studio.confirmRerun", { label: t("ai.fillBom") }),
+      )
+    )
+      return;
     focusTab("bom");
     setAiImageContext({
       action: "fill-bom",
@@ -1997,6 +2098,7 @@ export default function StudioPage() {
     });
     setAiTask("fill-bom");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         preferIntake: true,
@@ -2004,6 +2106,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/bom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
@@ -2012,6 +2115,7 @@ export default function StudioPage() {
           existingBom: project.bom_items,
           answers: project.questionnaire.answers,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2023,19 +2127,25 @@ export default function StudioPage() {
       );
 
       persist({ ...project, bom_items: items });
-      setAiTip(data.plainExplanation ?? "物料清单已生成");
+      setAiTip(data.plainExplanation ?? t("studio.tipBomGenerated"));
       if (added > 0 || merged > 0) {
         const bits = [
-          merged > 0 ? `合并 ${merged} 条` : null,
-          added > 0 ? `新增 ${added} 条` : null,
+          merged > 0 ? t("studio.tipBomMerged", { n: merged }) : null,
+          added > 0 ? t("studio.tipBomAdded", { n: added }) : null,
         ].filter(Boolean);
-        setAiMessage(`物料已更新（${bits.join("，")}）`);
+        setAiMessage(
+          t("studio.tipBomUpdated", {
+            bits: bits.join(locale === "en" ? ", " : "，"),
+          }),
+        );
       } else {
-        setAiMessage("物料已是最新");
+        setAiMessage(t("studio.tipBomUpToDate"));
       }
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "填物料失败");
+      if (isAbortError(e)) return;
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipBomFail"));
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2101,6 +2211,7 @@ export default function StudioPage() {
           regionCropped,
           existingPart,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2142,9 +2253,9 @@ export default function StudioPage() {
       });
       setHighlightedProcessIds([processId!]);
       focusTab("process");
-      setAiMessage(`已识别：${data.part}`);
+      setAiMessage(t("studio.tipRecognized", { part: data.part }));
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "区域识别失败");
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipRegionFail"));
     } finally {
       setAiTask(null);
       setAiImageContext(null);
@@ -2155,6 +2266,14 @@ export default function StudioPage() {
     if (aiBusy || !project) return;
     void (async () => {
       if (!(await requireAiLogin())) return;
+      if (
+        !confirmAiMenuIfNeeded(
+          project,
+          "fill-size",
+          t("studio.confirmRerun", { label: t("ai.fillSize") }),
+        )
+      )
+        return;
       focusTab("size");
       setSizeAiDialogOpen(true);
     })();
@@ -2173,6 +2292,7 @@ export default function StudioPage() {
     });
     setAiTask("fill-size");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: activeArtboard?.id,
@@ -2181,6 +2301,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/size-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           category: project.intake.detectedCategory,
           description: project.intake.description,
@@ -2190,6 +2311,7 @@ export default function StudioPage() {
           regionStandard: input.regionStandard,
           sampleSize: input.sampleSize,
           intake: project.intake,
+          locale,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -2247,6 +2369,7 @@ export default function StudioPage() {
           const dimRes = await fetch("/api/ai/size-dimension-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
             body: JSON.stringify({
               category: current.intake.detectedCategory,
               description: current.intake.description,
@@ -2256,6 +2379,7 @@ export default function StudioPage() {
               regionStandard: input.regionStandard,
               skipParts,
               intake: current.intake,
+              locale,
             }),
           });
           const dimData = (await dimRes.json().catch(() => ({}))) as {
@@ -2302,17 +2426,22 @@ export default function StudioPage() {
               dimensionBatchFailed = true;
               setAiTip(
                 skippedDimensions > 0
-                  ? `尺码表已生成，但 ${skippedDimensions} 条尺寸线未能匹配部位或已存在，请在当前选中款图上手动标注`
-                  : "尺码表已生成，但尺寸线未能写入画布（请检查部位名称或手动标注）",
+                  ? t("studio.tipSizeChartDimsSkipped", {
+                      n: skippedDimensions,
+                    })
+                  : t("studio.tipSizeChartNoDims"),
               );
             }
           } else if (!imageDataUrl) {
-            setAiTip("尺码表已生成。款式图过大或未加载，无法在画布上自动标注尺寸线");
+            setAiTip(t("studio.tipSizeChartImageTooBig"));
           }
         } catch (dimErr) {
           dimensionBatchFailed = true;
-          const msg = dimErr instanceof Error ? dimErr.message : "尺寸线生成失败";
-          setAiTip(`尺码表已生成，但画布尺寸线未完全生成：${msg}`);
+          const msg =
+            dimErr instanceof Error
+              ? dimErr.message
+              : t("studio.tipSizeDimGenFail");
+          setAiTip(t("studio.tipSizeChartDimsPartial", { msg }));
         }
       }
 
@@ -2323,19 +2452,28 @@ export default function StudioPage() {
         } else {
           setAiTip(
             addedDimensions > 0
-              ? `已在当前选中款图上标注 ${addedDimensions} 条尺寸线（蓝色）`
-              : (data.plainExplanation ?? "尺码表已生成"),
+              ? t("studio.tipSizeDimsAdded", { n: addedDimensions })
+              : (data.plainExplanation ?? t("studio.tipSizeChartOk")),
           );
         }
       }
       setAiMessage(
         addedDimensions > 0
-          ? `已填入 ${input.sampleSize} 码 ${filled} 项，并标注 ${addedDimensions} 条尺寸线`
-          : `已填入 ${input.sampleSize} 码 ${filled} 项估算值`,
+          ? t("studio.tipSizeOkWithDims", {
+              size: input.sampleSize,
+              filled,
+              dims: addedDimensions,
+            })
+          : t("studio.tipSizeOk", {
+              size: input.sampleSize,
+              filled,
+            }),
       );
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "尺码生成失败");
+      if (isAbortError(e)) return;
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipSizeFail"));
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2344,6 +2482,14 @@ export default function StudioPage() {
   const handleEnhanceAll = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "enhance",
+        t("studio.confirmRerun", { label: t("ai.enhance") }),
+      )
+    )
+      return;
     setAiImageContext({
       action: "enhance",
       preferIntake: true,
@@ -2351,11 +2497,13 @@ export default function StudioPage() {
     });
     setAiTask("enhance");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const res = await fetch("/api/ai/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project }),
+        signal: ac.signal,
+        body: JSON.stringify({ project, locale }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -2394,10 +2542,12 @@ export default function StudioPage() {
       }
       persist(updated);
       setAiTip(data.summary);
-      setAiMessage("工艺包已补全");
+      setAiMessage(t("studio.tipEnhanced"));
     } catch (e) {
-      setAiMessage(e instanceof Error ? e.message : "补全失败");
+      if (isAbortError(e)) return;
+      setAiMessage(e instanceof Error ? e.message : t("studio.tipEnhanceFail"));
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2406,6 +2556,14 @@ export default function StudioPage() {
   const handleStyleReview = async () => {
     if (aiBusy || !project) return;
     if (!(await requireAiLogin())) return;
+    if (
+      !confirmAiMenuIfNeeded(
+        project,
+        "explain",
+        t("studio.confirmRerun", { label: t("ai.explain") }),
+      )
+    )
+      return;
     setAiImageContext({
       action: "explain",
       sourceArtboardId: primaryArtboardId ?? activeArtboard?.id,
@@ -2413,6 +2571,7 @@ export default function StudioPage() {
     });
     setAiTask("explain");
     setAiMessage(null);
+    const ac = beginStudioAiFetch();
     try {
       const { dataUrl: imageDataUrl } = await resolveGarmentImageForAi(project, {
         activeArtboardId: primaryArtboardId ?? activeArtboard?.id,
@@ -2421,6 +2580,7 @@ export default function StudioPage() {
       const res = await fetch("/api/ai/style-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           title: project.title,
           category: project.intake.detectedCategory,
@@ -2438,6 +2598,7 @@ export default function StudioPage() {
           })),
           existingReview: project.style_review,
           intake: project.intake,
+          locale,
         }),
       });
       const data = await res.json();
@@ -2452,8 +2613,10 @@ export default function StudioPage() {
       focusTab("review");
       setAiMessage(saved ? "款式评语已生成" : "评语已显示但未能保存到本地，请清理存储空间");
     } catch (e) {
+      if (isAbortError(e)) return;
       setAiMessage(e instanceof Error ? e.message : "评语生成失败");
     } finally {
+      clearStudioAiFetch(ac);
       setAiTask(null);
       setAiImageContext(null);
     }
@@ -2553,12 +2716,12 @@ export default function StudioPage() {
           targetGarmentLabel={project.intake.targetGarment?.label}
           photoType={project.intake.photoType}
           flatFrontGenerated={project.intake.flatFrontGenerated}
-          workflowLabel={WORKFLOW_LABELS[project.workflowStatus]}
+          workflowLabel={getWorkflowLabel(project.workflowStatus, t)}
           progress={progress}
           workflowStatus={project.workflowStatus}
           onWorkflowChange={(ws: WorkflowStatus) => {
             if (ws === "finalized" && !canFinalize(project)) {
-              setAiMessage("请先完善必填项");
+              setAiMessage(t("studio.tipNeedRequired"));
               return;
             }
             persist({ ...project, workflowStatus: ws });
@@ -2714,7 +2877,7 @@ export default function StudioPage() {
                       ? primaryArtboardId
                       : activeArtboardId || primaryArtboardId;
                   if (sourceId) void handleGenerateLineArtFromArtboard(sourceId);
-                  else setAiMessage("请先选中一张彩图画板再生成线稿");
+                  else setAiMessage(t("studio.tipNeedColorBoard"));
                   break;
                 }
                 default:
@@ -2754,13 +2917,14 @@ export default function StudioPage() {
           {fullCollectOpen && project && !garmentBlocked && (
             <FullCollectFlowOverlay
               project={project}
+              locale={locale}
               onProjectPatch={(next) => {
                 persist(next);
               }}
               onComplete={(next, summary) => {
                 persist(next);
                 setFullCollectOpen(false);
-                setAiMessage(summary || "AI 一键标注已完成");
+                setAiMessage(summary || t("studio.tipFullCollectDone"));
                 setAiTip(COMM_PACK_COPY.annotateAfterAi);
                 if (
                   typeof window !== "undefined" &&
@@ -2786,7 +2950,7 @@ export default function StudioPage() {
                 ) {
                   router.replace(`/project/${id}/studio`);
                 }
-                setAiTip("已关闭全量标注。可先手动做，需要时再点左侧「AI 一键标注」。");
+                setAiTip(t("studio.tipFullCollectClosed"));
                 setAiMessage(null);
               }}
             />
@@ -2805,7 +2969,14 @@ export default function StudioPage() {
               onCancel={
                 activeAiPreset === "intake"
                   ? cancelPendingAiAnalysis
-                  : undefined
+                  : activeAiPreset && activeAiPreset !== "view-image"
+                    ? cancelStudioAiTask
+                    : undefined
+              }
+              cancelLabel={
+                activeAiPreset === "intake"
+                  ? "跳过，先手动标注"
+                  : "取消，中断本次 AI"
               }
               imagePreview={
                 activeAiImageSource?.previewUrl ??

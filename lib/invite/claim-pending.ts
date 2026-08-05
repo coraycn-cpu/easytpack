@@ -1,5 +1,6 @@
 import {
   clearPendingInviteCode,
+  INVITE_REWARD_POINTS,
   readPendingInviteCode,
   savePendingInviteCode,
 } from "@/lib/invite/constants";
@@ -88,7 +89,7 @@ export async function claimPendingInviteAfterAuth(): Promise<{
     if (definitive) clearPendingInviteCode();
 
     if (json?.ok) {
-      const pts = json.invitee_points ?? 50;
+      const pts = json.invitee_points ?? INVITE_REWARD_POINTS;
       stashInviteClaimTip(`邀请奖励已到账：你获得 ${pts} 积分`);
       return { claimed: true };
     }

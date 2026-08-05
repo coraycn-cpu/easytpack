@@ -203,21 +203,46 @@ export async function uploadProjectImagesForCloud(
   };
 }
 
-/** 把 sbstorage: 引用换成可显示的临时链接（约 1 小时） */
+/** 把 sbstorage: 引用换成可显示的临时链接（约 1 小时）；短时缓存避免项目库每张卡重复签名 */
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+const signedUrlInflight = new Map<string, Promise<string | undefined>>();
+
 export async function resolveSbStorageRef(
   ref: string,
 ): Promise<string | undefined> {
   const path = pathFromSbStorageRef(ref);
   if (!path) return undefined;
   if (!isSupabaseConfigured()) return undefined;
-  try {
-    const supabase = createClient();
-    const { data, error } = await supabase.storage
-      .from(STYLE_IMAGES_BUCKET)
-      .createSignedUrl(path, 60 * 60);
-    if (error || !data?.signedUrl) return undefined;
-    return data.signedUrl;
-  } catch {
-    return undefined;
+
+  const cached = signedUrlCache.get(path);
+  // 提前 2 分钟当作过期，避免刚打开就失效
+  if (cached && cached.expiresAt > Date.now() + 120_000) {
+    return cached.url;
   }
+
+  const pending = signedUrlInflight.get(path);
+  if (pending) return pending;
+
+  const job = (async () => {
+    try {
+      const supabase = createClient();
+      const ttlSec = 60 * 60;
+      const { data, error } = await supabase.storage
+        .from(STYLE_IMAGES_BUCKET)
+        .createSignedUrl(path, ttlSec);
+      if (error || !data?.signedUrl) return undefined;
+      signedUrlCache.set(path, {
+        url: data.signedUrl,
+        expiresAt: Date.now() + ttlSec * 1000,
+      });
+      return data.signedUrl;
+    } catch {
+      return undefined;
+    } finally {
+      signedUrlInflight.delete(path);
+    }
+  })();
+
+  signedUrlInflight.set(path, job);
+  return job;
 }

@@ -37,6 +37,6 @@ export async function appendPhotoReferenceArtboard(
 
   const slots = await computeArtboardSlots(artboards);
   const ref = createArtboard(refName, referenceImageUrl);
-  ref.canvasOrigin = nextArtboardOrigin(slots);
+  ref.canvasOrigin = nextArtboardOrigin(slots, artboards);
   return [...artboards, ref];
 }

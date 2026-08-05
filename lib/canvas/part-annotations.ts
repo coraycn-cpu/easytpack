@@ -13,6 +13,44 @@ export function getMarkerLabel(index: number): string {
   return `${index}`;
 }
 
+const ANNOTATION_TYPE_LABEL: Record<Annotation["type"], string> = {
+  rect: "方框",
+  circle: "圆框",
+  arrow: "箭头",
+  line: "线段",
+  dimension: "尺寸线",
+  freehand: "画笔",
+  text: "文字",
+  marker: "标记",
+};
+
+/** 工艺侧栏「图层」列表用的可读名称（避免显示 rect 等英文类型） */
+export function formatAnnotationLayerLabel(
+  ann: Annotation,
+  processItems: ProcessItem[],
+  fallbackIndex: number,
+): string {
+  const text = (ann.text ?? "").trim();
+  if (text) return text;
+
+  const linked = getAnnotationProcessIds(ann)
+    .map((id) => {
+      const idx = findProcessIndexById(processItems, id);
+      if (idx < 0) return null;
+      const part = (processItems[idx].part ?? "").trim();
+      const marker = getMarkerLabel(idx + 1);
+      return part ? `${marker} ${part}` : `${marker} 工艺`;
+    })
+    .filter((v): v is string => Boolean(v));
+  if (linked.length) return linked.join("、");
+
+  const sizePart = (ann.linkedSizePart ?? "").trim();
+  if (sizePart) return `尺寸 · ${sizePart}`;
+
+  const typeLabel = ANNOTATION_TYPE_LABEL[ann.type] ?? ann.type;
+  return `${getMarkerLabel(fallbackIndex)} · ${typeLabel}`;
+}
+
 export function getAnnotationProcessIds(ann: Annotation): string[] {
   return ann.linkedProcessIds ?? [];
 }

@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import BusyOverlay from "@/components/ui/BusyOverlay";
 import {
   createClient,
@@ -9,37 +11,39 @@ import {
 } from "@/lib/supabase/client";
 import { captureInviteRefFromSearch } from "@/lib/invite/claim-pending";
 import { startPostAuthBackgroundWork } from "@/lib/auth/post-auth-bootstrap";
+import { FREE_MONTHLY_AI_GIFT } from "@/lib/ai/login-gate";
 import {
-  FREE_MONTHLY_AI_GIFT,
-  REGISTER_CTA_LABEL,
-} from "@/lib/ai/login-gate";
-import { BRAND_NAME } from "@/lib/brand";
+  INVITE_MAX_SUCCESS,
+  INVITE_POINTS_CAP,
+  INVITE_REWARD_POINTS,
+} from "@/lib/invite/constants";
+import type { TranslateFn } from "@/lib/i18n/translate";
 
 type Mode = "login" | "register" | "forgot";
 
-function friendlyAuthError(message: string): string {
+function friendlyAuthError(message: string, t: TranslateFn): string {
   const raw = (message || "").trim();
   const m = raw.toLowerCase();
 
   if (m.includes("invalid login") || m.includes("invalid credentials")) {
-    return "邮箱或密码不对，请再试一次。";
+    return t("auth.errBadCreds");
   }
   if (
     m.includes("user already registered") ||
     m.includes("already been registered") ||
     m.includes("already registered")
   ) {
-    return "这个邮箱已经注册过了，请点上方「登录」。";
+    return t("auth.errExists");
   }
   if (
     m.includes("password should be at least") ||
     m.includes("password is known to be weak") ||
     (m.includes("password") && m.includes("at least 6"))
   ) {
-    return "密码至少要 6 位，请换一个更长一点的。";
+    return t("auth.errWeakPass");
   }
   if (m.includes("rate limit") || m.includes("too many requests")) {
-    return "操作太频繁了，请等一两分钟再试。";
+    return t("auth.errRate");
   }
   if (
     m.includes("confirm") ||
@@ -48,20 +52,20 @@ function friendlyAuthError(message: string): string {
     m.includes("error sending") ||
     m.includes("smtp")
   ) {
-    return "注册卡住了：多半是「要先验证邮箱」。请到云端后台 Authentication → Providers → Email，关掉 Confirm email 后再试。";
+    return t("auth.errConfirm");
   }
   if (m.includes("signups not allowed") || m.includes("signup is disabled")) {
-    return "云端暂时关闭了注册，请到 Authentication → Providers → Email 打开注册。";
+    return t("auth.errSignupOff");
   }
   if (
     m.includes("invalid format") ||
     m.includes("unable to validate email") ||
     (m.includes("email address") && m.includes("invalid"))
   ) {
-    return "邮箱格式不对，请写成 名字@网站.com 这种。";
+    return t("auth.errEmail");
   }
 
-  return raw ? `注册/登录失败：${raw}` : "操作失败，请稍后重试。";
+  return raw ? t("auth.errPrefix", { msg: raw }) : t("auth.errGeneric");
 }
 
 type AuthEntryPanelProps = {
@@ -77,6 +81,7 @@ export default function AuthEntryPanel({
   defaultNext = "/",
   className = "",
 }: AuthEntryPanelProps) {
+  const { t } = useLocale();
   const router = useRouter();
   const search = useSearchParams();
   const nextPath = search.get("next") || defaultNext;
@@ -110,7 +115,7 @@ export default function AuthEntryPanel({
   const [entering, setEntering] = useState(false);
   const [message, setMessage] = useState<string | null>(
     urlError === "confirm"
-      ? "邮箱确认出了问题，请再试一次注册或登录。"
+      ? t("auth.errUrlConfirm")
       : null,
   );
   const [okTip, setOkTip] = useState<string | null>(null);
@@ -123,17 +128,17 @@ export default function AuthEntryPanel({
     setOkTip(null);
 
     if (!configured) {
-      setMessage("还没配置云端。请先按「云端账号准备」说明填好钥匙再来。");
+      setMessage(t("auth.cloudNotReady"));
       return;
     }
 
     const trimmed = email.trim();
     if (!trimmed) {
-      setMessage("请填写邮箱。");
+      setMessage(t("auth.errEmailRequired"));
       return;
     }
     if (mode !== "forgot" && !password) {
-      setMessage("请填写邮箱和密码。");
+      setMessage(t("auth.errCredentialsRequired"));
       return;
     }
 
@@ -146,9 +151,7 @@ export default function AuthEntryPanel({
           redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/account?reset=1")}`,
         });
         if (error) throw error;
-        setOkTip(
-          "重置邮件已发送（若该邮箱已注册）。请到邮箱点链接，然后在用户中心设置新密码。",
-        );
+        setOkTip(t("auth.resetSent"));
         return;
       }
       if (mode === "login") {
@@ -183,13 +186,14 @@ export default function AuthEntryPanel({
         return;
       }
 
-      setOkTip(
-        "注册成功。若网站要求验证邮箱，请去邮箱点确认链接；测试时可在云端后台关掉「确认邮箱」。",
-      );
+      setOkTip(t("auth.signupSuccess"));
       setMode("login");
     } catch (err) {
       setMessage(
-        friendlyAuthError(err instanceof Error ? err.message : String(err)),
+        friendlyAuthError(
+          err instanceof Error ? err.message : String(err),
+          t,
+        ),
       );
       setEntering(false);
     } finally {
@@ -204,57 +208,60 @@ export default function AuthEntryPanel({
           title={
             entering
               ? mode === "register"
-                ? "注册成功，正在进入…"
-                : "登录成功，正在进入…"
+                ? t("auth.busyRegisterSuccess")
+                : t("auth.busyLoginSuccess")
               : mode === "register"
-                ? "正在注册…"
-                : "正在登录…"
+                ? t("auth.busyRegister")
+                : mode === "forgot"
+                  ? t("auth.submittingForgot")
+                  : t("auth.busyLogin")
           }
           subtitle={
             entering
-              ? "请稍候，马上跳转到你刚才的页面"
-              : "正在连接账号服务，请不要关闭或重复点击"
+              ? t("auth.busyEnteringHint")
+              : t("auth.busyConnectingHint")
           }
         />
       )}
 
+      <div className="mb-4 flex justify-end">
+        <LocaleSwitcher size="md" />
+      </div>
       <h2 className="text-2xl font-bold text-foreground">
         {mode === "login"
-          ? "欢迎回来"
+          ? t("auth.welcomeBack")
           : mode === "forgot"
-            ? "重置密码"
-            : "创建账号"}
+            ? t("auth.forgot")
+            : t("auth.createAccount")}
       </h2>
       <p className="mt-1 text-sm text-muted">
         {mode === "login"
-          ? `登录后继续使用 ${BRAND_NAME}`
+          ? t("auth.loginSubtitle", { brand: t("common.brandName") })
           : mode === "forgot"
-            ? "输入注册邮箱，我们会发重置链接给你"
-            : `注册免费，每月送 ${FREE_MONTHLY_AI_GIFT} 点 AI`}
+            ? t("auth.forgotSubtitle")
+            : t("auth.registerSubtitle", { n: FREE_MONTHLY_AI_GIFT })}
       </p>
 
       {mode === "register" && !inviteRef ? (
         <ul className="mt-4 space-y-1 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-950">
-          <li>✓ 每月 {FREE_MONTHLY_AI_GIFT} 点 AI 调用额度</li>
-          <li>✓ 云端存档，换设备不丢稿</li>
-          <li>✓ 邀请好友双方再各得 50 分</li>
+          <li>✓ {t("auth.benefitQuota", { n: FREE_MONTHLY_AI_GIFT })}</li>
+          <li>✓ {t("auth.benefitCloud")}</li>
+          <li>✓ {t("auth.benefitInvite", { n: INVITE_REWARD_POINTS })}</li>
         </ul>
       ) : null}
       {inviteRef ? (
         <p className="mt-4 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          你正在通过好友邀请注册。注册成功后，双方各得 50
-          积分（邀请人最多可成功邀请 6 人，上限 300 分）。
+          {t("auth.inviteBanner", {
+            reward: INVITE_REWARD_POINTS,
+            max: INVITE_MAX_SUCCESS,
+            cap: INVITE_POINTS_CAP,
+          })}
         </p>
       ) : null}
 
       {!configured && (
         <div className="mt-4 rounded-[var(--radius-sm)] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          还没配好云端钥匙。请打开说明{" "}
-          <code className="rounded bg-amber-100 px-1">
-            docs/SUPABASE_SETUP.md
-          </code>
-          ，在 <strong>Vercel → Settings → Environment Variables</strong>{" "}
-          填好两把钥匙后重新部署。
+          {t("auth.cloudNotReady")}
         </div>
       )}
 
@@ -274,7 +281,7 @@ export default function AuthEntryPanel({
               : "text-muted hover:bg-white"
           }`}
         >
-          登录
+          {t("common.login")}
         </button>
         <button
           type="button"
@@ -290,7 +297,7 @@ export default function AuthEntryPanel({
               : "text-muted hover:bg-white"
           }`}
         >
-          注册
+          {t("common.register")}
         </button>
       </div>
       ) : (
@@ -304,7 +311,7 @@ export default function AuthEntryPanel({
           }}
           className="pf-btn-text mt-5 text-sm"
         >
-          ← 返回登录
+          ← {t("auth.backToLogin")}
         </button>
       )}
 
@@ -316,7 +323,7 @@ export default function AuthEntryPanel({
       >
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">
-            邮箱
+            {t("auth.email")}
           </label>
           <div className="relative">
             <span
@@ -336,7 +343,7 @@ export default function AuthEntryPanel({
               className={`pf-input py-2.5 pl-9 pr-3 text-sm ${
                 message ? "pf-input-error" : ""
               }`}
-              placeholder="请输入邮箱"
+              placeholder={t("auth.emailPlaceholder")}
             />
           </div>
         </div>
@@ -344,7 +351,7 @@ export default function AuthEntryPanel({
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-sm font-medium text-foreground">
-              密码{mode === "register" ? "（至少 6 位）" : ""}
+              {mode === "register" ? t("auth.passwordMin") : t("auth.password")}
             </label>
             {mode === "login" ? (
               <button
@@ -357,7 +364,7 @@ export default function AuthEntryPanel({
                 }}
                 className="pf-btn-text text-xs"
               >
-                忘记密码？
+                {t("auth.switchToForgot")}
               </button>
             ) : null}
           </div>
@@ -379,7 +386,7 @@ export default function AuthEntryPanel({
               onChange={(e) => setPassword(e.target.value)}
               disabled={showBusy}
               className="pf-input py-2.5 pl-9 pr-10 text-sm"
-              placeholder="请输入密码"
+              placeholder={t("auth.passwordPlaceholder")}
             />
             <button
               type="button"
@@ -387,7 +394,9 @@ export default function AuthEntryPanel({
               disabled={showBusy}
               onClick={() => setShowPassword((v) => !v)}
               className="absolute inset-y-0 right-2 flex items-center px-1.5 text-muted hover:text-foreground disabled:opacity-50"
-              aria-label={showPassword ? "隐藏密码" : "显示密码"}
+              aria-label={
+                showPassword ? t("auth.hidePassword") : t("auth.showPassword")
+              }
             >
               {showPassword ? (
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
@@ -413,24 +422,24 @@ export default function AuthEntryPanel({
         >
           {showBusy
             ? entering
-              ? "正在进入…"
+              ? t("auth.entering")
               : mode === "forgot"
-                ? "发送中…"
+                ? t("auth.submittingForgot")
                 : mode === "login"
-                  ? "登录中…"
-                  : "注册中…"
+                  ? t("auth.submittingLogin")
+                  : t("auth.submittingRegister")
             : mode === "forgot"
-              ? "发送重置邮件"
+              ? t("auth.submitForgot")
               : mode === "login"
-                ? "登录"
-                : REGISTER_CTA_LABEL}
+                ? t("auth.submitLogin")
+                : t("auth.submitRegister")}
         </button>
       </form>
 
       {mode !== "forgot" ? (
       <div className="mt-6 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-border" />
-        或
+        {t("common.or")}
         <span className="h-px flex-1 bg-border" />
       </div>
       ) : null}
@@ -438,37 +447,31 @@ export default function AuthEntryPanel({
       {mode !== "forgot" ? (
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "login" ? (
-          <>
-            还没有账号？{" "}
-            <button
-              type="button"
-              disabled={showBusy}
-              onClick={() => {
-                setMode("register");
-                setMessage(null);
-                setOkTip(null);
-              }}
-              className="pf-btn-text font-semibold"
-            >
-              免费注册
-            </button>
-          </>
+          <button
+            type="button"
+            disabled={showBusy}
+            onClick={() => {
+              setMode("register");
+              setMessage(null);
+              setOkTip(null);
+            }}
+            className="pf-btn-text font-semibold"
+          >
+            {t("auth.switchToRegister")}
+          </button>
         ) : (
-          <>
-            已有账号？{" "}
-            <button
-              type="button"
-              disabled={showBusy}
-              onClick={() => {
-                setMode("login");
-                setMessage(null);
-                setOkTip(null);
-              }}
-              className="pf-btn-text font-semibold"
-            >
-              去登录
-            </button>
-          </>
+          <button
+            type="button"
+            disabled={showBusy}
+            onClick={() => {
+              setMode("login");
+              setMessage(null);
+              setOkTip(null);
+            }}
+            className="pf-btn-text font-semibold"
+          >
+            {t("auth.switchToLogin")}
+          </button>
         )}
       </p>
       ) : null}

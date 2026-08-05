@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { enhanceTechPack } from "@/lib/ai/assist";
 import { runMeteredAiJsonRoute } from "@/lib/ai/route-meter";
+import { normalizeLocale } from "@/lib/i18n/locale";
 import type { TechPackProject } from "@/types/project";
 
 export async function POST(req: NextRequest) {
@@ -11,7 +12,9 @@ export async function POST(req: NextRequest) {
       if (!project) {
         throw new Error("缺少项目数据");
       }
-      return enhanceTechPack(project);
+      return enhanceTechPack(project, {
+        locale: normalizeLocale(body.locale),
+      });
     },
   });
 }

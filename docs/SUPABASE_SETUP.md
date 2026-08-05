@@ -1,6 +1,6 @@
 # 云端账号准备（新手一步一步 · Vercel 优先）
 
-目标：让 EasytPack「登录后把工艺包存到网上」，换电脑也能打开。  
+目标：让 PackFlow服装工艺单AI智能画板系统「登录后把工艺包存到网上」，换电脑也能打开。  
 **没配好之前，网站照常能用**——只是工艺包还存在「你当前浏览器」里。
 
 > 你主要在 **Vercel** 上测试，下面按这个习惯写。本地一般不用开预览。
@@ -60,6 +60,9 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 **自检：** 左侧 **Storage → Buckets** 应能看到 `style-images`。若没有：再跑一遍脚本；或在 Storage 界面新建同名私有桶后，只重跑脚本里 `storage.objects` 的几条 policy。
 
+**已建过库、项目列表「更新」时间全一样？**  
+说明旧触发器在登录同步时把所有工艺包刷成了同一时刻。请再跑一次仓库里的 `supabase/fix-updated-at-trigger.sql`（SQL Editor → 粘贴 → Run）。需要把旧时间清掉时，按该文件末尾注释再执行一行 `update … set updated_at = created_at`。只 Redeploy Vercel **不够**，必须在云端数据库里跑这段 SQL。
+
 ---
 
 ## 第 4 步：打开邮箱注册（方便测试登录）
@@ -101,13 +104,13 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 
 ## 第 7 步（可选）：免费 AI 额度
 
-登录用户的 AI 调用会计入 Supabase 表 `ai_usage`。默认每月 **200** 点（可用 Vercel 环境变量 `AI_FREE_MONTHLY_UNITS` 调整）。**邀请好友成功注册**后双方各得 **50** 积分（计入额度上限；每人最多成功邀请 **6** 人，邀请积分上限 **300**）。超额返回 429。**未登录不能调用 AI**（可手动标注；点 AI / 云端同步会引导注册）。
+登录用户的 AI 调用会计入 Supabase 表 `ai_usage`。默认每月 **50** 点（可用 Vercel 环境变量 `AI_FREE_MONTHLY_UNITS` / `NEXT_PUBLIC_AI_FREE_MONTHLY_UNITS` 调整）。**邀请好友成功注册**后双方各得 **10** 积分（计入额度上限；每人最多成功邀请 **5** 人，邀请积分上限 **50**）。超额返回 429。**未登录不能调用 AI**（可手动标注；点 AI / 云端同步会引导注册）。
 
 用户中心 `/account` 可查看本月用量与邀请链接；「升级为团队」入口已预留。
 
 ## 第 8 步：邀请注册积分表
 
-请再跑一遍最新 `supabase/schema.sql`（含 `profiles`、`referrals`、`ensure_user_profile`、`claim_invite_reward`）。用户中心可复制邀请链接：`/login?mode=register&ref=邀请码`。好友注册并登录后，**双方各 +50** 积分（邀请人最多 6 人 / 上限 300 分）。
+请再跑一遍最新 `supabase/schema.sql`（含 `profiles`、`referrals`、`ensure_user_profile`、`claim_invite_reward`）。若库是旧版邀请规则，也可只跑 `supabase/fix-invite-reward-10.sql`。用户中心可复制邀请链接：`/login?mode=register&ref=邀请码`。好友注册并登录后，**双方各 +10** 积分（邀请人最多 5 人 / 上限 50 分）。
 
 ## 第 9 步（可选）：管理后台
 
@@ -150,6 +153,7 @@ Integrations 面板自动塞进来的 `POSTGRES_*`、`SUPABASE_JWT_SECRET`、`SU
 | 同步失败黄字提示 | 本机稿还在；检查网络 / RLS / 桶是否存在后重试 |
 | 想改自动/手动 | 「我的项目」→ 云端同步 → 同步方式 |
 | 邀请不加分 / 读档案失败 | 在 Supabase SQL 编辑器重新执行最新 `schema.sql`（含 profiles 段） |
+| 所有项目「更新」时间一模一样 | 在 SQL Editor 执行 `supabase/fix-updated-at-trigger.sql`；可选按文件注释把 `updated_at` 重置为 `created_at` |
 
 ---
 

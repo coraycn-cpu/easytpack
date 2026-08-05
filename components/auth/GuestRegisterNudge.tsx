@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   FREE_MONTHLY_AI_GIFT,
-  GUEST_LIMIT_LINES,
-  GUEST_MANUAL_OK_TIP,
-  REGISTER_BENEFITS_HEADLINE,
-  REGISTER_BENEFITS_LINES,
-  REGISTER_CTA_LABEL,
   buildLoginHref,
 } from "@/lib/ai/login-gate";
+import {
+  INVITE_POINTS_CAP,
+  INVITE_REWARD_POINTS,
+} from "@/lib/invite/constants";
 
 type GuestRegisterNudgeProps = {
   /** 登录后回跳 */
@@ -30,7 +30,10 @@ export default function GuestRegisterNudge({
   showCta = true,
   className = "",
 }: GuestRegisterNudgeProps) {
+  const { t, locale } = useLocale();
   const href = buildLoginHref({ mode: "register", next });
+  const n = FREE_MONTHLY_AI_GIFT;
+  const limitSep = locale === "en" ? "; " : "；";
 
   if (variant === "banner") {
     return (
@@ -38,9 +41,9 @@ export default function GuestRegisterNudge({
         className={`flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-950 ${className}`}
       >
         <p className="min-w-0 leading-snug">
-          {GUEST_MANUAL_OK_TIP}{" "}
+          {t("guest.manualOk")}{" "}
           <span className="font-medium text-amber-900">
-            注册送每月 {FREE_MONTHLY_AI_GIFT} 点 AI + 云端存档。
+            {t("guest.registerGift", { n })}
           </span>
         </p>
         {showCta ? (
@@ -48,7 +51,7 @@ export default function GuestRegisterNudge({
             href={href}
             className="pf-btn-primary shrink-0 px-2.5 py-1 text-[11px]"
           >
-            {REGISTER_CTA_LABEL}
+            {t("guest.cta")}
           </Link>
         ) : null}
       </div>
@@ -58,29 +61,35 @@ export default function GuestRegisterNudge({
   if (variant === "inline") {
     return (
       <p className={`text-[10px] leading-relaxed text-slate-500 ${className}`}>
-        {GUEST_MANUAL_OK_TIP} 注册即送每月{" "}
-        <strong className="font-semibold text-slate-700">
-          {FREE_MONTHLY_AI_GIFT} 点 AI
-        </strong>
-        ，还能云端存档。
+        {t("guest.manualOk")} {t("guest.registerInline", { n })}
         {showCta ? (
           <Link href={href} className="ml-1 text-blue-600 hover:underline">
-            {REGISTER_CTA_LABEL}
+            {t("guest.cta")}
           </Link>
         ) : null}
       </p>
     );
   }
 
+  const benefitLines = [
+    t("guest.benefit1", { n }),
+    t("guest.benefit2", { n }),
+    t("guest.benefit3"),
+    t("guest.benefit4", {
+      reward: INVITE_REWARD_POINTS,
+      cap: INVITE_POINTS_CAP,
+    }),
+  ];
+
   return (
     <div
       className={`rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-white px-3.5 py-3 text-left ${className}`}
     >
       <p className="text-xs font-semibold text-amber-950">
-        {REGISTER_BENEFITS_HEADLINE}
+        {t("guest.headline", { n })}
       </p>
       <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-amber-950/85">
-        {REGISTER_BENEFITS_LINES.map((line) => (
+        {benefitLines.map((line) => (
           <li key={line} className="flex gap-1.5">
             <span className="shrink-0 text-emerald-600">✓</span>
             <span>{line}</span>
@@ -88,14 +97,16 @@ export default function GuestRegisterNudge({
         ))}
       </ul>
       <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-        未登录限制：{GUEST_LIMIT_LINES.join("；")}。可先手动做款。
+        {t("guest.limits", {
+          lines: [t("guest.limitAi"), t("guest.limitCloud")].join(limitSep),
+        })}
       </p>
       {showCta ? (
         <Link
           href={href}
           className="pf-btn-primary mt-2.5 w-full py-2 text-xs"
         >
-          {REGISTER_CTA_LABEL}
+          {t("guest.cta")}
         </Link>
       ) : null}
     </div>

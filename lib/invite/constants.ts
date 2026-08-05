@@ -1,9 +1,9 @@
 /** 邀请好友注册奖励（与 schema claim_invite_reward 一致） */
-export const INVITE_REWARD_POINTS = 50;
-/** 双方各得一份；每人最多成功邀请 6 人 */
-export const INVITE_MAX_SUCCESS = 6;
-/** 邀请积分上限（6 × 50） */
-export const INVITE_POINTS_CAP = 300;
+export const INVITE_REWARD_POINTS = 10;
+/** 双方各得一份；每人最多成功邀请 5 人（10×5=50） */
+export const INVITE_MAX_SUCCESS = 5;
+/** 邀请积分上限（5 × 10） */
+export const INVITE_POINTS_CAP = 50;
 
 const REF_STORAGE_KEY = "easytpack_invite_ref";
 
