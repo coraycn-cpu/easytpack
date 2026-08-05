@@ -610,6 +610,7 @@ export const zhMessages = {
   footer: {
     aria: "站点页脚",
     guide: "功能介绍与使用说明 / FAQ",
+    articles: "工艺包专题文章",
     contact: "业务联系：",
     freeTrial: "注册可免费试用",
   },

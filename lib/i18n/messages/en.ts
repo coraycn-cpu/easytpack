@@ -615,6 +615,7 @@ export const enMessages: MessageTree = {
   footer: {
     aria: "Site footer",
     guide: "Features & FAQ",
+    articles: "Tech pack articles",
     contact: "Contact: ",
     freeTrial: "Register for a free trial",
   },
