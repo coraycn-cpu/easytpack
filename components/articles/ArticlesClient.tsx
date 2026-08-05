@@ -16,6 +16,11 @@ import {
   getArticlesHubCopy,
   seriesLabel,
 } from "@/lib/content/articles/types";
+import {
+  ARTICLE_TOPICS,
+  getArticlesTopicsCopy,
+  getTopicCopy,
+} from "@/lib/content/articles/topics";
 import { GUIDE_PAGE_PATH } from "@/lib/content/guide-faq";
 
 function ArticlesChrome({
@@ -23,11 +28,14 @@ function ArticlesChrome({
   navHome,
   navGuide,
   navRegister,
+  navArticles,
 }: {
   navAria: string;
   navHome: string;
   navGuide: string;
   navRegister: string;
+  /** 文章页显示「专题文章」回目录 */
+  navArticles?: string;
 }) {
   return (
     <header className="border-b border-border bg-surface">
@@ -46,6 +54,11 @@ function ArticlesChrome({
           <Link href="/" className="pf-btn-text">
             {navHome}
           </Link>
+          {navArticles ? (
+            <Link href={ARTICLES_PATH} className="pf-btn-text">
+              {navArticles}
+            </Link>
+          ) : null}
           <Link href={GUIDE_PAGE_PATH} className="pf-btn-text">
             {navGuide}
           </Link>
@@ -58,10 +71,11 @@ function ArticlesChrome({
   );
 }
 
-/** `/articles` 目录：随语言切换 EN/ZH 标题与摘要 */
+/** `/articles` 目录：专题入口 + 按系列全文 */
 export function ArticlesIndexClient() {
   const { locale } = useLocale();
   const hub = getArticlesHubCopy(locale);
+  const topicsUi = getArticlesTopicsCopy(locale);
   const articles = listArticles();
   const fundamentals = articles.filter((a) => a.series === "fundamentals");
   const howto = articles.filter((a) => a.series === "howto");
@@ -69,39 +83,43 @@ export function ArticlesIndexClient() {
   const compare = articles.filter((a) => a.series === "compare");
 
   const renderGroup = (
+    id: string,
     heading: string,
     items: typeof articles,
-  ) => (
-    <section className="mt-10">
-      <h2 className="text-lg font-semibold text-foreground">{heading}</h2>
-      <ul className="mt-4 space-y-3">
-        {items.map((article) => {
-          const copy = getArticleCopy(article, locale);
-          return (
-            <li key={article.slug}>
-              <Link
-                href={articlePath(article.slug)}
-                className="pf-card block p-4 transition hover:border-brand-light"
-              >
-                <p className="text-[10px] font-medium uppercase tracking-wide text-brand">
-                  {seriesLabel(article.series, locale)}
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-foreground">
-                  {copy.title}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                  {copy.description}
-                </p>
-                <span className="mt-2 inline-block text-xs font-medium text-brand">
-                  {hub.readMore} →
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
+  ) => {
+    if (items.length === 0) return null;
+    return (
+      <section id={id} className="mt-10 scroll-mt-20">
+        <h2 className="text-lg font-semibold text-foreground">{heading}</h2>
+        <ul className="mt-4 space-y-3">
+          {items.map((article) => {
+            const copy = getArticleCopy(article, locale);
+            return (
+              <li key={article.slug}>
+                <Link
+                  href={articlePath(article.slug)}
+                  className="pf-card block p-4 transition hover:border-brand-light"
+                >
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-brand">
+                    {seriesLabel(article.series, locale)}
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-foreground">
+                    {copy.title}
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                    {copy.description}
+                  </p>
+                  <span className="mt-2 inline-block text-xs font-medium text-brand">
+                    {hub.readMore} →
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -121,10 +139,97 @@ export function ArticlesIndexClient() {
         <p className="mt-3 text-sm leading-relaxed text-muted sm:text-base">
           {hub.heroLead}
         </p>
-        {renderGroup(hub.seriesFundamentals, fundamentals)}
-        {renderGroup(hub.seriesHowto, howto)}
-        {renderGroup(hub.seriesRoles, roles)}
-        {renderGroup(hub.seriesCompare, compare)}
+
+        <section className="mt-8" aria-labelledby="topics-heading">
+          <h2 id="topics-heading" className="text-xl font-semibold">
+            {topicsUi.topicsHeading}
+          </h2>
+          <p className="mt-1.5 text-sm text-muted">{topicsUi.topicsLead}</p>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+            {ARTICLE_TOPICS.map((topic) => {
+              const tCopy = getTopicCopy(topic, locale);
+              const hubArticle = getArticleBySlug(topic.hubSlug);
+              const more = topic.slugs
+                .filter((s) => s !== topic.hubSlug)
+                .map((s) => getArticleBySlug(s))
+                .filter(Boolean)
+                .slice(0, 4);
+              return (
+                <li
+                  key={topic.id}
+                  id={`topic-${topic.id}`}
+                  className="pf-card flex flex-col p-4 scroll-mt-20"
+                >
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {tCopy.title}
+                  </h3>
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                    {tCopy.blurb}
+                  </p>
+                  {hubArticle ? (
+                    <Link
+                      href={articlePath(topic.hubSlug)}
+                      className="mt-3 text-xs font-semibold text-brand hover:text-brand-dark"
+                    >
+                      {topicsUi.viewAllInTopic}:{" "}
+                      {getArticleCopy(hubArticle, locale).title} →
+                    </Link>
+                  ) : null}
+                  {more.length > 0 ? (
+                    <div className="mt-2 border-t border-border pt-2">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                        {topicsUi.moreInTopic}
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {more.map((a) =>
+                          a ? (
+                            <li key={a.slug}>
+                              <Link
+                                href={articlePath(a.slug)}
+                                className="text-[12px] text-brand hover:text-brand-dark"
+                              >
+                                {getArticleCopy(a, locale).title}
+                              </Link>
+                            </li>
+                          ) : null,
+                        )}
+                      </ul>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <nav
+          aria-label={topicsUi.jumpToSeries}
+          className="mt-10 flex flex-wrap gap-x-4 gap-y-2 border-t border-border pt-6 text-sm"
+        >
+          <span className="w-full text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {topicsUi.jumpToSeries}
+          </span>
+          <a href="#series-fundamentals" className="text-brand hover:text-brand-dark">
+            {hub.seriesFundamentals}
+          </a>
+          <a href="#series-howto" className="text-brand hover:text-brand-dark">
+            {hub.seriesHowto}
+          </a>
+          <a href="#series-roles" className="text-brand hover:text-brand-dark">
+            {hub.seriesRoles}
+          </a>
+          <a href="#series-compare" className="text-brand hover:text-brand-dark">
+            {hub.seriesCompare}
+          </a>
+        </nav>
+
+        <h2 className="mt-8 text-lg font-semibold text-foreground">
+          {topicsUi.allBySeries}
+        </h2>
+        {renderGroup("series-fundamentals", hub.seriesFundamentals, fundamentals)}
+        {renderGroup("series-howto", hub.seriesHowto, howto)}
+        {renderGroup("series-roles", hub.seriesRoles, roles)}
+        {renderGroup("series-compare", hub.seriesCompare, compare)}
       </main>
       <div className="border-t border-border px-4 py-8">
         <BrandFooter showArticlesLink={false} />
@@ -146,6 +251,11 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
   const related = article.relatedSlugs
     .map((s) => getArticleBySlug(s))
     .filter(Boolean);
+  const topicsUi = getArticlesTopicsCopy(locale);
+  const parentTopics = ARTICLE_TOPICS.filter((t) =>
+    t.slugs.includes(slug),
+  );
+  const articlesLabel = locale === "en" ? "Articles" : "专题文章";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -154,6 +264,7 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
         navHome={hub.navHome}
         navGuide={hub.navGuide}
         navRegister={hub.navRegister}
+        navArticles={articlesLabel}
       />
       <main className="mx-auto max-w-3xl px-4 py-10 sm:py-12">
         <p className="text-xs">
@@ -347,6 +458,49 @@ export function ArticleBodyClient({ slug }: ArticleBodyProps) {
                     >
                       {relCopy.title}
                     </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        {parentTopics.length > 0 ? (
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold">{topicsUi.topicsHeading}</h2>
+            <ul className="mt-3 space-y-4">
+              {parentTopics.map((topic) => {
+                const tCopy = getTopicCopy(topic, locale);
+                const siblings = topic.slugs
+                  .filter((s) => s !== slug)
+                  .map((s) => getArticleBySlug(s))
+                  .filter(Boolean)
+                  .slice(0, 6);
+                return (
+                  <li key={topic.id} className="pf-card p-4">
+                    <Link
+                      href={`${ARTICLES_PATH}#topic-${topic.id}`}
+                      className="text-sm font-semibold text-brand hover:text-brand-dark"
+                    >
+                      {tCopy.title} →
+                    </Link>
+                    <p className="mt-1 text-[12px] text-muted">{tCopy.blurb}</p>
+                    {siblings.length > 0 ? (
+                      <ul className="mt-2 space-y-1 border-t border-border pt-2">
+                        {siblings.map((a) =>
+                          a ? (
+                            <li key={a.slug}>
+                              <Link
+                                href={articlePath(a.slug)}
+                                className="text-[12px] text-brand hover:text-brand-dark"
+                              >
+                                {getArticleCopy(a, locale).title}
+                              </Link>
+                            </li>
+                          ) : null,
+                        )}
+                      </ul>
+                    ) : null}
                   </li>
                 );
               })}
