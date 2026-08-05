@@ -633,6 +633,7 @@ export const zhMessages = {
     chatTitle: "本款助手",
     chatPlaceholder: "问工艺 / 改物料说明…",
     chatSend: "发送",
+    pendingConfirm: "AI 建议执行（需确认）：",
     actionProcess: "标工艺",
     actionBom: "填物料",
     actionSize: "填尺寸",

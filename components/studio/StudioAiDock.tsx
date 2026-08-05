@@ -439,7 +439,7 @@ export default function StudioAiDock({
           {pendingActions.length > 0 && !loading && (
             <div className="rounded-lg border border-brand-light bg-brand-soft p-2">
               <p className="mb-1.5 text-[10px] font-medium text-brand-dark">
-                {t("ai.chatTitle")}
+                {t("ai.pendingConfirm")}
               </p>
               <div className="flex flex-col gap-1">
                 {pendingActions.map((s) => (

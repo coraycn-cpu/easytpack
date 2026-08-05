@@ -638,6 +638,7 @@ export const enMessages: MessageTree = {
     chatTitle: "Style assistant",
     chatPlaceholder: "Ask ops / edit BOM notes…",
     chatSend: "Send",
+    pendingConfirm: "AI suggests (confirm to run):",
     actionProcess: "Ops",
     actionBom: "BOM",
     actionSize: "Size",
