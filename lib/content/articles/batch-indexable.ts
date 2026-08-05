@@ -527,6 +527,7 @@ export const INDEXABLE_BATCH: ArticleRecord[] = [
       "how-to-write-garment-bom",
       "how-to-annotate-garment",
       "size-chart-basics",
+      "jacket-tech-pack-guide",
     ],
     en: {
       title: "How to make a hoodie tech pack",

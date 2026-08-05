@@ -1,12 +1,13 @@
 import type { ArticleRecord } from "@/lib/content/articles/types";
 import { BRAND_SHORT_NAME } from "@/lib/brand";
 import { INDEXABLE_BATCH } from "@/lib/content/articles/batch-indexable";
+import { CATEGORY_PAIN_BATCH } from "@/lib/content/articles/batch-category-pain";
 
 const PUB = "2026-08-05";
 
 /**
- * 首发 + 角色/对比系列；第三批易收录长尾见 INDEXABLE_BATCH。
- * slug 保持英文，利于 URL / 外贸 SEO。EN 优先，ZH 同步。
+ * 首发 + 角色/对比；长尾易收录见 INDEXABLE_BATCH；
+ * 品类/痛点见 CATEGORY_PAIN_BATCH。EN 优先，ZH 同步。
  */
 const CORE_ARTICLES: ArticleRecord[] = [
   {
@@ -570,9 +571,10 @@ const CORE_ARTICLES: ArticleRecord[] = [
     updatedAt: PUB,
     series: "howto",
     relatedSlugs: [
-      "tech-pack-vs-bom",
-      "how-to-annotate-garment",
-      "tech-pack-checklist",
+      "what-is-pom-apparel",
+      "pants-size-chart-pom",
+      "how-to-grade-size-chart",
+      "what-is-sample-size-apparel",
     ],
     en: {
       title: "Apparel size chart basics (POM) for tech packs",
@@ -1188,6 +1190,7 @@ const CORE_ARTICLES: ArticleRecord[] = [
 export const ARTICLES: ArticleRecord[] = [
   ...CORE_ARTICLES,
   ...INDEXABLE_BATCH,
+  ...CATEGORY_PAIN_BATCH,
 ];
 
 export function listArticles(): ArticleRecord[] {
