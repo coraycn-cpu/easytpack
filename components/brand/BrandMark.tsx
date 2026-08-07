@@ -21,19 +21,24 @@ type BrandMarkProps = {
   iconClassName?: string;
 };
 
-/** 蓝色 P 标：对照 UI 参考图，仅视觉 */
+/**
+ * PackFlow 蓝标：左箭头形 + 右 P，两块之间留缝。
+ * 对照品牌附件；顶栏等浅底用透明底 SVG。
+ */
 function BrandIcon({ className = "" }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 64 64"
       className={`shrink-0 ${className}`}
       aria-hidden
     >
-      <rect x="2" y="2" width="28" height="28" rx="7" fill="var(--brand)" />
-      <path
-        d="M11.2 23V9h6.1c3.15 0 5.15 1.7 5.15 4.45 0 2.75-2 4.45-5.15 4.45h-3.55V23H11.2zm2.55-7.35h3.4c1.7 0 2.7-.9 2.7-2.2s-1-2.2-2.7-2.2h-3.4v4.4z"
-        fill="#fff"
-      />
+      <g fill="var(--brand, #3B82F6)">
+        <path d="M29 9 L25.2 55 H18.2 V39.2 L8 32 L18.2 24.8 V9 Z" />
+        <path
+          fillRule="evenodd"
+          d="M34.5 9 H43.5 C54 9 60 16.2 60 27.5 C60 38.8 54 46 43.5 46 H39.2 L37.6 55 H31.2 L34.5 9 Z M39.8 16.8 L38.6 38.2 H43 C49.6 38.2 53.2 33.6 53.2 27.5 C53.2 21.4 49.6 16.8 43 16.8 H39.8 Z"
+        />
+      </g>
     </svg>
   );
 }

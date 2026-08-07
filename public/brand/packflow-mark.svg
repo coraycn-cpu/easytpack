@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-hidden="true">
+  <g fill="#3B82F6">
+    <!-- Left angular stem with one arrow tip -->
+    <path d="M29 9 L25.2 55 H18.2 V39.2 L8 32 L18.2 24.8 V9 Z"/>
+    <!-- Right P bowl + descending stem, gap from left -->
+    <path fill-rule="evenodd" d="
+      M34.5 9 H43.5
+      C54 9 60 16.2 60 27.5
+      C60 38.8 54 46 43.5 46
+      H39.2 L37.6 55 H31.2 L34.5 9 Z
+      M39.8 16.8 L38.6 38.2 H43
+      C49.6 38.2 53.2 33.6 53.2 27.5
+      C53.2 21.4 49.6 16.8 43 16.8 H39.8 Z
+    "/>
+  </g>
+</svg>
