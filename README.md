@@ -7,6 +7,7 @@
 | 文档 | 干什么 |
 |------|--------|
 | [docs/GO_LIVE.md](./docs/GO_LIVE.md) | **第一个基础版上线清单**（先看这个） |
+| [docs/CURSOR_HANDOFF.md](./docs/CURSOR_HANDOFF.md) | **Cursor 会话交接**（目标 / 选型 / 未完成 / 下一步） |
 | [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md) | 云端钥匙、表、登录回调（Vercel 优先） |
 | [docs/SMOKE_CHECKLIST.md](./docs/SMOKE_CHECKLIST.md) | 发版前手工冒烟 |
 | [docs/SUPABASE_BACKUP_RUNBOOK.md](./docs/SUPABASE_BACKUP_RUNBOOK.md) | 数据库备份 / 恢复说明 |
